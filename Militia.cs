@@ -381,8 +381,24 @@ public void IdentifyColonels(TriggerArgs args)
 
 private void CreateColonel(PlayerTeam team)
 {
-    // Get spawn position for this team
-    Vector2 spawnPos = GetTeamSpawnPosition(team);
+    // Find any player from this team to get spawn position
+    IPlayer[] allPlayers = Game.GetPlayers();
+    Vector2 spawnPos = Vector2.Zero;
+    
+    foreach (IPlayer player in allPlayers)
+    {
+        if (player.GetTeam() == team)
+        {
+            spawnPos = player.GetWorldPosition();
+            break; // Use the first player found from this team
+        }
+    }
+    
+    // Fallback to center if no team player found
+    if (spawnPos == Vector2.Zero)
+    {
+        spawnPos = Vector2.Zero;
+    }
     
     // Create colonel bot
     IPlayer colonel = Game.CreatePlayer(spawnPos);
