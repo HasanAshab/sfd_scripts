@@ -390,6 +390,7 @@ private void CreateColonel(PlayerTeam team)
     {
         // Set team
         colonel.SetTeam(team);
+        colonel.SetBotName("COLONEL");
         
         // Set as bot with very bad behavior (BotD)
         BotBehavior colonelBehavior = new BotBehavior(true, PredefinedAIType.BotD);
@@ -401,16 +402,14 @@ private void CreateColonel(PlayerTeam team)
         colonel.SetCameraSecondaryFocusMode(CameraFocusMode.Focus);
         
         // Give colonel enhanced stats (they're important but bad at fighting)
-        PlayerModifiers colonelModifiers = new PlayerModifiers();
-        colonelModifiers.MaxHealth = 150; // High health to survive
-        colonelModifiers.CurrentHealth = 150;
-        colonelModifiers.RunSpeedModifier = 0.7f; // Slower movement
-        colonelModifiers.SprintSpeedModifier = 0.7f;
+        PlayerModifiers colonelModifiers = colonel.GetModifiers();
+        colonelModifiers.MaxHealth = 600; // High health to survive
+        colonelModifiers.CurrentHealth = 600;
         colonel.SetModifiers(colonelModifiers);
         
         // Give colonel basic weapons
-        colonel.GiveWeaponItem(WeaponItem.PISTOL);
-        colonel.GiveWeaponItem(WeaponItem.KNIFE);
+        colonel.GiveWeaponItem(WeaponItem.MAGNUM);
+        colonel.GiveWeaponItem(WeaponItem.KATANA);
         colonel.GiveWeaponItem(WeaponItem.GRENADES);
         
         // Set colonel profile
@@ -418,10 +417,6 @@ private void CreateColonel(PlayerTeam team)
         
         // Store colonel reference
         colonels[team] = colonel;
-        
-        // Show colonel announcement
-        string teamName = GetTeamName(team);
-        Game.ShowPopupMessage(teamName + " COLONEL DEPLOYED!");
     }
 }
 
@@ -435,22 +430,6 @@ private int GetAILevel(PredefinedAIType aiType, PredefinedAIType[] hierarchy)
     return 0; // Default to lowest level
 }
 
-private void SetupColonel(IPlayer colonel, PlayerTeam team)
-{
-    colonel.SetBotName("COLONEL");
-    colonel.SetNametagVisible(true);
-    colonel.SetStatusBarsVisible(true);
-    // Give colonel the General profile with team colors
-    colonel.SetProfile(GetColonelProfile(team));
-
-    PlayerModifiers colonelModifiers = colonel.GetModifiers();
-    colonelModifiers.MaxHealth = 500;
-    colonelModifiers.CurrentHealth = 500;
-    colonel.SetModifiers(colonelModifiers);
-    
-    // Show colonel announcement
-    string teamName = GetTeamName(team);
-}
 
 private void SetupGuards(PlayerTeam team)
 {
