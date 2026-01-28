@@ -35,9 +35,13 @@ public class DeadPlayerInfo
 // Winner announcement tracking
 private bool gameEnded = false;
 
-// Track colonels for each team
+// Track colonels for each team (now supports all teams)
+private Dictionary<PlayerTeam, IPlayer> colonels = new Dictionary<PlayerTeam, IPlayer>();
+
 private IPlayer team1Colonel = null;
 private IPlayer team2Colonel = null;
+private IPlayer team3Colonel = null;
+private IPlayer team4Colonel = null;
 
 // Track specialist item assignments per team
 private int team1AssignedCount = 0;
@@ -169,13 +173,15 @@ public void SpawnRookies(TriggerArgs args)
     if (!gameEnded)
     {
         // Only spawn if colonels are alive
-        if (team1Colonel != null && !team1Colonel.IsDead)
+        foreach (var colonelEntry in colonels)
         {
-            SpawnRookie(PlayerTeam.Team1);
-        }
-        if (team2Colonel != null && !team2Colonel.IsDead)
-        {
-            SpawnRookie(PlayerTeam.Team2);
+            PlayerTeam team = colonelEntry.Key;
+            IPlayer colonel = colonelEntry.Value;
+            
+            if (colonel != null && !colonel.IsDead)
+            {
+                SpawnRookie(team);
+            }
         }
     }
 }
@@ -185,13 +191,15 @@ public void SpawnCaptains(TriggerArgs args)
     if (!gameEnded)
     {
         // Only spawn if colonels are alive
-        if (team1Colonel != null && !team1Colonel.IsDead)
+        foreach (var colonelEntry in colonels)
         {
-            SpawnCaptain(PlayerTeam.Team1);
-        }
-        if (team2Colonel != null && !team2Colonel.IsDead)
-        {
-            SpawnCaptain(PlayerTeam.Team2);
+            PlayerTeam team = colonelEntry.Key;
+            IPlayer colonel = colonelEntry.Value;
+            
+            if (colonel != null && !colonel.IsDead)
+            {
+                SpawnCaptain(team);
+            }
         }
     }
 }
@@ -201,13 +209,15 @@ public void SpawnArtillerys(TriggerArgs args)
     if (!gameEnded)
     {
         // Only spawn if colonels are alive
-        if (team1Colonel != null && !team1Colonel.IsDead)
+        foreach (var colonelEntry in colonels)
         {
-            SpawnArtillery(PlayerTeam.Team1);
-        }
-        if (team2Colonel != null && !team2Colonel.IsDead)
-        {
-            SpawnArtillery(PlayerTeam.Team2);
+            PlayerTeam team = colonelEntry.Key;
+            IPlayer colonel = colonelEntry.Value;
+            
+            if (colonel != null && !colonel.IsDead)
+            {
+                SpawnArtillery(team);
+            }
         }
     }
 }
@@ -235,13 +245,15 @@ public void SpawnDrones(TriggerArgs args)
     if (!gameEnded)
     {
         // Only spawn if colonels are alive
-        if (team1Colonel != null && !team1Colonel.IsDead)
+        foreach (var colonelEntry in colonels)
         {
-            SpawnDrone(PlayerTeam.Team1);
-        }
-        if (team2Colonel != null && !team2Colonel.IsDead)
-        {
-            SpawnDrone(PlayerTeam.Team2);
+            PlayerTeam team = colonelEntry.Key;
+            IPlayer colonel = colonelEntry.Value;
+            
+            if (colonel != null && !colonel.IsDead)
+            {
+                SpawnDrone(team);
+            }
         }
     }
 }
@@ -258,8 +270,16 @@ public void CheckForWinner(TriggerArgs args)
                                                   !spawnedDroneIds.Contains(p.UniqueID)).ToArray();
     
     // Check if all colonels are dead
-    bool allColonelsDead = (team1Colonel == null || team1Colonel.IsDead) && 
-                          (team2Colonel == null || team2Colonel.IsDead);
+    bool allColonelsDead = true;
+    foreach (var colonelEntry in colonels)
+    {
+        IPlayer colonel = colonelEntry.Value;
+        if (colonel != null && !colonel.IsDead)
+        {
+            allColonelsDead = false;
+            break;
+        }
+    }
     
     // Check if all human players are dead
     bool allHumansDead = true;
@@ -339,69 +359,69 @@ public void CheckForWinner(TriggerArgs args)
 
 public void IdentifyColonels(TriggerArgs args)
 {
-    // Find the highest AI behavior bot for each team to be the colonel
+    // Get all current players and find unique teams
     IPlayer[] allPlayers = Game.GetPlayers();
-    
-    IPlayer bestTeam1Bot = null;
-    IPlayer bestTeam2Bot = null;
-    PredefinedAIType highestTeam1AI = PredefinedAIType.BotA;
-    PredefinedAIType highestTeam2AI = PredefinedAIType.BotA;
-    
-    // Define AI hierarchy (higher index = better AI)
-    PredefinedAIType[] aiHierarchy = {
-        PredefinedAIType.BotA,
-        PredefinedAIType.BotB,
-        PredefinedAIType.BotC,
-        PredefinedAIType.BotD,
-        PredefinedAIType.Grunt,
-        PredefinedAIType.Hulk,
-        PredefinedAIType.Meatgrinder
-    };
+    HashSet<PlayerTeam> existingTeams = new HashSet<PlayerTeam>();
     
     foreach (IPlayer player in allPlayers)
     {
-        if (player.IsBot && !spawnedRookieIds.Contains(player.UniqueID) && !spawnedCaptainIds.Contains(player.UniqueID) && !spawnedArtilleryIds.Contains(player.UniqueID) && !spawnedDroneIds.Contains(player.UniqueID))
+        PlayerTeam team = player.GetTeam();
+        if (team != PlayerTeam.Independent)
         {
-            BotBehavior behavior = player.GetBotBehavior();
-            PredefinedAIType playerAI = behavior.PredefinedAI;
-            
-            // Get AI level (higher = better)
-            int aiLevel = GetAILevel(playerAI, aiHierarchy);
-            
-            if (player.GetTeam() == PlayerTeam.Team1)
-            {
-                int currentLevel = GetAILevel(highestTeam1AI, aiHierarchy);
-                if (aiLevel > currentLevel)
-                {
-                    highestTeam1AI = playerAI;
-                    bestTeam1Bot = player;
-                }
-            }
-            else if (player.GetTeam() == PlayerTeam.Team2)
-            {
-                int currentLevel = GetAILevel(highestTeam2AI, aiHierarchy);
-                if (aiLevel > currentLevel)
-                {
-                    highestTeam2AI = playerAI;
-                    bestTeam2Bot = player;
-                }
-            }
+            existingTeams.Add(team);
         }
     }
-
-    // Assign colonels and set up guard relationships
-    if (bestTeam1Bot != null)
-    {
-        team1Colonel = bestTeam1Bot;
-        SetupColonel(team1Colonel, PlayerTeam.Team1);
-        // SetupGuards(PlayerTeam.Team1);
-    }
     
-    if (bestTeam2Bot != null)
+    // Create colonels for each existing team
+    foreach (PlayerTeam team in existingTeams)
     {
-        team2Colonel = bestTeam2Bot;
-        SetupColonel(team2Colonel, PlayerTeam.Team2);
-        // SetupGuards(PlayerTeam.Team2);
+        CreateColonel(team);
+    }
+}
+
+private void CreateColonel(PlayerTeam team)
+{
+    // Get spawn position for this team
+    Vector2 spawnPos = GetTeamSpawnPosition(team);
+    
+    // Create colonel bot
+    IPlayer colonel = Game.CreatePlayer(spawnPos);
+    if (colonel != null)
+    {
+        // Set team
+        colonel.SetTeam(team);
+        
+        // Set as bot with very bad behavior (BotD)
+        BotBehavior colonelBehavior = new BotBehavior(true, PredefinedAIType.BotD);
+        colonel.SetBotBehavior(colonelBehavior);
+        
+        // Set colonel properties
+        colonel.SetNametagVisible(true);
+        colonel.SetStatusBarsVisible(true);
+        colonel.SetCameraSecondaryFocusMode(CameraFocusMode.Focus);
+        
+        // Give colonel enhanced stats (they're important but bad at fighting)
+        PlayerModifiers colonelModifiers = new PlayerModifiers();
+        colonelModifiers.MaxHealth = 150; // High health to survive
+        colonelModifiers.CurrentHealth = 150;
+        colonelModifiers.RunSpeedModifier = 0.7f; // Slower movement
+        colonelModifiers.SprintSpeedModifier = 0.7f;
+        colonel.SetModifiers(colonelModifiers);
+        
+        // Give colonel basic weapons
+        colonel.GiveWeaponItem(WeaponItem.PISTOL);
+        colonel.GiveWeaponItem(WeaponItem.KNIFE);
+        colonel.GiveWeaponItem(WeaponItem.GRENADES);
+        
+        // Set colonel profile
+        colonel.SetProfile(GetColonelProfile(team));
+        
+        // Store colonel reference
+        colonels[team] = colonel;
+        
+        // Show colonel announcement
+        string teamName = GetTeamName(team);
+        Game.ShowPopupMessage(teamName + " COLONEL DEPLOYED!");
     }
 }
 
@@ -486,13 +506,9 @@ public void OnPlayerDeath(IPlayer player, PlayerDeathArgs args)
         PlayerTeam playerTeam = player.GetTeam();
         IPlayer colonel = null;
 
-        if (playerTeam == PlayerTeam.Team1)
+        if (colonels.ContainsKey(playerTeam))
         {
-            colonel = team1Colonel;
-        }
-        else if (playerTeam == PlayerTeam.Team2)
-        {
-            colonel = team2Colonel;
+            colonel = colonels[playerTeam];
         }
         
         // Only queue for respawn if colonel is alive and game hasn't ended
@@ -534,13 +550,9 @@ public void ProcessRespawnQueue(TriggerArgs args)
         // Check if player's colonel is still alive
         IPlayer colonel = null;
         
-        if (deadPlayerInfo.Team == PlayerTeam.Team1)
+        if (colonels.ContainsKey(deadPlayerInfo.Team))
         {
-            colonel = team1Colonel;
-        }
-        else if (deadPlayerInfo.Team == PlayerTeam.Team2)
-        {
-            colonel = team2Colonel;
+            colonel = colonels[deadPlayerInfo.Team];
         }
         
         // Respawn at colonel's position if colonel is alive
@@ -1111,42 +1123,61 @@ private Vector2 GetTeamSpawnPosition(PlayerTeam team)
         return Vector2.Zero;
     }
     
-    if (team == PlayerTeam.Team1)
+    // Different spawn strategies for different teams
+    switch (team)
     {
-        // Team1: rightest + topest position
-        IObject rightestTopest = allSpawns
-            .OrderByDescending(spawn => spawn.GetWorldPosition().X) // Rightest first
-            .ThenBy(spawn => spawn.GetWorldPosition().Y)            // Then topest (lowest Y)
-            .FirstOrDefault();
-        
-        return rightestTopest != null ? rightestTopest.GetWorldPosition() : Vector2.Zero;
-    }
-    else
-    {
-        // Team2: leftest + bottomest position
-        IObject leftestBottomest = allSpawns
-            .OrderBy(spawn => spawn.GetWorldPosition().X)           // Leftest first
-            .ThenByDescending(spawn => spawn.GetWorldPosition().Y) // Then bottomest (highest Y)
-            .FirstOrDefault();
-        
-        return leftestBottomest != null ? leftestBottomest.GetWorldPosition() : Vector2.Zero;
+        case PlayerTeam.Team1:
+            // Team1: rightest + topest position
+            IObject rightestTopest = allSpawns
+                .OrderByDescending(spawn => spawn.GetWorldPosition().X) // Rightest first
+                .ThenBy(spawn => spawn.GetWorldPosition().Y)            // Then topest (lowest Y)
+                .FirstOrDefault();
+            return rightestTopest != null ? rightestTopest.GetWorldPosition() : Vector2.Zero;
+            
+        case PlayerTeam.Team2:
+            // Team2: leftest + bottomest position
+            IObject leftestBottomest = allSpawns
+                .OrderBy(spawn => spawn.GetWorldPosition().X)           // Leftest first
+                .ThenByDescending(spawn => spawn.GetWorldPosition().Y) // Then bottomest (highest Y)
+                .FirstOrDefault();
+            return leftestBottomest != null ? leftestBottomest.GetWorldPosition() : Vector2.Zero;
+            
+        case PlayerTeam.Team3:
+            // Team3: leftest + topest position
+            IObject leftestTopest = allSpawns
+                .OrderBy(spawn => spawn.GetWorldPosition().X)          // Leftest first
+                .ThenBy(spawn => spawn.GetWorldPosition().Y)           // Then topest (lowest Y)
+                .FirstOrDefault();
+            return leftestTopest != null ? leftestTopest.GetWorldPosition() : Vector2.Zero;
+            
+        case PlayerTeam.Team4:
+            // Team4: rightest + bottomest position
+            IObject rightestBottomest = allSpawns
+                .OrderByDescending(spawn => spawn.GetWorldPosition().X) // Rightest first
+                .ThenByDescending(spawn => spawn.GetWorldPosition().Y)  // Then bottomest (highest Y)
+                .FirstOrDefault();
+            return rightestBottomest != null ? rightestBottomest.GetWorldPosition() : Vector2.Zero;
+            
+        default:
+            // Random spawn for other teams
+            return allSpawns.ElementAt(RNG.Next(allSpawns.Count())).GetWorldPosition();
     }
 }
 
 private Vector2 GetColonelSpawnPosition(PlayerTeam team)
 {
-    IPlayer colonel = (team == PlayerTeam.Team1) ? team1Colonel : team2Colonel;
+    if (colonels.ContainsKey(team))
+    {
+        IPlayer colonel = colonels[team];
+        if (colonel != null && !colonel.IsDead)
+        {
+            // Spawn at exact same position as colonel
+            return colonel.GetWorldPosition();
+        }
+    }
     
-    if (colonel != null && !colonel.IsDead)
-    {
-        // Spawn at exact same position as colonel
-        return colonel.GetWorldPosition();
-    }
-    else
-    {
-        // Fallback to team spawn position if colonel is dead/missing
-        return GetTeamSpawnPosition(team);
-    }
+    // Fallback to team spawn position if colonel is dead/missing
+    return GetTeamSpawnPosition(team);
 }
 
 private void SetColonelTarget(IPlayer player, PlayerTeam team)
@@ -1171,27 +1202,41 @@ private void SetColonelTarget(IPlayer player, PlayerTeam team)
 
 private void SetColonelGuard(IPlayer player, PlayerTeam team)
 {
-    IPlayer ownColonel = null;
-    
+    if (colonels.ContainsKey(team))
+    {
+        IPlayer ownColonel = colonels[team];
+        if (ownColonel != null && !ownColonel.IsDead)
+        {
+            player.SetGuardTarget(ownColonel);
+        }
+    }
+}
+
+private string GetPrimeColor(PlayerTeam team)
+{
     if (team == PlayerTeam.Team1)
     {
-        ownColonel = team1Colonel;
+        return "ClothingDarkGray";
     }
     else if (team == PlayerTeam.Team2)
     {
-        ownColonel = team2Colonel;
+        return "ClothingDarkYellow";
+    }
+    else if (team == PlayerTeam.Team3)
+    {
+        return "ClothingLightOrange";
+    }
+    else if (team == PlayerTeam.Team4)
+    {
+        return "ClothingLightGray";
     }
     
-    if (ownColonel != null && !ownColonel.IsDead)
-    {
-        player.SetGuardTarget(ownColonel);
-    }
-   
+    return "";
 }
 
 private IProfile GetRookieProfile(PlayerTeam team)
 {
-    string primeColor = (team == PlayerTeam.Team1) ? "ClothingDarkGray" : "ClothingDarkYellow";
+    string primeColor = GetPrimeColor(team);
     
     return new IProfile()
     {
@@ -1208,7 +1253,7 @@ private IProfile GetRookieProfile(PlayerTeam team)
 
 private IProfile GetCaptainProfile(PlayerTeam team)
 {
-    string primeColor = (team == PlayerTeam.Team1) ? "ClothingDarkGray" : "ClothingDarkYellow";
+    string primeColor = GetPrimeColor(team);
     
     return new IProfile()
     {
@@ -1225,7 +1270,7 @@ private IProfile GetCaptainProfile(PlayerTeam team)
 
 private IProfile GetColonelProfile(PlayerTeam team)
 {
-    string primeColor = (team == PlayerTeam.Team1) ? "ClothingDarkGray" : "ClothingDarkYellow";
+    string primeColor = GetPrimeColor(team);
     return new IProfile()
     {
         Name = "General",
@@ -1242,7 +1287,7 @@ private IProfile GetColonelProfile(PlayerTeam team)
 
 private IProfile GetArtilleryProfile(PlayerTeam team)
 {
-    string primeColor = (team == PlayerTeam.Team1) ? "ClothingDarkGray" : "ClothingDarkYellow";
+    string primeColor = GetPrimeColor(team);
     
     return new IProfile()
     {
