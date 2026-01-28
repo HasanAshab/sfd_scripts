@@ -1,0 +1,4 @@
+A Timpa = when hp is low (30%) or killed a player give him IPlayer.SetStrengthBoostTime(15000)
+B Bichi = InfiniteAmmo = 1
+C kokola = spawn a bot to closest AvailablePathNodes of the player every 5 seconds.
+D Edur = over hp loose 

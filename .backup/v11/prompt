@@ -1,0 +1,34 @@
+Lets create another script (Ujiri.cs) that includes 6 boss.
+randomly 3 of them are Team1 and other 3 Team2
+
+Timpa = when hp is low (30%) or killed a player give him IPlayer.SetStrengthBoostTime(15000)
+Bichi = spawn a gun drone to closest AvailablePathNodes of the player every 5 seconds.
+kokola = spawn a bot to closest AvailablePathNodes of the player every 5 seconds.
+Edur = over hp loose, will be getting smaller in size and speed will be increasing
+Xray = always gets guns laser pointer
+Pakhi = hp increases every 1 seconds (no cooldown for combat or energy) and a downside of pakhi. if his hp decrease for any other player, they gets the hp that pakhi
+
+
+
+
+now back to #Militia.cs. i want some changes.
+
+1. One main elite bot (the main bot with the top behaviour class among others) will be consider as cornel at each team. his Profile will be
+new IProfile()
+{
+    Name = "General",
+    Gender = Gender.Male,
+    Skin = new IProfileClothingItem("Tattoos", "Skin3", "ClothingLightYellow"),
+    Head = new IProfileClothingItem("GeneralHat", "ClothingDarkYellow"),
+    ChestUnder = new IProfileClothingItem("LeatherJacket", "ClothingDarkYellow", "ClothingLightYellow"),
+    Waist = new IProfileClothingItem("Sash", "ClothingDarkYellow"),
+    Legs = new IProfileClothingItem("CamoPants", "ClothingDarkYellow", "ClothingDarkYellow"),
+    Feet = new IProfileClothingItem("BootsBlack", "ClothingGray"),
+    Accesory = new IProfileClothingItem("Armband", "ClothingLightYellow"),
+}
+also dont forget to maintain PRIME_COLOR
+
+2. Other main bots (main bots, not either rookies or captain) will guard the cornel (read BotBehaviorSet.GuardRange IPlayer.SetGuardTarget) 
+3. instead of spawning rookies and captains at AvailablePathNodes, spawn them some very little pixel away from cornel. 
+4. When their cornel dies, stop spawning new rookies and captains
+5. the rookies and captains target will always try to kill opponents cornel (read IPlayer.SetForcedBotTarget)
