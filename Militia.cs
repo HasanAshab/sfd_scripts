@@ -99,7 +99,7 @@ public void OnStartup()
     artilleryTimer.SetRepeatCount(0); // Infinite repeats
     artilleryTimer.SetScriptMethod("SpawnArtillerys");
     artilleryTimer.Trigger();
-    
+
     // Set up artillery fire ammo timer
     IObjectTimerTrigger fireAmmoTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
     fireAmmoTimer.SetIntervalTime(7000); // 7 seconds
@@ -823,6 +823,48 @@ private void AssignRandomProfile(IPlayer player)
 
 private IProfile[] GetTeamProfiles(PlayerTeam team)
 {
+    string primeColor = GetPrimeColor(team);
+    return new IProfile[]
+        {
+            new IProfile()
+            {
+                Name = "Soldier",
+                Gender = Gender.Male,
+                Skin = new IProfileClothingItem("Tattoos", "Skin4", "ClothingLightYellow"),
+                Head = new IProfileClothingItem("Helmet", primeColor),
+                ChestUnder = new IProfileClothingItem("MilitaryShirt", primeColor, "ClothingLightBlue"),
+                Waist = new IProfileClothingItem("SatchelBelt", primeColor),
+                Legs = new IProfileClothingItem("CamoPants", primeColor, primeColor),
+                Feet = new IProfileClothingItem("BootsBlack", primeColor),
+            },
+            new IProfile()
+            {
+                Name = "Sniper",
+                Gender = Gender.Male,
+                Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingLightGray"),
+                ChestOver = new IProfileClothingItem("AmmoBelt", primeColor),
+                ChestUnder = new IProfileClothingItem("TShirt", primeColor),
+                Hands = new IProfileClothingItem("Gloves", "ClothingGray"),
+                Waist = new IProfileClothingItem("AmmoBeltWaist", "ClothingGray"),
+                Legs = new IProfileClothingItem("CamoPants", "ClothingDarkGreen", primeColor),
+                Feet = new IProfileClothingItem("BootsBlack", primeColor),
+                Accesory = new IProfileClothingItem("Vizor", primeColor, "ClothingLightRed"),
+            },
+            new IProfile()
+            {
+                Name = "Sniper",
+                Gender = Gender.Male,
+                Skin = new IProfileClothingItem("Normal", "Skin1", "ClothingLightGray"),
+                ChestOver = new IProfileClothingItem("AmmoBelt", primeColor),
+                ChestUnder = new IProfileClothingItem("TShirt", primeColor),
+                Hands = new IProfileClothingItem("Gloves", "ClothingGray"),
+                Waist = new IProfileClothingItem("AmmoBeltWaist", "ClothingGray"),
+                Legs = new IProfileClothingItem("CamoPants", "ClothingDarkGreen", primeColor),
+                Feet = new IProfileClothingItem("BootsBlack", primeColor),
+                Accesory = new IProfileClothingItem("Vizor", primeColor, "ClothingLightRed"),
+            }
+        };
+
     if (team == PlayerTeam.Team1)
     {
         // Team 1 profiles with DarkGray primary color
