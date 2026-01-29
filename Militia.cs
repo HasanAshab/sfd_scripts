@@ -1086,14 +1086,21 @@ private void SpawnArtillery(PlayerTeam team)
 
     // Set high HP and slow speed
     PlayerModifiers artilleryModifiers = new PlayerModifiers();
-    artilleryModifiers.MaxHealth = 70;
-    artilleryModifiers.CurrentHealth = 70;
+    artilleryModifiers.MaxHealth = 100;
+    artilleryModifiers.CurrentHealth = 100;
     artilleryModifiers.RunSpeedModifier = 0.35f;
     artilleryModifiers.SprintSpeedModifier = 0.35f;
 
-    artilleryModifiers.ProjectileDamageTakenModifier *= 0.4f;
-    artilleryModifiers.MeleeStunImmunity = 1;
     artilleryModifiers.SizeModifier = 1.5f;
+    artilleryModifiers.ProjectileDamageDealtModifier *= 0.2f;
+
+    artilleryModifiers.FireDamageTakenModifier *= 1.3f;
+    artilleryModifiers.ProjectileDamageTakenModifier *= 0.4f;
+    artilleryModifiers.MeleeDamageTakenModifier *= 0.2f;
+    artilleryModifiers.ImpactDamageTakenModifier *= 0.2f;
+    artilleryModifiers.ExplosionDamageTakenModifier *= 0.05f;
+
+    artilleryModifiers.MeleeStunImmunity = 1;
     artilleryModifiers.InfiniteAmmo = 1;
     artilleryModifiers.ItemDropMode = 1;
 
