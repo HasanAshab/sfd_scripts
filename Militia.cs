@@ -165,6 +165,19 @@ public void PrepareP1()
     PlayerModifiers mods = p1.GetModifiers();
     mods.ProjectileDamageTakenModifier *= 0.8f;
     p1.SetModifiers(mods);
+
+    string primeColor = GetPrimeColor(p1.GetTeam());
+    p1.SetProfile(new IProfile() {
+        Name = "Bonduk",
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGreen"),
+        ChestOver = new IProfileClothingItem("KevlarVest_fem", primeColor),
+        ChestUnder = new IProfileClothingItem("LumberjackShirt2_fem", primeColor, "ClothingLightYellow"),
+        Hands = new IProfileClothingItem("GlovesBlack", "ClothingLightGray"),
+        Legs = new IProfileClothingItem("Pants_fem", primeColor),
+        Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+        Accesory = new IProfileClothingItem("SunGlasses", "", "ClothingLightGray"),
+    });
 }
 
 public void PrepareP2()
@@ -173,6 +186,19 @@ public void PrepareP2()
     PlayerModifiers mods = p2.GetModifiers();
     mods.MeleeDamageTakenModifier *= 0.8f;
     p2.SetModifiers(mods);
+
+    string primeColor = GetPrimeColor(p2.GetTeam());
+    p2.SetProfile(new IProfile() {
+        Name = "Hateli",
+        Gender = Gender.Male,
+        Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGray"),
+        ChestOver = new IProfileClothingItem("MilitaryJacket", primeColor, "ClothingLightGray"),
+        ChestUnder = new IProfileClothingItem("SleevelessShirt", "ClothingLightGray"),
+        Hands = new IProfileClothingItem("GlovesBlack", "ClothingLightGray"),
+        Legs = new IProfileClothingItem("Pants", primeColor),
+        Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+        Accesory = new IProfileClothingItem("Cigar", "ClothingDarkGray"),
+    });
 }
 
 public void SpawnRookies(TriggerArgs args)
@@ -834,9 +860,9 @@ public void ProcessRespawnQueue(TriggerArgs args)
                 {
                     newPlayer.SetGuardTarget(deadPlayerInfo.GuardTarget);
                 }
-                
+
                 // Re-equip the player after respawn
-                EquipMilitiaLoadout(newPlayer);
+                EquipMilitiaLoadout(newPlayer, false);
             }
         }
 
