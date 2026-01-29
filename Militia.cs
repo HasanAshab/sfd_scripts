@@ -38,6 +38,18 @@ private bool gameEnded = false;
 // Track colonels for each team (now supports all teams)
 private Dictionary<PlayerTeam, IPlayer> colonels = new Dictionary<PlayerTeam, IPlayer>();
 
+// Track colonel states for respawning after gib/void death
+private Dictionary<PlayerTeam, ColonelState> colonelStates = new Dictionary<PlayerTeam, ColonelState>();
+
+// Class to store colonel state before death
+public class ColonelState
+{
+    public float Health { get; set; }
+    public PlayerModifiers Modifiers { get; set; }
+    public WeaponItem[] Weapons { get; set; }
+    public IProfile Profile { get; set; }
+}
+
 private IPlayer team1Colonel = null;
 private IPlayer team2Colonel = null;
 private IPlayer team3Colonel = null;
@@ -411,6 +423,30 @@ private void CreateColonel(PlayerTeam team)
     }
 }
 
+private bool IsColonel(IPlayer player)
+{
+    foreach (var colonelEntry in colonels)
+    {
+        if (colonelEntry.Value != null && colonelEntry.Value.UniqueID == player.UniqueID)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+private PlayerTeam GetColonelTeam(IPlayer colonel)
+{
+    foreach (var colonelEntry in colonels)
+    {
+        if (colonelEntry.Value != null && colonelEntry.Value.UniqueID == colonel.UniqueID)
+        {
+            return colonelEntry.Key;
+        }
+    }
+    return PlayerTeam.Independent;
+}
+
 private int GetAILevel(PredefinedAIType aiType, PredefinedAIType[] hierarchy)
 {
     for (int i = 0; i < hierarchy.Length; i++)
@@ -465,8 +501,31 @@ public void OnPlayerSpawned(IPlayer player)
 
 public void OnPlayerDeath(IPlayer player, PlayerDeathArgs args)
 {
+    // Check if this is a colonel death
+    if (IsColonel(player))
+    {
+        PlayerTeam colonelTeam = GetColonelTeam(player);
+        
+        // If colonel died by gib or falling (Removed == true), respawn them
+        if (args.Removed)
+        {
+            // Save colonel state before respawning
+            SaveColonelState(player, colonelTeam);
+            
+            // Respawn colonel immediately at team player position
+            RespawnColonel(colonelTeam);
+            
+            return; // Don't process as regular player death
+        }
+        else
+        {
+            // Colonel died normally, save their state for potential future respawn
+            SaveColonelState(player, colonelTeam);
+        }
+    }
+    
     // Only handle respawn for main players (P1-P8), not spawned bots
-    if (
+    if (!player.IsBot &&
         !spawnedRookieIds.Contains(player.UniqueID) && 
         !spawnedCaptainIds.Contains(player.UniqueID) && 
         !spawnedArtilleryIds.Contains(player.UniqueID) &&
@@ -504,6 +563,112 @@ public void OnPlayerDeath(IPlayer player, PlayerDeathArgs args)
             
             // Add to respawn queue
             respawnQueue.Add(deadPlayerInfo);
+        }
+    }
+}
+
+private void SaveColonelState(IPlayer colonel, PlayerTeam team)
+{
+    // Save colonel's current state before death
+    ColonelState state = new ColonelState
+    {
+        Health = colonel.GetModifiers().CurrentHealth,
+        Modifiers = colonel.GetModifiers(),
+        Profile = colonel.GetProfile(),
+        Weapons = new WeaponItem[] { WeaponItem.MAGNUM, WeaponItem.KATANA, WeaponItem.GRENADES } // Default weapons
+    };
+    
+    colonelStates[team] = state;
+}
+
+private void RespawnColonel(PlayerTeam team)
+{
+    // Find any player from this team to get spawn position
+    IPlayer[] allPlayers = Game.GetPlayers();
+    Vector2 spawnPos = Vector2.Zero;
+    
+    foreach (IPlayer player in allPlayers)
+    {
+        if (player.GetTeam() == team && !IsColonel(player))
+        {
+            spawnPos = player.GetWorldPosition();
+            break; // Use the first non-colonel player found from this team
+        }
+    }
+    
+    // If no player found, cancel respawn
+    if (spawnPos == Vector2.Zero)
+    {
+        return;
+    }
+    
+    // Create new colonel
+    IPlayer newColonel = Game.CreatePlayer(spawnPos);
+    if (newColonel != null)
+    {
+        // Set team
+        newColonel.SetTeam(team);
+        newColonel.SetBotName("COLONEL");
+        
+        // Set as bot with very bad behavior (BotD)
+        BotBehavior colonelBehavior = new BotBehavior(true, PredefinedAIType.BotD);
+        newColonel.SetBotBehavior(colonelBehavior);
+        
+        // Set colonel properties
+        newColonel.SetNametagVisible(true);
+        newColonel.SetStatusBarsVisible(true);
+        newColonel.SetCameraSecondaryFocusMode(CameraFocusMode.Focus);
+        
+        // Restore previous state if available
+        if (colonelStates.ContainsKey(team))
+        {
+            ColonelState savedState = colonelStates[team];
+            
+            // Restore health and modifiers
+            PlayerModifiers restoredModifiers = savedState.Modifiers;
+            restoredModifiers.CurrentHealth = savedState.Health; // Restore exact HP before death
+            newColonel.SetModifiers(restoredModifiers);
+            
+            // Restore profile
+            newColonel.SetProfile(savedState.Profile);
+            
+            // Restore weapons
+            foreach (WeaponItem weapon in savedState.Weapons)
+            {
+                newColonel.GiveWeaponItem(weapon);
+            }
+        }
+        else
+        {
+            // Default setup if no saved state
+            PlayerModifiers colonelModifiers = newColonel.GetModifiers();
+            colonelModifiers.MaxHealth = 600;
+            colonelModifiers.CurrentHealth = 600;
+            newColonel.SetModifiers(colonelModifiers);
+            
+            newColonel.GiveWeaponItem(WeaponItem.MAGNUM);
+            newColonel.GiveWeaponItem(WeaponItem.KATANA);
+            newColonel.GiveWeaponItem(WeaponItem.GRENADES);
+            
+            newColonel.SetProfile(GetColonelProfile(team));
+        }
+        
+        // Update colonel reference
+        colonels[team] = newColonel;
+        switch (team)
+        {
+            case PlayerTeam.Team1:
+                team1Colonel = newColonel;
+                break;
+            case PlayerTeam.Team2:
+                team2Colonel = newColonel;
+                break;
+            case PlayerTeam.Team3:
+                team3Colonel = newColonel;
+                break;
+            case PlayerTeam.Team4:
+                team4Colonel = newColonel;
+                break;
         }
     }
 }
