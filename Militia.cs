@@ -761,7 +761,7 @@ private void RespawnColonel(PlayerTeam team)
             
             // Restore health and modifiers
             PlayerModifiers restoredModifiers = savedState.Modifiers;
-            restoredModifiers.CurrentHealth = savedState.Health; // Restore exact HP before death
+            restoredModifiers.CurrentHealth = (int) restoredModifiers.MaxHealth * 0.4f;
             newColonel.SetModifiers(restoredModifiers);
             
             // Restore profile
@@ -1558,7 +1558,7 @@ private string GetPrimeColor(PlayerTeam team)
 private IProfile GetRookieProfile(PlayerTeam team)
 {
     string primeColor = GetPrimeColor(team);
-    
+
     return new IProfile()
     {
         Name = "Rookie",
