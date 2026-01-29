@@ -1545,7 +1545,7 @@ private string GetPrimeColor(PlayerTeam team)
     }
     else if (team == PlayerTeam.Team3)
     {
-        return "ClothingLightOrange";
+        return "ClothingOrange";
     }
     else if (team == PlayerTeam.Team4)
     {
