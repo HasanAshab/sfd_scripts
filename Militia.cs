@@ -48,6 +48,7 @@ public class ColonelState
     public PlayerModifiers Modifiers { get; set; }
     public WeaponItem[] Weapons { get; set; }
     public IProfile Profile { get; set; }
+    public int RespawnCount { get; set; } // Track how many times respawned
 }
 
 private IPlayer team1Colonel = null;
@@ -506,14 +507,35 @@ public void OnPlayerDeath(IPlayer player, PlayerDeathArgs args)
     {
         PlayerTeam colonelTeam = GetColonelTeam(player);
         
-        // If colonel died by gib or falling (Removed == true), respawn them
+        // If colonel died by gib or falling (Removed == true), check if they can respawn
         if (args.Removed)
         {
-            // Save colonel state before respawning
+            // Save colonel state before checking respawn eligibility
             SaveColonelState(player, colonelTeam);
             
-            // Respawn colonel immediately at team player position
-            RespawnColonel(colonelTeam);
+            // Check if colonel has respawns left (max 3 respawns)
+            int currentRespawnCount = 0;
+            if (colonelStates.ContainsKey(colonelTeam))
+            {
+                currentRespawnCount = colonelStates[colonelTeam].RespawnCount;
+            }
+            
+            if (currentRespawnCount < 3)
+            {
+                // Respawn colonel and increment counter
+                RespawnColonel(colonelTeam);
+                
+                // Show respawn count message
+                string teamName = GetTeamName(colonelTeam);
+                int remainingRespawns = 3 - (currentRespawnCount + 1);
+                Game.ShowPopupMessage(teamName + " COLONEL RESPAWNED! (" + remainingRespawns + " respawns left)");
+            }
+            else
+            {
+                // No more respawns left
+                string teamName = GetTeamName(colonelTeam);
+                Game.ShowPopupMessage(teamName + " COLONEL ELIMINATED! (No respawns left)");
+            }
             
             return; // Don't process as regular player death
         }
@@ -569,13 +591,21 @@ public void OnPlayerDeath(IPlayer player, PlayerDeathArgs args)
 
 private void SaveColonelState(IPlayer colonel, PlayerTeam team)
 {
+    // Get existing respawn count if available, otherwise start at 0
+    int existingRespawnCount = 0;
+    if (colonelStates.ContainsKey(team))
+    {
+        existingRespawnCount = colonelStates[team].RespawnCount;
+    }
+    
     // Save colonel's current state before death
     ColonelState state = new ColonelState
     {
         Health = colonel.GetModifiers().CurrentHealth,
         Modifiers = colonel.GetModifiers(),
         Profile = colonel.GetProfile(),
-        Weapons = new WeaponItem[] { WeaponItem.MAGNUM, WeaponItem.KATANA, WeaponItem.GRENADES } // Default weapons
+        Weapons = new WeaponItem[] { WeaponItem.MAGNUM, WeaponItem.KATANA, WeaponItem.GRENADES }, // Default weapons
+        RespawnCount = existingRespawnCount // Preserve existing count (starts at 0 for new colonels)
     };
     
     colonelStates[team] = state;
@@ -619,7 +649,7 @@ private void RespawnColonel(PlayerTeam team)
         newColonel.SetStatusBarsVisible(true);
         newColonel.SetCameraSecondaryFocusMode(CameraFocusMode.Focus);
         
-        // Restore previous state if available
+        // Restore previous state if available and increment respawn count
         if (colonelStates.ContainsKey(team))
         {
             ColonelState savedState = colonelStates[team];
@@ -637,6 +667,10 @@ private void RespawnColonel(PlayerTeam team)
             {
                 newColonel.GiveWeaponItem(weapon);
             }
+            
+            // Increment respawn count
+            savedState.RespawnCount++;
+            colonelStates[team] = savedState;
         }
         else
         {
@@ -651,6 +685,17 @@ private void RespawnColonel(PlayerTeam team)
             newColonel.GiveWeaponItem(WeaponItem.GRENADES);
             
             newColonel.SetProfile(GetColonelProfile(team));
+            
+            // Initialize respawn count for first respawn
+            ColonelState newState = new ColonelState
+            {
+                Health = 600,
+                Modifiers = colonelModifiers,
+                Profile = GetColonelProfile(team),
+                Weapons = new WeaponItem[] { WeaponItem.MAGNUM, WeaponItem.KATANA, WeaponItem.GRENADES },
+                RespawnCount = 1 // First respawn
+            };
+            colonelStates[team] = newState;
         }
         
         // Update colonel reference
