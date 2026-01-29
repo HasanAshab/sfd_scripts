@@ -402,7 +402,10 @@ private void CreateColonel(PlayerTeam team)
         // Set as bot with very bad behavior (BotD)
         BotBehavior colonelBehavior = new BotBehavior(true, PredefinedAIType.BotD);
         colonel.SetBotBehavior(colonelBehavior);
-        
+        BotBehaviorSet colonelBehaviorSet = colonel.GetBotBehaviorSet();
+        colonelBehaviorSet.SearchItems = 0;
+        colonel.SetBotBehaviorSet(colonelBehaviorSet);
+
         // Set colonel properties
         colonel.SetNametagVisible(true);
         colonel.SetStatusBarsVisible(true);
@@ -414,10 +417,6 @@ private void CreateColonel(PlayerTeam team)
         colonelModifiers.CurrentHealth = 600;
         colonel.SetModifiers(colonelModifiers);
         
-        // Give colonel basic weapons
-        colonel.GiveWeaponItem(WeaponItem.MAGNUM);
-        colonel.GiveWeaponItem(WeaponItem.KATANA);
-        colonel.GiveWeaponItem(WeaponItem.GRENADES);
         
         // Set colonel profile
         colonel.SetProfile(GetColonelProfile(team));
