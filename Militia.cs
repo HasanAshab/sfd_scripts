@@ -99,13 +99,6 @@ public void OnStartup()
     artilleryTimer.SetRepeatCount(0); // Infinite repeats
     artilleryTimer.SetScriptMethod("SpawnArtillerys");
     artilleryTimer.Trigger();
-
-    // Set up artillery fire ammo timer
-    IObjectTimerTrigger fireAmmoTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    fireAmmoTimer.SetIntervalTime(7000); // 7 seconds
-    fireAmmoTimer.SetRepeatCount(0); // Infinite repeats
-    fireAmmoTimer.SetScriptMethod("GiveArtilleryFireAmmo");
-    fireAmmoTimer.Trigger();
     
     IObjectTimerTrigger droneTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
     droneTimer.SetIntervalTime(16000); // 16 seconds
@@ -218,24 +211,6 @@ public void SpawnArtillerys(TriggerArgs args)
             {
                 SpawnArtillery(team);
             }
-        }
-    }
-}
-
-public void GiveArtilleryFireAmmo(TriggerArgs args)
-{
-    if (gameEnded) return;
-    
-    // Get all current players and find artillery units
-    IPlayer[] allPlayers = Game.GetPlayers();
-    
-    foreach (IPlayer player in allPlayers)
-    {
-        // Check if this is a spawned artillery unit
-        if (player.IsBot && spawnedArtilleryIds.Contains(player.UniqueID))
-        {
-            // Give fire ammo to artillery
-            player.GiveWeaponItem(WeaponItem.FIREAMMO);
         }
     }
 }
@@ -1125,8 +1100,9 @@ private void SpawnArtillery(PlayerTeam team)
 
     artillery.SetModifiers(artilleryModifiers);
 
-    // Give grenade launcher
+    // Give weapons
     artillery.GiveWeaponItem(WeaponItem.GRENADE_LAUNCHER);
+    artillery.GiveWeaponItem(WeaponItem.FIREAMMO);
 
     // Set artillery profile
     artillery.SetProfile(GetArtilleryProfile(team));
