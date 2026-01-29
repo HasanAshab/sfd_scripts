@@ -47,7 +47,6 @@ public class ColonelState
 {
     public float Health { get; set; }
     public PlayerModifiers Modifiers { get; set; }
-    public WeaponItem[] Weapons { get; set; }
     public IProfile Profile { get; set; }
     public int RespawnCount { get; set; } // Track how many times respawned
     public bool BodyGuardsSpawned { get; set; } // Track if bodyguards have been spawned
@@ -490,7 +489,6 @@ private void SpawnBodyGuards(IPlayer colonel, PlayerTeam team)
             Health = 600,
             Modifiers = colonel.GetModifiers(),
             Profile = colonel.GetProfile(),
-            Weapons = new WeaponItem[] { WeaponItem.MAGNUM, WeaponItem.KATANA, WeaponItem.GRENADES },
             RespawnCount = 0,
             BodyGuardsSpawned = true
         };
@@ -683,7 +681,6 @@ private void SaveColonelState(IPlayer colonel, PlayerTeam team)
         Health = colonel.GetModifiers().CurrentHealth,
         Modifiers = colonel.GetModifiers(),
         Profile = colonel.GetProfile(),
-        Weapons = new WeaponItem[] { WeaponItem.MAGNUM, WeaponItem.KATANA, WeaponItem.GRENADES }, // Default weapons
         RespawnCount = existingRespawnCount // Preserve existing count (starts at 0 for new colonels)
     };
     
@@ -718,10 +715,13 @@ private void RespawnColonel(PlayerTeam team)
         // Set team
         newColonel.SetTeam(team);
         newColonel.SetBotName("COLONEL");
-        
+
         // Set as bot with very bad behavior (BotD)
         BotBehavior colonelBehavior = new BotBehavior(true, PredefinedAIType.BotD);
         newColonel.SetBotBehavior(colonelBehavior);
+        BotBehaviorSet colonelBehaviorSet = newColonel.GetBotBehaviorSet();
+        colonelBehaviorSet.SearchItems = 0;
+        newColonel.SetBotBehaviorSet(colonelBehaviorSet);
         
         // Set colonel properties
         newColonel.SetNametagVisible(true);
@@ -740,13 +740,7 @@ private void RespawnColonel(PlayerTeam team)
             
             // Restore profile
             newColonel.SetProfile(savedState.Profile);
-            
-            // Restore weapons
-            foreach (WeaponItem weapon in savedState.Weapons)
-            {
-                newColonel.GiveWeaponItem(weapon);
-            }
-            
+
             // Increment respawn count
             savedState.RespawnCount++;
             colonelStates[team] = savedState;
@@ -771,7 +765,6 @@ private void RespawnColonel(PlayerTeam team)
                 Health = 600,
                 Modifiers = colonelModifiers,
                 Profile = GetColonelProfile(team),
-                Weapons = new WeaponItem[] { WeaponItem.MAGNUM, WeaponItem.KATANA, WeaponItem.GRENADES },
                 RespawnCount = 1 // First respawn
             };
             colonelStates[team] = newState;
@@ -1611,6 +1604,6 @@ private IProfile GetBodyGuardProfile(PlayerTeam team)
         ChestUnder = new IProfileClothingItem("MilitaryShirt_fem", primeColor, primeColor),
         Legs = new IProfileClothingItem("Pants_fem", primeColor),
         Feet = new IProfileClothingItem("ShoesBlack", "ClothingGray"),
-        Accesory = new IProfileClothingItem("GasMask2", primeColor == "ClothingLightGray" ? "ClothingGray" : primeColor, "ClothingLightGray"),
+        Accesory = new IProfileClothingItem("GasMask2", "ClothingGray", "ClothingLightGray"),
     };
 }
