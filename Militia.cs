@@ -410,7 +410,7 @@ private void CreateColonel(PlayerTeam team)
         colonel.SetNametagVisible(true);
         colonel.SetStatusBarsVisible(true);
         colonel.SetCameraSecondaryFocusMode(CameraFocusMode.Focus);
-        
+
         // Give colonel enhanced stats (they're important but bad at fighting)
         PlayerModifiers colonelModifiers = colonel.GetModifiers();
         colonelModifiers.MaxHealth = 600; // High health to survive
