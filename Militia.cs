@@ -7,6 +7,7 @@ private HashSet<int> spawnedRookieIds = new HashSet<int>();
 private HashSet<int> spawnedCaptainIds = new HashSet<int>();
 private HashSet<int> spawnedArtilleryIds = new HashSet<int>();
 private HashSet<int> spawnedDroneIds = new HashSet<int>();
+private HashSet<int> spawnedBodyGuardIds = new HashSet<int>();
 
 // Track player respawn timers
 private Dictionary<int, IObjectTimerTrigger> playerRespawnTimers = new Dictionary<int, IObjectTimerTrigger>();
@@ -49,6 +50,7 @@ public class ColonelState
     public WeaponItem[] Weapons { get; set; }
     public IProfile Profile { get; set; }
     public int RespawnCount { get; set; } // Track how many times respawned
+    public bool BodyGuardsSpawned { get; set; } // Track if bodyguards have been spawned
 }
 
 private IPlayer team1Colonel = null;
@@ -255,7 +257,8 @@ public void CheckForWinner(TriggerArgs args)
     IPlayer[] mainPlayers = allPlayers.Where(p => !spawnedRookieIds.Contains(p.UniqueID) && 
                                                   !spawnedCaptainIds.Contains(p.UniqueID) &&
                                                   !spawnedArtilleryIds.Contains(p.UniqueID) &&
-                                                  !spawnedDroneIds.Contains(p.UniqueID)).ToArray();
+                                                  !spawnedDroneIds.Contains(p.UniqueID) &&
+                                                  !spawnedBodyGuardIds.Contains(p.UniqueID)).ToArray();
     
     // Check if all colonels are dead
     bool allColonelsDead = true;
@@ -421,6 +424,81 @@ private void CreateColonel(PlayerTeam team)
         
         // Store colonel reference
         colonels[team] = colonel;
+        
+        // Spawn 2 bodyguards for this colonel (only on first creation)
+        SpawnBodyGuards(colonel, team);
+    }
+}
+
+private void SpawnBodyGuards(IPlayer colonel, PlayerTeam team)
+{
+    // Check if bodyguards have already been spawned for this team
+    if (colonelStates.ContainsKey(team) && colonelStates[team].BodyGuardsSpawned)
+    {
+        return; // Bodyguards already spawned, don't spawn again
+    }
+    
+    Vector2 colonelPos = colonel.GetWorldPosition();
+    
+    // Spawn 2 bodyguards at colonel's position
+    for (int i = 0; i < 2; i++)
+    {
+        IPlayer bodyguard = Game.CreatePlayer(colonelPos);
+        if (bodyguard != null)
+        {
+            // Track as spawned bodyguard
+            spawnedBodyGuardIds.Add(bodyguard.UniqueID);
+            
+            // Set team
+            bodyguard.SetTeam(team);
+            
+            // Set as bot with good behavior (BotA)
+            BotBehavior bodyguardBehavior = new BotBehavior(true, PredefinedAIType.BotA);
+            bodyguard.SetBotBehavior(bodyguardBehavior);
+            
+            // Set bodyguard properties
+            bodyguard.SetNametagVisible(false);
+            bodyguard.SetStatusBarsVisible(false);
+            bodyguard.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+            
+            // Give bodyguard enhanced stats
+            PlayerModifiers bodyguardModifiers = bodyguard.GetModifiers();
+            bodyguardModifiers.ProjectileDamageTakenModifier *= 0.5f;
+            bodyguardModifiers.ExplosionDamageTakenModifier *= 0.5f;
+            bodyguardModifiers.CanBurn = 0;
+            bodyguardModifiers.RunSpeedModifier = 1.2f;
+            bodyguardModifiers.SprintSpeedModifier = 1.2f;
+            bodyguard.SetModifiers(bodyguardModifiers);
+            
+            // Give bodyguard weapons
+            bodyguard.GiveWeaponItem(WeaponItem.SHOCK_BATON);
+            bodyguard.GiveWeaponItem(WeaponItem.MACHINE_PISTOL);
+            bodyguard.GiveWeaponItem(WeaponItem.MP50);
+            
+            // Set bodyguard to guard the colonel
+            bodyguard.SetGuardTarget(colonel);
+            
+            // Set bodyguard profile
+            bodyguard.SetProfile(GetBodyGuardProfile(team));
+        }
+    }
+    
+    // Mark bodyguards as spawned for this team
+    if (!colonelStates.ContainsKey(team))
+    {
+        colonelStates[team] = new ColonelState
+        {
+            Health = 600,
+            Modifiers = colonel.GetModifiers(),
+            Profile = colonel.GetProfile(),
+            Weapons = new WeaponItem[] { WeaponItem.MAGNUM, WeaponItem.KATANA, WeaponItem.GRENADES },
+            RespawnCount = 0,
+            BodyGuardsSpawned = true
+        };
+    }
+    else
+    {
+        colonelStates[team].BodyGuardsSpawned = true;
     }
 }
 
@@ -474,7 +552,8 @@ private void SetupGuards(PlayerTeam team)
             !spawnedRookieIds.Contains(player.UniqueID) && 
             !spawnedCaptainIds.Contains(player.UniqueID) &&
             !spawnedArtilleryIds.Contains(player.UniqueID) &&
-            !spawnedDroneIds.Contains(player.UniqueID))
+            !spawnedDroneIds.Contains(player.UniqueID) &&
+            !spawnedBodyGuardIds.Contains(player.UniqueID))
         {
             // Set this bot to guard the colonel
             player.SetGuardTarget(colonel);
@@ -551,7 +630,8 @@ public void OnPlayerDeath(IPlayer player, PlayerDeathArgs args)
         !spawnedRookieIds.Contains(player.UniqueID) && 
         !spawnedCaptainIds.Contains(player.UniqueID) && 
         !spawnedArtilleryIds.Contains(player.UniqueID) &&
-        !spawnedDroneIds.Contains(player.UniqueID))
+        !spawnedDroneIds.Contains(player.UniqueID) &&
+        !spawnedBodyGuardIds.Contains(player.UniqueID))
     {
         // Check if player's colonel is alive
         PlayerTeam playerTeam = player.GetTeam();
@@ -1529,9 +1609,9 @@ private IProfile GetBodyGuardProfile(PlayerTeam team)
         Name = "Body Guard",
         Gender = Gender.Female,
         Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGray"),
-        ChestUnder = new IProfileClothingItem("MilitaryShirt_fem", primeColor, "ClothingDarkYellow"),
-        Legs = new IProfileClothingItem("PantsBlack_fem", primeColor),
+        ChestUnder = new IProfileClothingItem("MilitaryShirt_fem", primeColor, primeColor),
+        Legs = new IProfileClothingItem("Pants_fem", primeColor),
         Feet = new IProfileClothingItem("ShoesBlack", "ClothingGray"),
-        Accesory = new IProfileClothingItem("GasMask", primeColor, "ClothingLightGray"),
-    }
+        Accesory = new IProfileClothingItem("GasMask2", primeColor == "ClothingLightGray" ? "ClothingGray" : primeColor, "ClothingLightGray"),
+    };
 }
