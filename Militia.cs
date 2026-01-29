@@ -112,7 +112,7 @@ public void OnStartup()
     artilleryTimer.SetRepeatCount(0); // Infinite repeats
     artilleryTimer.SetScriptMethod("SpawnArtillerys");
     artilleryTimer.Trigger();
-    
+
     IObjectTimerTrigger droneTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
     droneTimer.SetIntervalTime(16000); // 16 seconds
     droneTimer.SetRepeatCount(0); // Infinite repeats
@@ -1206,8 +1206,8 @@ private void SpawnRookie(PlayerTeam team)
         rookieModifiers.SizeModifier = 0.88f;
         rookieModifiers.MaxHealth = 5; // Very low health
         rookieModifiers.CurrentHealth = 5;
-        rookieModifiers.MeleeDamageDealtModifier = 0.1f; // Very low melee damage (10%)
-        rookieModifiers.ProjectileDamageDealtModifier = 0.1f; // Very low projectile damage (10%)
+        rookieModifiers.MeleeDamageDealtModifier = 0.3f; // Very low melee damage (10%)
+        rookieModifiers.ProjectileDamageDealtModifier = 0.3f; // Very low projectile damage (10%)
         rookie.SetModifiers(rookieModifiers);
         
         // Give pistol weapon
@@ -1250,8 +1250,8 @@ private void SpawnCaptain(PlayerTeam team)
         PlayerModifiers captainModifiers = new PlayerModifiers();
         captainModifiers.MaxHealth = 15; // 3x rookie health
         captainModifiers.CurrentHealth = 15;
-        captainModifiers.MeleeDamageDealtModifier = 0.3f; // Very low melee damage (30%)
-        captainModifiers.ProjectileDamageDealtModifier = 0.3f; // Very low projectile damage (30%)
+        captainModifiers.MeleeDamageDealtModifier = 0.5f; // Very low melee damage (30%)
+        captainModifiers.ProjectileDamageDealtModifier = 0.5f; // Very low projectile damage (30%)
         captain.SetModifiers(captainModifiers);
 
         // Give pistol and knife weapons
@@ -1518,4 +1518,20 @@ private IProfile GetArtilleryProfile(PlayerTeam team)
         Gender = Gender.Male,
         Skin = new IProfileClothingItem("MechSkin", primeColor, "ClothingLightGray"),
     };
+}
+
+private IProfile GetBodyGuardProfile(PlayerTeam team)
+{
+    string primeColor = GetPrimeColor(team);
+    
+    return new IProfile()
+    {
+        Name = "Body Guard",
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGray"),
+        ChestUnder = new IProfileClothingItem("MilitaryShirt_fem", primeColor, "ClothingDarkYellow"),
+        Legs = new IProfileClothingItem("PantsBlack_fem", primeColor),
+        Feet = new IProfileClothingItem("ShoesBlack", "ClothingGray"),
+        Accesory = new IProfileClothingItem("GasMask", primeColor, "ClothingLightGray"),
+    }
 }
