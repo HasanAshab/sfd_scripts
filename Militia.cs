@@ -315,7 +315,7 @@ public void CheckForWinner(TriggerArgs args)
         
         // Clean up respawn queue when game ends
         respawnQueue.Clear();
-        
+
         Game.ShowPopupMessage("GAME OVER - No colonels or humans left!");
         Game.RunCommand("gameover");
         return;
@@ -630,15 +630,8 @@ public void OnPlayerDeath(IPlayer player, PlayerDeathArgs args)
                 // Show respawn count message
                 string teamName = GetTeamName(colonelTeam);
                 int remainingRespawns = 3 - (currentRespawnCount + 1);
-                Game.ShowPopupMessage(teamName + " COLONEL RESPAWNED! (" + remainingRespawns + " respawns left)");
+                Game.ShowChatMessage(teamName + " COLONEL RESPAWNED! (" + remainingRespawns + " respawns left)", Color.Red);
             }
-            else
-            {
-                // No more respawns left
-                string teamName = GetTeamName(colonelTeam);
-                Game.ShowPopupMessage(teamName + " COLONEL ELIMINATED! (No respawns left)");
-            }
-            
             return; // Don't process as regular player death
         }
         else
