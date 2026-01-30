@@ -122,10 +122,17 @@ public void OnStartup()
     droneTimer.Trigger();
     
     IObjectTimerTrigger assassinTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    assassinTimer.SetIntervalTime(9000); // 9 seconds
+    assassinTimer.SetIntervalTime(6000); // 6 seconds
     assassinTimer.SetRepeatCount(0); // Infinite repeats
     assassinTimer.SetScriptMethod("SpawnAssassins");
     assassinTimer.Trigger();
+    
+    // Set up assassin targeting update timer (every 500ms for responsive targeting)
+    IObjectTimerTrigger assassinTargetingTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    assassinTargetingTimer.SetIntervalTime(500); // 500ms for responsive targeting
+    assassinTargetingTimer.SetRepeatCount(0); // Infinite repeats
+    assassinTargetingTimer.SetScriptMethod("UpdateAssassinTargeting");
+    assassinTargetingTimer.Trigger();
     
     // Set up single respawn timer (processes queue every 5 seconds)
     IObjectTimerTrigger respawnTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -642,7 +649,7 @@ public void OnPlayerDeath(IPlayer player, PlayerDeathArgs args)
                 // Show respawn count message
                 string teamName = GetTeamName(colonelTeam);
                 int remainingRespawns = 3 - (currentRespawnCount + 1);
-                Game.ShowChatMessage(teamName + " COLONEL RESPAWNED! (" + remainingRespawns + " respawns left)", Color.Red);
+                Game.ShowChatMessage(teamName + " COLONEL RESPAWNED! (" + remainingRespawns + " respawns left)", Color.Yellow);
             }
             return; // Don't process as regular player death
         }
@@ -838,23 +845,23 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
         
         IPlayer target = hitArg.HitObject as IPlayer;
         if (target == null) continue;
-        
+    
         // Don't backstab other spawned units (rookies, captains, etc.)
-        if (spawnedRookieIds.Contains(target.UniqueID) ||
-            spawnedCaptainIds.Contains(target.UniqueID) ||
-            spawnedArtilleryIds.Contains(target.UniqueID) ||
-            spawnedDroneIds.Contains(target.UniqueID) ||
-            spawnedBodyGuardIds.Contains(target.UniqueID) ||
-            spawnedAssassinIds.Contains(target.UniqueID) ||
-            IsColonel(target))
-        {
-            continue; // Skip spawned units and colonels
-        }
+        // if (spawnedRookieIds.Contains(target.UniqueID) ||
+        //     spawnedCaptainIds.Contains(target.UniqueID) ||
+        //     spawnedArtilleryIds.Contains(target.UniqueID) ||
+        //     spawnedDroneIds.Contains(target.UniqueID) ||
+        //     spawnedBodyGuardIds.Contains(target.UniqueID) ||
+        //     spawnedAssassinIds.Contains(target.UniqueID) ||
+        //     IsColonel(target))
+        // {
+        //     continue; // Skip spawned units and colonels
+        // }
         
         // Check if both players are facing the same direction (backstab condition)
         int attackerFacing = attacker.FacingDirection;
         int targetFacing = target.FacingDirection;
-        
+        Game.ShowPopupMessage("attackerFacing: " + attackerFacing + ", targetFacing: " + targetFacing);
         if (attackerFacing == targetFacing)
         {
             // Backstab! Kill the target instantly
@@ -1751,13 +1758,15 @@ private void SpawnAssassin(PlayerTeam team)
         assassinBehaviorSet.SearchItems = 0;
         assassin.SetBotBehaviorSet(assassinBehaviorSet);
         
-        // Guard Own Colonel
-        SetColonelGuard(assassin, team);
+        // Don't guard colonel - assassins should hunt targets actively
+        // SetColonelGuard(assassin, team);
         
         PlayerModifiers assassinModifiers = new PlayerModifiers();
         assassinModifiers.SizeModifier = 0.9f;
         assassinModifiers.MaxHealth = 10; 
         assassinModifiers.CurrentHealth = 10;
+        assassinModifiers.RunSpeedModifier = 2.5f;
+        assassinModifiers.SprintSpeedModifier = 4.5f;
         assassin.SetModifiers(assassinModifiers);
         
         assassin.GiveWeaponItem(WeaponItem.KNIFE);
@@ -1765,4 +1774,67 @@ private void SpawnAssassin(PlayerTeam team)
         // Set assassin profile
         assassin.SetProfile(GetAssassinProfile(team));
     }
+}
+
+public void UpdateAssassinTargeting(TriggerArgs args)
+{
+    if (gameEnded) return;
+    
+    // Get all alive assassins
+    IPlayer[] allPlayers = Game.GetPlayers();
+    IPlayer[] assassins = allPlayers.Where(p => spawnedAssassinIds.Contains(p.UniqueID) && !p.IsDead).ToArray();
+    
+    foreach (IPlayer assassin in assassins)
+    {
+        // Find the best target for this assassin (enemy facing same direction)
+        IPlayer bestTarget = FindBestAssassinTarget(assassin);
+        
+        if (bestTarget != null)
+        {
+            // Set the assassin to target this player
+            assassin.SetForcedBotTarget(bestTarget);
+        }
+        else
+        {
+            // No good target found, clear forced target (let AI choose)
+            assassin.SetForcedBotTarget(null);
+        }
+    }
+}
+
+private IPlayer FindBestAssassinTarget(IPlayer assassin)
+{
+    PlayerTeam assassinTeam = assassin.GetTeam();
+    int assassinFacing = assassin.FacingDirection;
+    
+    // Get all potential targets (enemies not in spawned units)
+    IPlayer[] allPlayers = Game.GetPlayers();
+    IPlayer[] potentialTargets = allPlayers.Where(p => 
+        p.GetTeam() != assassinTeam && // Enemy team
+        !p.IsDead && // Alive
+        !spawnedRookieIds.Contains(p.UniqueID) && // Not spawned units
+        !spawnedCaptainIds.Contains(p.UniqueID) &&
+        !spawnedArtilleryIds.Contains(p.UniqueID) &&
+        !spawnedDroneIds.Contains(p.UniqueID) &&
+        !spawnedBodyGuardIds.Contains(p.UniqueID) &&
+        !spawnedAssassinIds.Contains(p.UniqueID) &&
+        !IsColonel(p) // Not colonels (they're too important to backstab easily)
+    ).ToArray();
+    
+    // Find targets facing the same direction as the assassin
+    IPlayer[] sameDirectionTargets = potentialTargets.Where(p => p.FacingDirection == assassinFacing).ToArray();
+    
+    if (sameDirectionTargets.Length > 0)
+    {
+        // Find the closest target facing the same direction
+        Vector2 assassinPos = assassin.GetWorldPosition();
+        IPlayer closestTarget = sameDirectionTargets
+            .OrderBy(p => Vector2.Distance(assassinPos, p.GetWorldPosition()))
+            .FirstOrDefault();
+        
+        return closestTarget;
+    }
+    
+    // No targets facing same direction found
+    return null;
 }
