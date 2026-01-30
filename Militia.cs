@@ -610,7 +610,7 @@ public void OnPlayerDeath(IPlayer player, PlayerDeathArgs args)
         PlayerTeam colonelTeam = GetColonelTeam(player);
         
         // If colonel died by gib or falling (Removed == true), check if they can respawn
-        if (args.Removed)
+        if (args.Killed && args.Removed)
         {
             // Save colonel state before checking respawn eligibility
             SaveColonelState(player, colonelTeam);
