@@ -1626,3 +1626,20 @@ private IProfile GetBodyGuardProfile(PlayerTeam team)
         Accesory = new IProfileClothingItem("GasMask2", "ClothingGray", "ClothingLightGray"),
     };
 }
+
+private IProfile GetAssassinProfile(PlayerTeam team)
+{
+    string primeColor = GetPrimeColor(team);
+    
+    return new IProfile()
+    {
+        Name = "Assassin",
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGray"),
+        Head = new IProfileClothingItem("Headband", primeColor),
+        ChestUnder = new IProfileClothingItem("SweaterBlack_fem", "ClothingDarkBlue"),
+        Legs = new IProfileClothingItem("PantsBlack_fem", "ClothingDarkBlue"),
+        Feet = new IProfileClothingItem("ShoesBlack", "ClothingGray"),
+        Accesory = new IProfileClothingItem("Mask", primeColor),
+    }
+}
