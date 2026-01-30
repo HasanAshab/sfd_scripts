@@ -8,6 +8,7 @@ private HashSet<int> spawnedCaptainIds = new HashSet<int>();
 private HashSet<int> spawnedArtilleryIds = new HashSet<int>();
 private HashSet<int> spawnedDroneIds = new HashSet<int>();
 private HashSet<int> spawnedBodyGuardIds = new HashSet<int>();
+private HashSet<int> spawnedAssassinIds = new HashSet<int>();
 
 // Track player respawn timers
 private Dictionary<int, IObjectTimerTrigger> playerRespawnTimers = new Dictionary<int, IObjectTimerTrigger>();
@@ -120,6 +121,12 @@ public void OnStartup()
     droneTimer.SetScriptMethod("SpawnDrones");
     droneTimer.Trigger();
     
+    IObjectTimerTrigger assassinTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    assassinTimer.SetIntervalTime(9000); // 9 seconds
+    assassinTimer.SetRepeatCount(0); // Infinite repeats
+    assassinTimer.SetScriptMethod("SpawnAssassins");
+    assassinTimer.Trigger();
+    
     // Set up single respawn timer (processes queue every 5 seconds)
     IObjectTimerTrigger respawnTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
     respawnTimer.SetIntervalTime(5000); // 5 seconds
@@ -143,6 +150,9 @@ public void OnStartup()
     
     // Set up player death callback for respawning
     Events.PlayerDeathCallback.Start(OnPlayerDeath);
+    
+    // Set up melee hit callback for assassin backstab mechanics
+    Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
     
     // Equip all players with militia loadout
     foreach (IPlayer player in Game.GetPlayers())
@@ -283,7 +293,8 @@ public void CheckForWinner(TriggerArgs args)
                                                   !spawnedCaptainIds.Contains(p.UniqueID) &&
                                                   !spawnedArtilleryIds.Contains(p.UniqueID) &&
                                                   !spawnedDroneIds.Contains(p.UniqueID) &&
-                                                  !spawnedBodyGuardIds.Contains(p.UniqueID)).ToArray();
+                                                  !spawnedBodyGuardIds.Contains(p.UniqueID) &&
+                                                  !spawnedAssassinIds.Contains(p.UniqueID)).ToArray();
     
     // Check if all colonels are dead
     bool allColonelsDead = true;
@@ -576,7 +587,8 @@ private void SetupGuards(PlayerTeam team)
             !spawnedCaptainIds.Contains(player.UniqueID) &&
             !spawnedArtilleryIds.Contains(player.UniqueID) &&
             !spawnedDroneIds.Contains(player.UniqueID) &&
-            !spawnedBodyGuardIds.Contains(player.UniqueID))
+            !spawnedBodyGuardIds.Contains(player.UniqueID) &&
+            !spawnedAssassinIds.Contains(player.UniqueID))
         {
             // Set this bot to guard the colonel
             player.SetGuardTarget(colonel);
@@ -647,7 +659,8 @@ public void OnPlayerDeath(IPlayer player, PlayerDeathArgs args)
         !spawnedCaptainIds.Contains(player.UniqueID) && 
         !spawnedArtilleryIds.Contains(player.UniqueID) &&
         !spawnedDroneIds.Contains(player.UniqueID) &&
-        !spawnedBodyGuardIds.Contains(player.UniqueID))
+        !spawnedBodyGuardIds.Contains(player.UniqueID) &&
+        !spawnedAssassinIds.Contains(player.UniqueID))
     {
         // Check if player's colonel is alive
         PlayerTeam playerTeam = player.GetTeam();
@@ -805,6 +818,53 @@ private void RespawnColonel(PlayerTeam team)
             case PlayerTeam.Team4:
                 team4Colonel = newColonel;
                 break;
+        }
+    }
+}
+
+public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
+{
+    // Check if attacker is an assassin
+    if (!spawnedAssassinIds.Contains(attacker.UniqueID))
+    {
+        return; // Not an assassin, ignore
+    }
+    
+    // Check each target hit by the assassin
+    foreach (PlayerMeleeHitArg hitArg in args)
+    {
+        IPlayer target = hitArg.HitPlayer;
+        if (target == null) continue;
+        
+        // Don't backstab other spawned units (rookies, captains, etc.)
+        if (spawnedRookieIds.Contains(target.UniqueID) ||
+            spawnedCaptainIds.Contains(target.UniqueID) ||
+            spawnedArtilleryIds.Contains(target.UniqueID) ||
+            spawnedDroneIds.Contains(target.UniqueID) ||
+            spawnedBodyGuardIds.Contains(target.UniqueID) ||
+            spawnedAssassinIds.Contains(target.UniqueID) ||
+            IsColonel(target))
+        {
+            continue; // Skip spawned units and colonels
+        }
+        
+        // Check if both players are facing the same direction (backstab condition)
+        int attackerFacing = attacker.FacingDirection;
+        int targetFacing = target.FacingDirection;
+        
+        if (attackerFacing == targetFacing)
+        {
+            // Backstab! Kill the target instantly
+            target.Kill();
+            
+            // Show backstab message
+            string targetName = target.GetProfile().Name;
+            if (targetName == null || targetName == "")
+            {
+                targetName = "Player";
+            }
+            
+            Game.ShowChatMessage("BACKSTAB! " + targetName + " was assassinated!", Color.Red);
         }
     }
 }
@@ -1641,5 +1701,67 @@ private IProfile GetAssassinProfile(PlayerTeam team)
         Legs = new IProfileClothingItem("PantsBlack_fem", "ClothingDarkBlue"),
         Feet = new IProfileClothingItem("ShoesBlack", "ClothingGray"),
         Accesory = new IProfileClothingItem("Mask", primeColor),
+    };
+}
+
+public void SpawnAssassins(TriggerArgs args)
+{
+    if (!gameEnded)
+    {
+        // Only spawn if colonels are alive
+        foreach (var colonelEntry in colonels)
+        {
+            PlayerTeam team = colonelEntry.Key;
+            IPlayer colonel = colonelEntry.Value;
+            
+            if (colonel != null && !colonel.IsDead)
+            {
+                SpawnAssassin(team);
+            }
+        }
+    }
+}
+
+private void SpawnAssassin(PlayerTeam team)
+{
+    // Get spawn position near colonel
+    Vector2 spawnPos = GetColonelSpawnPosition(team);
+    
+    // Create assassin bot
+    IPlayer assassin = Game.CreatePlayer(spawnPos);
+    if (assassin != null)
+    {
+        // Track this as a spawned assassin (exclude from winner calculation)
+        spawnedAssassinIds.Add(assassin.UniqueID);
+        
+        assassin.SetNametagVisible(false);
+        assassin.SetStatusBarsVisible(false);
+        assassin.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+        
+        // Set team
+        assassin.SetTeam(team);
+        
+        // Set as bot with easy behavior (same as rookies)
+        BotBehavior assassinBehavior = new BotBehavior(true, PredefinedAIType.BotD);
+        assassin.SetBotBehavior(assassinBehavior);
+        
+        // Guard Own Colonel
+        SetColonelGuard(assassin, team);
+        
+        // Set same modifiers as rookies
+        PlayerModifiers assassinModifiers = new PlayerModifiers();
+        assassinModifiers.SizeModifier = 0.88f;
+        assassinModifiers.MaxHealth = 5; // Very low health (same as rookies)
+        assassinModifiers.CurrentHealth = 5;
+        assassinModifiers.MeleeDamageDealtModifier = 0.3f; // Very low melee damage (same as rookies)
+        assassinModifiers.ProjectileDamageDealtModifier = 0.3f; // Very low projectile damage (same as rookies)
+        assassin.SetModifiers(assassinModifiers);
+        
+        // Give pistol weapon (same as rookies)
+        assassin.GiveWeaponItem(WeaponItem.PISTOL);
+        assassin.GiveWeaponItem(WeaponItem.GRENADES);
+
+        // Set assassin profile
+        assassin.SetProfile(GetAssassinProfile(team));
     }
 }
