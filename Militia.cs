@@ -833,7 +833,10 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     // Check each target hit by the assassin
     foreach (PlayerMeleeHitArg hitArg in args)
     {
-        IPlayer target = hitArg.HitPlayer;
+        // Check if the hit object is a player
+        if (!hitArg.IsPlayer) continue;
+        
+        IPlayer target = hitArg.HitObject as IPlayer;
         if (target == null) continue;
         
         // Don't backstab other spawned units (rookies, captains, etc.)
@@ -1742,24 +1745,22 @@ private void SpawnAssassin(PlayerTeam team)
         assassin.SetTeam(team);
         
         // Set as bot with easy behavior (same as rookies)
-        BotBehavior assassinBehavior = new BotBehavior(true, PredefinedAIType.BotD);
+        BotBehavior assassinBehavior = new BotBehavior(true, PredefinedAIType.BotA);
         assassin.SetBotBehavior(assassinBehavior);
+        BotBehaviorSet assassinBehaviorSet = assassin.GetBotBehaviorSet();
+        assassinBehaviorSet.SearchItems = 0;
+        assassin.SetBotBehaviorSet(assassinBehaviorSet);
         
         // Guard Own Colonel
         SetColonelGuard(assassin, team);
         
-        // Set same modifiers as rookies
         PlayerModifiers assassinModifiers = new PlayerModifiers();
-        assassinModifiers.SizeModifier = 0.88f;
-        assassinModifiers.MaxHealth = 5; // Very low health (same as rookies)
-        assassinModifiers.CurrentHealth = 5;
-        assassinModifiers.MeleeDamageDealtModifier = 0.3f; // Very low melee damage (same as rookies)
-        assassinModifiers.ProjectileDamageDealtModifier = 0.3f; // Very low projectile damage (same as rookies)
+        assassinModifiers.SizeModifier = 0.9f;
+        assassinModifiers.MaxHealth = 10; 
+        assassinModifiers.CurrentHealth = 10;
         assassin.SetModifiers(assassinModifiers);
         
-        // Give pistol weapon (same as rookies)
-        assassin.GiveWeaponItem(WeaponItem.PISTOL);
-        assassin.GiveWeaponItem(WeaponItem.GRENADES);
+        assassin.GiveWeaponItem(WeaponItem.KNIFE);
 
         // Set assassin profile
         assassin.SetProfile(GetAssassinProfile(team));
