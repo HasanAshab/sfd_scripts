@@ -10,6 +10,9 @@ private HashSet<int> spawnedDroneIds = new HashSet<int>();
 private HashSet<int> spawnedBodyGuardIds = new HashSet<int>();
 private HashSet<int> spawnedAssassinIds = new HashSet<int>();
 
+// Track player facing directions for backstab detection
+private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
+
 // Track player respawn timers
 private Dictionary<int, IObjectTimerTrigger> playerRespawnTimers = new Dictionary<int, IObjectTimerTrigger>();
 
@@ -133,6 +136,13 @@ public void OnStartup()
     assassinTargetingTimer.SetRepeatCount(0); // Infinite repeats
     assassinTargetingTimer.SetScriptMethod("UpdateAssassinTargeting");
     assassinTargetingTimer.Trigger();
+    
+    // Set up player facing direction tracking timer (every 30ms)
+    IObjectTimerTrigger facingTrackingTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    facingTrackingTimer.SetIntervalTime(30); // 30ms for precise tracking
+    facingTrackingTimer.SetRepeatCount(0); // Infinite repeats
+    facingTrackingTimer.SetScriptMethod("UpdatePlayerFacingDirections");
+    facingTrackingTimer.Trigger();
     
     // Set up single respawn timer (processes queue every 5 seconds)
     IObjectTimerTrigger respawnTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -859,9 +869,11 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
         // }
         
         // Check if both players are facing the same direction (backstab condition)
+        // Use stored facing direction from before the hit (to avoid instant turn-around)
         int attackerFacing = attacker.FacingDirection;
-        int targetFacing = target.FacingDirection;
-        Game.ShowPopupMessage("attackerFacing: " + attackerFacing + ", targetFacing: " + targetFacing);
+        int targetFacing = playerFacingDirections.ContainsKey(target.UniqueID) ? 
+                          playerFacingDirections[target.UniqueID] : 
+                          target.FacingDirection; // Fallback to current if not tracked yet
         if (attackerFacing == targetFacing)
         {
             // Backstab! Kill the target instantly
@@ -1822,7 +1834,10 @@ private IPlayer FindBestAssassinTarget(IPlayer assassin)
     ).ToArray();
     
     // Find targets facing the same direction as the assassin
-    IPlayer[] sameDirectionTargets = potentialTargets.Where(p => p.FacingDirection == assassinFacing).ToArray();
+    IPlayer[] sameDirectionTargets = potentialTargets.Where(p => 
+        playerFacingDirections.ContainsKey(p.UniqueID) && 
+        playerFacingDirections[p.UniqueID] == assassinFacing
+    ).ToArray();
     
     if (sameDirectionTargets.Length > 0)
     {
@@ -1837,4 +1852,19 @@ private IPlayer FindBestAssassinTarget(IPlayer assassin)
     
     // No targets facing same direction found
     return null;
+}
+
+public void UpdatePlayerFacingDirections(TriggerArgs args)
+{
+    if (gameEnded) return;
+    
+    // Update facing directions for all alive players
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer player in allPlayers)
+    {
+        if (!player.IsDead)
+        {
+            playerFacingDirections[player.UniqueID] = player.FacingDirection;
+        }
+    }
 }
