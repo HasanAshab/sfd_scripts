@@ -504,8 +504,8 @@ private void SpawnBodyGuards(IPlayer colonel, PlayerTeam team)
             // Set team
             bodyguard.SetTeam(team);
             
-            // Set as bot with good behavior (BotA)
-            BotBehavior bodyguardBehavior = new BotBehavior(true, PredefinedAIType.BotA);
+            // Set as bot with good behavior (CompanionA)
+            BotBehavior bodyguardBehavior = new BotBehavior(true, PredefinedAIType.CompanionA);
             bodyguard.SetBotBehavior(bodyguardBehavior);
             
             // Set bodyguard properties
@@ -856,17 +856,17 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
         IPlayer target = hitArg.HitObject as IPlayer;
         if (target == null) continue;
     
-        // Don't backstab other spawned units (rookies, captains, etc.)
-        // if (spawnedRookieIds.Contains(target.UniqueID) ||
-        //     spawnedCaptainIds.Contains(target.UniqueID) ||
-        //     spawnedArtilleryIds.Contains(target.UniqueID) ||
-        //     spawnedDroneIds.Contains(target.UniqueID) ||
-        //     spawnedBodyGuardIds.Contains(target.UniqueID) ||
-        //     spawnedAssassinIds.Contains(target.UniqueID) ||
-        //     IsColonel(target))
-        // {
-        //     continue; // Skip spawned units and colonels
-        // }
+        if (
+            // spawnedRookieIds.Contains(target.UniqueID) ||
+            // spawnedCaptainIds.Contains(target.UniqueID) ||
+            // spawnedArtilleryIds.Contains(target.UniqueID) ||
+            // spawnedDroneIds.Contains(target.UniqueID) ||
+            // spawnedBodyGuardIds.Contains(target.UniqueID) ||
+            // spawnedAssassinIds.Contains(target.UniqueID) ||
+            IsColonel(target))
+        {
+            continue;
+        }
         
         // Check if both players are facing the same direction (backstab condition)
         // Use stored facing direction from before the hit (to avoid instant turn-around)
