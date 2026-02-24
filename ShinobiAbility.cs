@@ -6,7 +6,7 @@
 private IPlayer uchihaPlayer = null;
 private bool susanoActive = false;
 private bool susanoUsed = false; // Track if Susano has been used once
-private float originalMaxHealth = 100f;
+private int originalMaxHealth = 100;
 private float originalSizeModifier = 1f;
 
 private IPlayer senjuPlayer = null;
@@ -96,8 +96,8 @@ private void ActivateSusano()
     
     // Transform to Susano form
     mods.SizeModifier = 2f; // 2x size
-    mods.MaxHealth = originalMaxHealth * 3f; // 3x health
-    mods.CurrentHealth = originalMaxHealth * 3f; // Full heal to 3x health
+    mods.MaxHealth = (int)(originalMaxHealth * 3f); // 3x health
+    mods.CurrentHealth = (int)(originalMaxHealth * 3f); // Full heal to 3x health
 
     // Strength boost
     mods.MeleeDamageDealtModifier = 2f; // 2x melee damage
@@ -146,17 +146,17 @@ public void GiveSenjuAbility(IPlayer player)
 {
     // Store the player reference
     senjuPlayer = player;
-    
+
     // Get current modifiers
     PlayerModifiers mods = player.GetModifiers();
-    
+
     // Set max energy to 3x (default is 100)
-    mods.MaxEnergy = 3f; // 3x max energy
-    mods.CurrentEnergy = 3f; // Start with full energy
-    
+    mods.MaxEnergy = (int)(mods.MaxEnergy * 3f); // 3x max energy
+    mods.CurrentEnergy = (int)(mods.CurrentEnergy * 3f); // Start with full energy
+
     // Apply modifiers
     player.SetModifiers(mods);
-    
+
     // Set up timer to heal 2% of max HP every 2 seconds
     IObjectTimerTrigger senjuHealTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
     senjuHealTimer.SetIntervalTime(2000); // 2 seconds
@@ -177,8 +177,8 @@ public void HealSenjuPlayer(TriggerArgs args)
     float maxHealth = mods.MaxHealth;
     float currentHealth = mods.CurrentHealth;
     
-    // Heal 2% of max HP
-    float healAmount = maxHealth * 0.02f;
+    // Heal 5% of max HP
+    float healAmount = maxHealth * 0.05f;
     float newHealth = currentHealth + healAmount;
     
     // Don't exceed max health
