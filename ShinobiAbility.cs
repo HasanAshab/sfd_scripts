@@ -96,18 +96,16 @@ private void ActivateSusano()
     
     // Transform to Susano form
     mods.SizeModifier = 2f; // 2x size
-    mods.MaxHealth = (int)(originalMaxHealth * 3f); // 3x health
-    mods.CurrentHealth = (int)(originalMaxHealth * 3f); // Full heal to 3x health
-
-    // Strength boost
-    mods.MeleeDamageDealtModifier = 2f; // 2x melee damage
-    mods.ProjectileDamageDealtModifier = 1.5f; // 1.5x projectile damage
+    mods.MaxHealth = (int)(originalMaxHealth * 2f); // 3x health
+    mods.CurrentHealth = (int)(originalMaxHealth * 2f); // Full heal to 3x health
 
     // Apply modifiers
     uchihaPlayer.SetModifiers(mods);
     
     // Give Katana
     uchihaPlayer.GiveWeaponItem(WeaponItem.KATANA);
+
+    uchihaPlayer.SetStrengthBoostTime(9999999);
     
     // Show transformation message
     Game.ShowChatMessage("SUSANO ACTIVATED!", Color.Red);
@@ -127,13 +125,13 @@ private void BreakSusano()
     mods.MaxHealth = originalMaxHealth; // Original max health
     mods.CurrentHealth = originalMaxHealth * 0.2f; // Set to 20% of original health
     
-    // Remove strength boost
-    mods.MeleeDamageDealtModifier = 1f; // Normal melee damage
-    mods.ProjectileDamageDealtModifier = 1f; // Normal projectile damage
     
     // Apply modifiers
     uchihaPlayer.SetModifiers(mods);
     
+    // Remove strength boost
+    uchihaPlayer.SetStrengthBoostTime(0);
+
     // Remove Katana
     uchihaPlayer.RemoveWeaponItemType(WeaponItemType.Melee);
     
