@@ -80,7 +80,7 @@ private bool IsHighestDifficultyBot(IPlayer player)
         PredefinedAIType.BotC,
         PredefinedAIType.Meatgrinder
     };
-    
+
     // Check if this player is an elite bot type
     bool isEliteBot = false;
     foreach (PredefinedAIType eliteType in eliteBotTypes)
