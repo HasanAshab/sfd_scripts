@@ -98,11 +98,11 @@ private void ActivateSusano()
     mods.SizeModifier = 2f; // 2x size
     mods.MaxHealth = originalMaxHealth * 3f; // 3x health
     mods.CurrentHealth = originalMaxHealth * 3f; // Full heal to 3x health
-    
+
     // Strength boost
     mods.MeleeDamageDealtModifier = 2f; // 2x melee damage
     mods.ProjectileDamageDealtModifier = 1.5f; // 1.5x projectile damage
-    
+
     // Apply modifiers
     uchihaPlayer.SetModifiers(mods);
     
