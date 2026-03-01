@@ -52,6 +52,13 @@ public void GiveUchihaAbility(IPlayer player)
     healthMonitorTimer.SetRepeatCount(0); // Infinite repeats
     healthMonitorTimer.SetScriptMethod("MonitorUchihaHealth");
     healthMonitorTimer.Trigger();
+    
+    // Set up eye contact burning ability timer
+    IObjectTimerTrigger eyeContactTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    eyeContactTimer.SetIntervalTime(500); // Check every 500ms
+    eyeContactTimer.SetRepeatCount(0); // Infinite repeats
+    eyeContactTimer.SetScriptMethod("CheckUchihaEyeContact");
+    eyeContactTimer.Trigger();
 }
 
 public void GiveUchihaSlowmo(TriggerArgs args)
@@ -139,6 +146,44 @@ private void BreakSusano()
     
     // Show break message
     Game.ShowChatMessage("SUSANO BROKEN!", Color.Blue);
+}
+
+public void CheckUchihaEyeContact(TriggerArgs args)
+{
+    if (uchihaPlayer == null || uchihaPlayer.IsDead) return;
+    
+    // Get all players to check for targeting
+    IPlayer[] allPlayers = Game.GetPlayers();
+    int uchihaFacing = uchihaPlayer.FacingDirection;
+    
+    foreach (IPlayer player in allPlayers)
+    {
+        // Skip if same player, dead, or not a bot
+        if (player.UniqueID == uchihaPlayer.UniqueID || player.IsDead || !player.IsBot) continue;
+        
+        // Check if this player is targeting the Uchiha
+        IObject target = player.GetBotTarget();
+        if (target == null) continue;
+        
+        // Check if target is the Uchiha player
+        IPlayer targetPlayer = target as IPlayer;
+        if (targetPlayer == null || targetPlayer.UniqueID != uchihaPlayer.UniqueID) continue;
+        
+        // Check if they are facing each other (different facing directions)
+        int playerFacing = player.FacingDirection;
+        if (playerFacing == uchihaFacing) continue; // Same direction = not facing each other
+        
+        // 75% chance to burn the player
+        int randomChance = (int)(Game.TotalElapsedGameTime * 1000) + player.UniqueID;
+        if ((randomChance % 100) < 75) // 75% chance
+        {
+            // Burn the player
+            player.SetMaxFire();
+            
+            // Show eye contact message
+            Game.ShowChatMessage("SHARINGAN! " + player.GetProfile().Name + " burned by eye contact!", Color.Red);
+        }
+    }
 }
 
 
