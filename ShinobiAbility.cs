@@ -8,6 +8,7 @@ private bool susanoActive = false;
 private bool susanoUsed = false; // Track if Susano has been used once
 private int originalMaxHealth = 100;
 private float originalSizeModifier = 1f;
+private float originalMeleeForceModifier = 1f;
 
 private IPlayer senjuPlayer = null;
 
@@ -31,6 +32,7 @@ public void GiveUchihaAbility(IPlayer player)
     PlayerModifiers originalMods = player.GetModifiers();
     originalMaxHealth = originalMods.MaxHealth;
     originalSizeModifier = originalMods.SizeModifier;
+    originalMeleeForceModifier = originalMods.MeleeForceModifier;
     
     // Give initial SLOWMO_5
     if (uchihaPlayer != null && !uchihaPlayer.IsDead)
@@ -108,6 +110,7 @@ private void ActivateSusano()
     mods.SizeModifier = 2f; // 2x size
     mods.MaxHealth = (int)(originalMaxHealth * 2f); // 3x health
     mods.CurrentHealth = (int)(originalMaxHealth * 2f); // Full heal to 3x health
+    mods.MeleeForceModifier = (int)(originalMeleeForceModifier * 3f);
     mods.MeleeStunImmunity = 1;
     mods.CanBurn = 0;
 
@@ -137,6 +140,7 @@ private void BreakSusano()
     mods.SizeModifier = originalSizeModifier; // Original size
     mods.MaxHealth = originalMaxHealth; // Original max health
     mods.CurrentHealth = originalMaxHealth * 0.2f; // Set to 20% of original health
+    mods.MeleeForceModifier = originalMeleeForceModifier;
     mods.MeleeStunImmunity = 0;
     mods.CanBurn = 1;
     
