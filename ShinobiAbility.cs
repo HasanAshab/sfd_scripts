@@ -114,6 +114,7 @@ private void ActivateSusano()
     // Apply modifiers
     uchihaPlayer.SetModifiers(mods);
     
+    uchihaPlayer.RemoveWeaponItemType(WeaponItemType.Powerup);
     // Give Katana
     uchihaPlayer.GiveWeaponItem(WeaponItem.KATANA);
 
@@ -189,9 +190,9 @@ public void CheckUchihaEyeContact(TriggerArgs args)
         int playerFacing = player.FacingDirection;
         if (playerFacing == uchihaFacing) continue; // Same direction = not facing each other
         
-        // 75% chance to burn the player
+        // 50% chance to burn the player
         int randomChance = (int)(Game.TotalElapsedGameTime * 1000) + player.UniqueID;
-        if ((randomChance % 100) < 75) // 75% chance
+        if ((randomChance % 100) < 50) // 50% chance
         {
             // Burn the player
             player.SetMaxFire();
