@@ -175,7 +175,7 @@ public void SetupBots()
             Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
         });
     }
-    
+
     bichiBot = Game.CreatePlayer(spawnPositions[1]);
     if (bichiBot != null)
     {
@@ -190,7 +190,7 @@ public void SetupBots()
     Skin = new IProfileClothingItem("Normal", "Skin3", "ClothingLightGreen"),
     ChestUnder = new IProfileClothingItem("Sweater", "ClothingGreen"),
     Hands = new IProfileClothingItem("GlovesBlack", "ClothingLightGray"),
-    Legs = new IProfileClothingItem("PantsBlack", "ClothingBlue"),
+    Legs = new IProfileClothingItem("Skirt", "ClothingBlue"),
     Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
 });
     }

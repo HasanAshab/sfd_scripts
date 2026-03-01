@@ -114,7 +114,7 @@ private void ActivateSusano()
 private void BreakSusano()
 {
     if (uchihaPlayer == null || uchihaPlayer.IsDead) return;
-    
+
     susanoActive = false;
     
     // Get current modifiers
