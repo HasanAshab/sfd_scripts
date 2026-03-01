@@ -9,7 +9,7 @@ private bool susanoUsed = false; // Track if Susano has been used once
 private int originalMaxHealth = 100;
 private float originalSizeModifier = 1f;
 private float originalMeleeForceModifier = 1f;
-
+private IProfile originalProfile = null;
 private IPlayer senjuPlayer = null;
 
 
@@ -33,6 +33,7 @@ public void GiveUchihaAbility(IPlayer player)
     originalMaxHealth = originalMods.MaxHealth;
     originalSizeModifier = originalMods.SizeModifier;
     originalMeleeForceModifier = originalMods.MeleeForceModifier;
+    originalProfile = player.GetProfile();
     
     // Give initial SLOWMO_5
     if (uchihaPlayer != null && !uchihaPlayer.IsDead)
@@ -170,7 +171,7 @@ private void BreakSusano()
     uchihaPlayer.RemoveWeaponItemType(WeaponItemType.Melee);
 
     // Remove Susano profile
-    uchihaPlayer.SetProfile(null);
+    uchihaPlayer.SetProfile(originalProfile);
     
     // Show break message
     Game.ShowChatMessage("SUSANO BROKEN!", Color.Blue);
