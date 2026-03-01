@@ -163,7 +163,7 @@ public void CheckUchihaEyeContact(TriggerArgs args)
         if (player.UniqueID == uchihaPlayer.UniqueID || player.IsDead || !player.IsBot) continue;
         
         // Skip if player is already burning
-        if (player.IsBurning()) continue;
+        if (player.IsBurning) continue;
         
         // Check if this player is targeting the Uchiha
         IObject target = player.GetBotTarget();
@@ -176,7 +176,7 @@ public void CheckUchihaEyeContact(TriggerArgs args)
         // Check range - player must be within 5 tiles (160 pixels) of Uchiha
         Vector2 playerPos = player.GetWorldPosition();
         float distance = Vector2.Distance(uchihaPos, playerPos);
-        if (distance > 160f) continue; // 5 tiles * 32 pixels per tile
+        if (distance > 120f) continue; // 5 tiles * 32 pixels per tile
         
         // Check if they are facing each other (different facing directions)
         int playerFacing = player.FacingDirection;
