@@ -64,7 +64,8 @@ public void GiveUchihaAbility(IPlayer player)
 public void GiveUchihaSlowmo(TriggerArgs args)
 {
     // Give SLOWMO_5 to the Uchiha player every 20 seconds
-    if (uchihaPlayer != null && !uchihaPlayer.IsDead)
+    // But not when Susano is active
+    if (uchihaPlayer != null && !uchihaPlayer.IsDead && !susanoActive)
     {
         uchihaPlayer.RemoveWeaponItemType(WeaponItemType.Powerup);
         uchihaPlayer.GiveWeaponItem(WeaponItem.SLOWMO_5);
