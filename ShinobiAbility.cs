@@ -152,6 +152,9 @@ public void CheckUchihaEyeContact(TriggerArgs args)
 {
     if (uchihaPlayer == null || uchihaPlayer.IsDead) return;
     
+    // Only work when Susano is not active
+    if (susanoActive) return;
+    
     // Get all players to check for targeting
     IPlayer[] allPlayers = Game.GetPlayers();
     int uchihaFacing = uchihaPlayer.FacingDirection;
