@@ -13,7 +13,7 @@ public void MakeEveryoneSmaller()
         if (!player.IsDead)
         {
             PlayerModifiers mods = player.GetModifiers();
-            mods.SizeModifier *= 0.65f;
+            mods.SizeModifier *= 0.85f;
             player.SetModifiers(mods);
         }
     }

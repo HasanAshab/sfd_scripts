@@ -121,6 +121,22 @@ private void ActivateSusano()
     // Give Katana
     uchihaPlayer.GiveWeaponItem(WeaponItem.KATANA);
 
+    uchihaPlayer.SetProfile(
+        new IProfile()
+        {
+            Name = "Assassin",
+            Gender = Gender.Female,
+            Skin = new IProfileClothingItem("BearSkin", ""),
+            Head = new IProfileClothingItem("SpikedHelmet", "ClothingLightBlue"),
+            ChestOver = new IProfileClothingItem("Poncho_fem", "ClothingLightBlue", "ClothingLightBlue"),
+            ChestUnder = new IProfileClothingItem("LumberjackShirt_fem", "ClothingLightBlue", "ClothingLightGray"),
+            Hands = new IProfileClothingItem("SafetyGloves_fem", "ClothingLightBlue"),
+            Legs = new IProfileClothingItem("PantsBlack_fem", "ClothingBlue"),
+            Feet = new IProfileClothingItem("Boots", "ClothingLightBlue"),
+            Accesory = new IProfileClothingItem("ClownMakeup_fem", "ClothingLightBlue"),
+        }
+    );
+
     uchihaPlayer.SetStrengthBoostTime(9999999);
     
     // Show transformation message
@@ -152,6 +168,9 @@ private void BreakSusano()
 
     // Remove Katana
     uchihaPlayer.RemoveWeaponItemType(WeaponItemType.Melee);
+
+    // Remove Susano profile
+    uchihaPlayer.SetProfile(null);
     
     // Show break message
     Game.ShowChatMessage("SUSANO BROKEN!", Color.Blue);
