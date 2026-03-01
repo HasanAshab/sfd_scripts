@@ -34,7 +34,8 @@ public void GiveUchihaAbility(IPlayer player)
     
     // Give initial SLOWMO_5
     if (uchihaPlayer != null && !uchihaPlayer.IsDead)
-    {
+    {   
+        uchihaPlayer.RemoveWeaponItemType(WeaponItemType.Powerup);
         uchihaPlayer.GiveWeaponItem(WeaponItem.SLOWMO_5);
     }
     
@@ -58,6 +59,7 @@ public void GiveUchihaSlowmo(TriggerArgs args)
     // Give SLOWMO_5 to the Uchiha player every 20 seconds
     if (uchihaPlayer != null && !uchihaPlayer.IsDead)
     {
+        uchihaPlayer.RemoveWeaponItemType(WeaponItemType.Powerup);
         uchihaPlayer.GiveWeaponItem(WeaponItem.SLOWMO_5);
     }
 }
