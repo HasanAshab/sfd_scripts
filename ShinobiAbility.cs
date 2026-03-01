@@ -109,7 +109,7 @@ private void ActivateSusano()
     mods.MaxHealth = (int)(originalMaxHealth * 2f); // 3x health
     mods.CurrentHealth = (int)(originalMaxHealth * 2f); // Full heal to 3x health
     mods.MeleeStunImmunity = 1;
-    mods.CanBurn = 1;
+    mods.CanBurn = 0;
 
     // Apply modifiers
     uchihaPlayer.SetModifiers(mods);
@@ -137,7 +137,7 @@ private void BreakSusano()
     mods.MaxHealth = originalMaxHealth; // Original max health
     mods.CurrentHealth = originalMaxHealth * 0.2f; // Set to 20% of original health
     mods.MeleeStunImmunity = 0;
-    mods.CanBurn = 0;
+    mods.CanBurn = 1;
     
     // Apply modifiers
     uchihaPlayer.SetModifiers(mods);
