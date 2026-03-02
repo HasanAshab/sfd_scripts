@@ -126,15 +126,15 @@ private void ActivateSusano()
         new IProfile()
         {
             Name = "Assassin",
-            Gender = Gender.Female,
-            Skin = new IProfileClothingItem("BearSkin", ""),
+            Gender = Gender.Male,
+            Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightBlue"),
             Head = new IProfileClothingItem("SpikedHelmet", "ClothingLightBlue"),
-            ChestOver = new IProfileClothingItem("Poncho_fem", "ClothingLightBlue", "ClothingLightBlue"),
-            ChestUnder = new IProfileClothingItem("LumberjackShirt_fem", "ClothingLightBlue", "ClothingLightGray"),
-            Hands = new IProfileClothingItem("SafetyGloves_fem", "ClothingLightBlue"),
-            Legs = new IProfileClothingItem("PantsBlack_fem", "ClothingBlue"),
+            ChestOver = new IProfileClothingItem("Poncho", "ClothingLightBlue", "ClothingLightBlue"),
+            ChestUnder = new IProfileClothingItem("LumberjackShirt", "ClothingLightBlue", "ClothingLightGray"),
+            Hands = new IProfileClothingItem("SafetyGloves", "ClothingLightBlue"),
+            Legs = new IProfileClothingItem("PantsBlack", "ClothingBlue"),
             Feet = new IProfileClothingItem("Boots", "ClothingLightBlue"),
-            Accesory = new IProfileClothingItem("ClownMakeup_fem", "ClothingLightBlue"),
+            Accesory = new IProfileClothingItem("ClownMakeup", "ClothingLightBlue"),
         }
     );
 
@@ -172,7 +172,7 @@ private void BreakSusano()
 
     // Remove Susano profile
     uchihaPlayer.SetProfile(originalProfile);
-    
+
     // Show break message
     Game.ShowChatMessage("SUSANO BROKEN!", Color.Blue);
 }
@@ -239,6 +239,7 @@ public void GiveSenjuAbility(IPlayer player)
     // Set max energy to 3x (default is 100)
     mods.MaxEnergy = (int)(mods.MaxEnergy * 3f); // 3x max energy
     mods.CurrentEnergy = (int)(mods.CurrentEnergy * 3f); // Start with full energy
+    mods.EnergyRechargeModifier = 2f; // 2x energy recharge rate
 
     // Apply modifiers
     player.SetModifiers(mods);
@@ -251,7 +252,7 @@ public void GiveSenjuAbility(IPlayer player)
     senjuHealTimer.Trigger();
     
     // Show ability granted message
-    Game.ShowChatMessage("SENJU ABILITY GRANTED! 3x Energy + Regeneration", Color.Green);
+    Game.ShowChatMessage("SENJU ABILITY GRANTED! 3x Energy + 2x Recharge + Regeneration", Color.Green);
 }
 
 public void HealSenjuPlayer(TriggerArgs args)
