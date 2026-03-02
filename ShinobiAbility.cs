@@ -11,6 +11,9 @@ private float originalSizeModifier = 1f;
 private float originalMeleeForceModifier = 1f;
 private IProfile originalProfile = null;
 private IPlayer senjuPlayer = null;
+private IPlayer woodenGolem = null;
+private int senjuBlockCount = 0;
+private bool isGolemActive = false;
 
 
 
@@ -251,8 +254,21 @@ public void GiveSenjuAbility(IPlayer player)
     senjuHealTimer.SetScriptMethod("HealSenjuPlayer");
     senjuHealTimer.Trigger();
     
+    // Set up golem energy drain timer (every 1 second)
+    IObjectTimerTrigger golemEnergyTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    golemEnergyTimer.SetIntervalTime(1000); // 1 second
+    golemEnergyTimer.SetRepeatCount(0); // Infinite repeats
+    golemEnergyTimer.SetScriptMethod("DrainGolemEnergy");
+    golemEnergyTimer.Trigger();
+    
+    // Set up player key input callback for block detection
+    Events.PlayerKeyInputCallback.Start(OnSenjuKeyInput);
+    
+    // Set up player death callback for golem cleanup
+    Events.PlayerDeathCallback.Start(OnSenjuPlayerDeath);
+    
     // Show ability granted message
-    Game.ShowChatMessage("SENJU ABILITY GRANTED! 3x Energy + 2x Recharge + Regeneration", Color.Green);
+    Game.ShowChatMessage("SENJU ABILITY GRANTED! 3x Energy + 2x Recharge + Regeneration + Golem Summon", Color.Green);
 }
 
 public void HealSenjuPlayer(TriggerArgs args)
@@ -277,4 +293,163 @@ public void HealSenjuPlayer(TriggerArgs args)
     // Apply healing
     mods.CurrentHealth = newHealth;
     senjuPlayer.SetModifiers(mods);
+}
+
+public void OnSenjuKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
+{
+    // Only track Senju player
+    if (player == null || senjuPlayer == null || player.UniqueID != senjuPlayer.UniqueID) return;
+    
+    foreach (VirtualKeyInfo keyInfo in keyInfos)
+    {
+        // Check for block key press while sitting
+        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.BLOCK)
+        {
+            // Check if player is sitting (crouching)
+            if (player.IsCrouching)
+            {
+                senjuBlockCount++;
+                Game.ShowChatMessage("Senju Block Count: " + senjuBlockCount + "/2", Color.Green);
+                
+                // Summon golem after 2 blocks
+                if (senjuBlockCount >= 2 && !isGolemActive)
+                {
+                    SummonWoodenGolem();
+                    senjuBlockCount = 0; // Reset counter
+                }
+            }
+        }
+    }
+}
+
+private void SummonWoodenGolem()
+{
+    if (senjuPlayer == null || senjuPlayer.IsDead) return;
+    
+    // Check if player has enough energy (30 energy required)
+    PlayerModifiers mods = senjuPlayer.GetModifiers();
+    if (mods.CurrentEnergy < 0.3f) // 30% of max energy (which is 3.0, so 0.3 = 30 energy)
+    {
+        Game.ShowChatMessage("Not enough energy to summon golem! (30 energy required)", Color.Red);
+        return;
+    }
+    
+    // Deduct initial energy cost
+    mods.CurrentEnergy -= 0.3f; // 30 energy
+    senjuPlayer.SetModifiers(mods);
+    
+    // Create wooden golem at Senju's position
+    Vector2 senjuPos = senjuPlayer.GetWorldPosition();
+    woodenGolem = Game.CreatePlayer(senjuPos);
+    
+    if (woodenGolem != null)
+    {
+        isGolemActive = true;
+        
+        // Set golem properties
+        woodenGolem.SetTeam(senjuPlayer.GetTeam());
+        woodenGolem.SetBotName("WOOD GOLEM");
+        
+        // Set as bot with defensive behavior
+        BotBehavior golemBehavior = new BotBehavior(true, PredefinedAIType.BotA);
+        woodenGolem.SetBotBehavior(golemBehavior);
+        
+        // Set golem to guard the Senju player
+        woodenGolem.SetGuardTarget(senjuPlayer);
+        
+        // Set golem properties
+        woodenGolem.SetNametagVisible(true);
+        woodenGolem.SetStatusBarsVisible(true);
+        woodenGolem.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+        
+        // Give golem enhanced stats (tanky guardian)
+        PlayerModifiers golemMods = new PlayerModifiers();
+        golemMods.MaxHealth = 200; // High health
+        golemMods.CurrentHealth = 200;
+        golemMods.SizeModifier = 1.3f; // Larger size
+        golemMods.RunSpeedModifier = 0.7f; // Slower movement
+        golemMods.SprintSpeedModifier = 0.7f;
+        golemMods.MeleeDamageDealtModifier = 1.5f; // Strong melee
+        golemMods.ProjectileDamageTakenModifier = 0.6f; // Damage resistance
+        golemMods.MeleeDamageTakenModifier = 0.6f;
+        woodenGolem.SetModifiers(golemMods);
+        
+        // Give golem weapons
+        woodenGolem.GiveWeaponItem(WeaponItem.HAMMER);
+        woodenGolem.GiveWeaponItem(WeaponItem.GRENADES);
+        
+        // Set golem profile
+        woodenGolem.SetProfile(GetWoodenGolemProfile());
+        
+        Game.ShowChatMessage("WOODEN GOLEM SUMMONED! (-30 energy, -5 energy/sec)", Color.Green);
+    }
+}
+
+public void DrainGolemEnergy(TriggerArgs args)
+{
+    // Only drain energy if golem is active
+    if (!isGolemActive || senjuPlayer == null || senjuPlayer.IsDead) return;
+    
+    PlayerModifiers mods = senjuPlayer.GetModifiers();
+    
+    // Drain 5 energy per second (5% of max energy which is 3.0, so 0.05)
+    mods.CurrentEnergy -= 0.05f; // 5 energy per second
+    
+    // Check if out of energy
+    if (mods.CurrentEnergy <= 0f)
+    {
+        mods.CurrentEnergy = 0f;
+        senjuPlayer.SetModifiers(mods);
+        
+        // Destroy golem when out of energy
+        DestroyWoodenGolem();
+        Game.ShowChatMessage("Out of energy! Wooden Golem destroyed!", Color.Red);
+    }
+    else
+    {
+        senjuPlayer.SetModifiers(mods);
+    }
+}
+
+private void DestroyWoodenGolem()
+{
+    if (woodenGolem != null && !woodenGolem.IsDead)
+    {
+        // Gib the golem
+        woodenGolem.Gib();
+    }
+    
+    woodenGolem = null;
+    isGolemActive = false;
+    senjuBlockCount = 0; // Reset block counter
+}
+
+private IProfile GetWoodenGolemProfile()
+{
+    return new IProfile()
+    {
+        Name = "Wood Golem",
+        Gender = Gender.Male,
+        Skin = new IProfileClothingItem("MechSkin", "ClothingBrown", "ClothingDarkBrown"),
+        Head = new IProfileClothingItem("Helmet", "ClothingBrown"),
+        ChestOver = new IProfileClothingItem("KevlarVest", "ClothingBrown"),
+        ChestUnder = new IProfileClothingItem("MilitaryShirt", "ClothingBrown", "ClothingDarkBrown"),
+        Hands = new IProfileClothingItem("Gloves", "ClothingBrown"),
+        Waist = new IProfileClothingItem("SatchelBelt", "ClothingBrown"),
+        Legs = new IProfileClothingItem("Pants", "ClothingBrown"),
+        Feet = new IProfileClothingItem("BootsBlack", "ClothingBrown"),
+    };
+}
+
+public void OnSenjuPlayerDeath(IPlayer player, PlayerDeathArgs args)
+{
+    // Clean up golem if Senju player dies
+    if (player != null && senjuPlayer != null && player.UniqueID == senjuPlayer.UniqueID)
+    {
+        if (isGolemActive)
+        {
+            DestroyWoodenGolem();
+            Game.ShowChatMessage("Senju died! Wooden Golem destroyed!", Color.Yellow);
+        }
+    }
 }
