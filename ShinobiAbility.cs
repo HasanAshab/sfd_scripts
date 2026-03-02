@@ -11,9 +11,8 @@ private float originalSizeModifier = 1f;
 private float originalMeleeForceModifier = 1f;
 private IProfile originalProfile = null;
 private IPlayer senjuPlayer = null;
-private IPlayer woodenGolem = null;
+private List<IPlayer> woodenGolems = new List<IPlayer>();
 private int senjuBlockCount = 0;
-private bool isGolemActive = false;
 
 
 
@@ -312,7 +311,7 @@ public void OnSenjuKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
                 Game.ShowChatMessage("Senju Block Count: " + senjuBlockCount + "/2", Color.Green);
                 
                 // Summon golem after 2 blocks
-                if (senjuBlockCount >= 2 && !isGolemActive)
+                if (senjuBlockCount >= 2)
                 {
                     SummonWoodenGolem();
                     senjuBlockCount = 0; // Reset counter
@@ -328,6 +327,7 @@ private void SummonWoodenGolem()
     
     // Check if player has enough energy (30 energy required)
     PlayerModifiers mods = senjuPlayer.GetModifiers();
+    Game.ShowChatMessage("Current Energy: " + mods.CurrentEnergy, Color.Green);
     if (mods.CurrentEnergy < 0.3f) // 30% of max energy (which is 3.0, so 0.3 = 30 energy)
     {
         Game.ShowChatMessage("Not enough energy to summon golem! (30 energy required)", Color.Red);
@@ -340,11 +340,12 @@ private void SummonWoodenGolem()
     
     // Create wooden golem at Senju's position
     Vector2 senjuPos = senjuPlayer.GetWorldPosition();
-    woodenGolem = Game.CreatePlayer(senjuPos);
+    IPlayer woodenGolem = Game.CreatePlayer(senjuPos);
     
     if (woodenGolem != null)
     {
-        isGolemActive = true;
+        // Add to golem list
+        woodenGolems.Add(woodenGolem);
         
         // Set golem properties
         woodenGolem.SetTeam(senjuPlayer.GetTeam());
@@ -381,19 +382,23 @@ private void SummonWoodenGolem()
         // Set golem profile
         woodenGolem.SetProfile(GetWoodenGolemProfile());
         
-        Game.ShowChatMessage("WOODEN GOLEM SUMMONED! (-30 energy, -5 energy/sec)", Color.Green);
+        Game.ShowChatMessage("WOODEN GOLEM SUMMONED! (Total: " + woodenGolems.Count + ", -30 energy, -" + (woodenGolems.Count * 5) + " energy/sec)", Color.Green);
     }
 }
 
 public void DrainGolemEnergy(TriggerArgs args)
 {
-    // Only drain energy if golem is active
-    if (!isGolemActive || senjuPlayer == null || senjuPlayer.IsDead) return;
+    // Clean up dead golems first
+    CleanupDeadGolems();
+    
+    // Only drain energy if golems are active
+    if (woodenGolems.Count == 0 || senjuPlayer == null || senjuPlayer.IsDead) return;
     
     PlayerModifiers mods = senjuPlayer.GetModifiers();
     
-    // Drain 5 energy per second (5% of max energy which is 3.0, so 0.05)
-    mods.CurrentEnergy -= 0.05f; // 5 energy per second
+    // Drain 5 energy per second per golem
+    float energyDrain = 0.05f * woodenGolems.Count; // 5 energy per golem per second
+    mods.CurrentEnergy -= energyDrain;
     
     // Check if out of energy
     if (mods.CurrentEnergy <= 0f)
@@ -401,9 +406,9 @@ public void DrainGolemEnergy(TriggerArgs args)
         mods.CurrentEnergy = 0f;
         senjuPlayer.SetModifiers(mods);
         
-        // Destroy golem when out of energy
-        DestroyWoodenGolem();
-        Game.ShowChatMessage("Out of energy! Wooden Golem destroyed!", Color.Red);
+        // Destroy all golems when out of energy
+        DestroyAllWoodenGolems();
+        Game.ShowChatMessage("Out of energy! All Wooden Golems destroyed!", Color.Red);
     }
     else
     {
@@ -411,17 +416,25 @@ public void DrainGolemEnergy(TriggerArgs args)
     }
 }
 
-private void DestroyWoodenGolem()
+private void DestroyAllWoodenGolems()
 {
-    if (woodenGolem != null && !woodenGolem.IsDead)
+    foreach (IPlayer golem in woodenGolems)
     {
-        // Gib the golem
-        woodenGolem.Gib();
+        if (golem != null && !golem.IsDead)
+        {
+            // Gib the golem
+            golem.Gib();
+        }
     }
     
-    woodenGolem = null;
-    isGolemActive = false;
+    woodenGolems.Clear();
     senjuBlockCount = 0; // Reset block counter
+}
+
+private void CleanupDeadGolems()
+{
+    // Remove dead golems from the list
+    woodenGolems.RemoveAll(golem => golem == null || golem.IsDead);
 }
 
 private IProfile GetWoodenGolemProfile()
@@ -443,13 +456,13 @@ private IProfile GetWoodenGolemProfile()
 
 public void OnSenjuPlayerDeath(IPlayer player, PlayerDeathArgs args)
 {
-    // Clean up golem if Senju player dies
+    // Clean up golems if Senju player dies
     if (player != null && senjuPlayer != null && player.UniqueID == senjuPlayer.UniqueID)
     {
-        if (isGolemActive)
+        if (woodenGolems.Count > 0)
         {
-            DestroyWoodenGolem();
-            Game.ShowChatMessage("Senju died! Wooden Golem destroyed!", Color.Yellow);
+            DestroyAllWoodenGolems();
+            Game.ShowChatMessage("Senju died! All Wooden Golems destroyed!", Color.Yellow);
         }
     }
 }
