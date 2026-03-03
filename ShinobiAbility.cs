@@ -3,6 +3,38 @@
 // Susano transformation at 20% HP and breaks at 10% HP
 // Provides Senju ability with 3x max energy and health regeneration
 
+// Configuration Variables
+private const int UCHIHA_SLOWMO_INTERVAL = 20000; // 20 seconds
+private const float SUSANO_ACTIVATE_THRESHOLD = 20f; // 20% HP
+private const float SUSANO_BREAK_THRESHOLD = 10f; // 10% HP
+private const float SUSANO_SIZE_MULTIPLIER = 2f; // 2x size
+private const float SUSANO_HEALTH_MULTIPLIER = 3f; // 3x health
+private const float SUSANO_MELEE_DAMAGE_MULTIPLIER = 2f; // 2x melee damage
+private const float SUSANO_PROJECTILE_DAMAGE_MULTIPLIER = 1.5f; // 1.5x projectile damage
+private const int SUSANO_MAX_RESPAWNS = 3; // 3 respawns max
+
+private const float UCHIHA_EYE_CONTACT_RANGE = 160f; // 5 tiles * 32 pixels
+private const int UCHIHA_EYE_CONTACT_BURN_CHANCE = 75; // 75% chance
+private const int UCHIHA_EYE_CONTACT_CHECK_INTERVAL = 500; // 500ms
+
+private const float SENJU_MAX_ENERGY_MULTIPLIER = 3f; // 3x max energy
+private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 2f; // 2x energy recharge
+private const int SENJU_HEAL_INTERVAL = 2000; // 2 seconds
+private const float SENJU_HEAL_PERCENTAGE = 0.02f; // 2% of max HP
+
+private const int SENJU_BLOCKS_REQUIRED = 2; // 2 blocks to summon golem
+private const float GOLEM_SUMMON_ENERGY_COST = 0.3f; // 30 energy (30% of 100 base energy)
+private const float GOLEM_ENERGY_DRAIN_PER_SECOND = 0.05f; // 5 energy per second per golem
+private const int GOLEM_ENERGY_DRAIN_INTERVAL = 1000; // 1 second
+private const float GOLEM_MAX_HEALTH = 200f; // 200 HP
+private const float GOLEM_SIZE_MULTIPLIER = 1.3f; // 1.3x size
+private const float GOLEM_SPEED_MULTIPLIER = 0.7f; // 0.7x speed
+private const float GOLEM_MELEE_DAMAGE_MULTIPLIER = 1.5f; // 1.5x melee damage
+private const float GOLEM_DAMAGE_RESISTANCE = 0.6f; // 40% damage reduction (0.6 = 60% damage taken)
+
+private const int HEALTH_MONITOR_INTERVAL = 100; // 100ms
+private const int FACING_TRACKING_INTERVAL = 30; // 30ms
+
 private IPlayer uchihaPlayer = null;
 private bool susanoActive = false;
 private bool susanoUsed = false; // Track if Susano has been used once
@@ -46,21 +78,21 @@ public void GiveUchihaAbility(IPlayer player)
     
     // Set up timer to give SLOWMO_5 every 20 seconds
     IObjectTimerTrigger uchihaAbilityTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    uchihaAbilityTimer.SetIntervalTime(20000); // 20 seconds
+    uchihaAbilityTimer.SetIntervalTime(UCHIHA_SLOWMO_INTERVAL);
     uchihaAbilityTimer.SetRepeatCount(0); // Infinite repeats
     uchihaAbilityTimer.SetScriptMethod("GiveUchihaSlowmo");
     uchihaAbilityTimer.Trigger();
     
     // Set up health monitoring timer for Susano transformation
     IObjectTimerTrigger healthMonitorTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    healthMonitorTimer.SetIntervalTime(100); // Check every 100ms
+    healthMonitorTimer.SetIntervalTime(HEALTH_MONITOR_INTERVAL);
     healthMonitorTimer.SetRepeatCount(0); // Infinite repeats
     healthMonitorTimer.SetScriptMethod("MonitorUchihaHealth");
     healthMonitorTimer.Trigger();
     
     // Set up eye contact burning ability timer
     IObjectTimerTrigger eyeContactTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    eyeContactTimer.SetIntervalTime(500); // Check every 500ms
+    eyeContactTimer.SetIntervalTime(UCHIHA_EYE_CONTACT_CHECK_INTERVAL);
     eyeContactTimer.SetRepeatCount(0); // Infinite repeats
     eyeContactTimer.SetScriptMethod("CheckUchihaEyeContact");
     eyeContactTimer.Trigger();
@@ -87,13 +119,13 @@ public void MonitorUchihaHealth(TriggerArgs args)
     float healthPercentage = (currentHealth / maxHealth) * 100f;
     
     // Activate Susano when health drops to 20% (first time only)
-    if (!susanoActive && !susanoUsed && healthPercentage <= 20f)
+    if (!susanoActive && !susanoUsed && healthPercentage <= SUSANO_ACTIVATE_THRESHOLD)
     {
         ActivateSusano();
     }
     
     // Break Susano when health drops to 10% while Susano is active
-    if (susanoActive && healthPercentage <= 10f)
+    if (susanoActive && healthPercentage <= SUSANO_BREAK_THRESHOLD)
     {
         BreakSusano();
     }
@@ -110,10 +142,10 @@ private void ActivateSusano()
     PlayerModifiers mods = uchihaPlayer.GetModifiers();
     
     // Transform to Susano form
-    mods.SizeModifier = 2f; // 2x size
-    mods.MaxHealth = (int)(originalMaxHealth * 2f); // 3x health
-    mods.CurrentHealth = (int)(originalMaxHealth * 2f); // Full heal to 3x health
-    mods.MeleeForceModifier = (int)(originalMeleeForceModifier * 3f);
+    mods.SizeModifier = SUSANO_SIZE_MULTIPLIER;
+    mods.MaxHealth = (int)(originalMaxHealth * SUSANO_HEALTH_MULTIPLIER);
+    mods.CurrentHealth = (int)(originalMaxHealth * SUSANO_HEALTH_MULTIPLIER);
+    mods.MeleeForceModifier = (int)(originalMeleeForceModifier * SUSANO_MELEE_DAMAGE_MULTIPLIER);
     mods.MeleeStunImmunity = 1;
     mods.CanBurn = 0;
 
@@ -207,18 +239,18 @@ public void CheckUchihaEyeContact(TriggerArgs args)
         IPlayer targetPlayer = target as IPlayer;
         if (targetPlayer == null || targetPlayer.UniqueID != uchihaPlayer.UniqueID) continue;
         
-        // Check range - player must be within 5 tiles (160 pixels) of Uchiha
+        // Check range - player must be within configured range of Uchiha
         Vector2 playerPos = player.GetWorldPosition();
         float distance = Vector2.Distance(uchihaPos, playerPos);
-        if (distance > 120f) continue; // 5 tiles * 32 pixels per tile
+        if (distance > UCHIHA_EYE_CONTACT_RANGE) continue;
         
         // Check if they are facing each other (different facing directions)
         int playerFacing = player.FacingDirection;
         if (playerFacing == uchihaFacing) continue; // Same direction = not facing each other
         
-        // 50% chance to burn the player
+        // Configured chance to burn the player
         int randomChance = (int)(Game.TotalElapsedGameTime * 1000) + player.UniqueID;
-        if ((randomChance % 100) < 50) // 50% chance
+        if ((randomChance % 100) < UCHIHA_EYE_CONTACT_BURN_CHANCE)
         {
             // Burn the player
             player.SetMaxFire();
@@ -238,25 +270,25 @@ public void GiveSenjuAbility(IPlayer player)
     // Get current modifiers
     PlayerModifiers mods = player.GetModifiers();
 
-    // Set max energy to 3x (default is 100)
-    mods.MaxEnergy = (int)(mods.MaxEnergy * 3f); // 3x max energy
-    mods.CurrentEnergy = (int)(mods.CurrentEnergy * 3f); // Start with full energy
-    mods.EnergyRechargeModifier = 2f; // 2x energy recharge rate
+    // Set max energy to configured multiplier (default is 100)
+    mods.MaxEnergy = (int)(mods.MaxEnergy * SENJU_MAX_ENERGY_MULTIPLIER);
+    mods.CurrentEnergy = (int)(mods.CurrentEnergy * SENJU_MAX_ENERGY_MULTIPLIER);
+    mods.EnergyRechargeModifier = SENJU_ENERGY_RECHARGE_MULTIPLIER;
 
     // Apply modifiers
     player.SetModifiers(mods);
 
-    // Set up timer to heal 2% of max HP every 2 seconds
+    // Set up timer to heal configured percentage of max HP every configured interval
     IObjectTimerTrigger senjuHealTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    senjuHealTimer.SetIntervalTime(2000); // 2 seconds
+    senjuHealTimer.SetIntervalTime(SENJU_HEAL_INTERVAL);
     senjuHealTimer.SetRepeatCount(0); // Infinite repeats
     senjuHealTimer.SetScriptMethod("HealSenjuPlayer");
     senjuHealTimer.Trigger();
     
-    // Set up golem energy drain timer (every 1 second)
+    // Set up golem energy drain timer
     IObjectTimerTrigger golemEnergyTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    golemEnergyTimer.SetIntervalTime(1000); // 1 second
-    golemEnergyTimer.SetRepeatCount(0); // Infinite repeats
+    golemEnergyTimer.SetIntervalTime(GOLEM_ENERGY_DRAIN_INTERVAL);
+    senjuHealTimer.SetRepeatCount(0); // Infinite repeats
     golemEnergyTimer.SetScriptMethod("DrainGolemEnergy");
     golemEnergyTimer.Trigger();
     
@@ -272,15 +304,15 @@ public void GiveSenjuAbility(IPlayer player)
 
 public void HealSenjuPlayer(TriggerArgs args)
 {
-    // Heal Senju player every 2 seconds
+    // Heal Senju player every configured interval
     if (senjuPlayer == null || senjuPlayer.IsDead) return;
     
     PlayerModifiers mods = senjuPlayer.GetModifiers();
     float maxHealth = mods.MaxHealth;
     float currentHealth = mods.CurrentHealth;
     
-    // Heal 5% of max HP
-    float healAmount = maxHealth * 0.05f;
+    // Heal configured percentage of max HP
+    float healAmount = maxHealth * SENJU_HEAL_PERCENTAGE;
     float newHealth = currentHealth + healAmount;
     
     // Don't exceed max health
