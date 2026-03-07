@@ -27,7 +27,7 @@ private const int SENJU_PUNCH_WINDOW = 600;
 private const float SENJU_THIRD_PUNCH_FORCE = 15f;
 private const float SENJU_THIRD_PUNCH_IMPACT_RESISTANCE = 0.05f;
 private const float SENJU_THIRD_PUNCH_DAMAGE_MULTIPLIER = 3f;
-private const int SENJU_THIRD_PUNCH_DAMAGE_DURATION = 100;
+private const int SENJU_THIRD_PUNCH_DAMAGE_DURATION = 500;
 
 private const int SENJU_BLOCKS_REQUIRED = 2;
 private const float GOLEM_SUMMON_ENERGY_COST = 250f;
