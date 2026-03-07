@@ -29,6 +29,10 @@ private const float SENJU_THIRD_PUNCH_IMPACT_RESISTANCE = 0.05f;
 private const float SENJU_THIRD_PUNCH_DAMAGE_MULTIPLIER = 3f;
 private const int SENJU_THIRD_PUNCH_DAMAGE_DURATION = 500;
 
+private const float SENJU_JUMP_ATTACK_RANGE = 40f;
+private const float SENJU_JUMP_ATTACK_SLOW_SPEED = 0.005f;
+private const int SENJU_JUMP_ATTACK_SLOW_DURATION = 5000;
+
 private const int SENJU_BLOCKS_REQUIRED = 2;
 private const float GOLEM_SUMMON_ENERGY_COST = 250f;
 private const float GOLEM_ENERGY_DRAIN_PER_SECOND = 20f;
@@ -61,14 +65,16 @@ private float lastSenjuPunchTime = 0f;
 private float senjuOriginalMeleeForce = 1f;
 private float senjuOriginalMeleeDamage = 1f;
 private List<int> thirdPunchVictimIDs = new List<int>();
+private Dictionary<int, float> slowedPlayersOriginalRunSpeed = new Dictionary<int, float>();
+private Dictionary<int, float> slowedPlayersOriginalSprintSpeed = new Dictionary<int, float>();
 
 
 
 public void OnStartup()
 {
     IPlayer[] players = Game.GetPlayers();
-    GiveSenjuAbility(players[0]);
-    GiveUchihaAbility(players[1]);
+    GiveUchihaAbility(players[0]);
+    GiveSenjuAbility(players[1]);
 }
 
 
@@ -520,6 +526,16 @@ public void OnSenjuKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
     
     foreach (VirtualKeyInfo keyInfo in keyInfos)
     {
+        // Check for ATTACK key press while in mid-air (jump attack)
+        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.ATTACK)
+        {
+            // Check if player is in mid-air (not on ground)
+            if (!player.IsOnGround)
+            {
+                PerformSenjuJumpAttack(player);
+            }
+        }
+        
         // Check for block key press while sitting
         if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.BLOCK)
         {
@@ -539,6 +555,88 @@ public void OnSenjuKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
             }
         }
     }
+}
+
+private void PerformSenjuJumpAttack(IPlayer senju)
+{
+    Vector2 senjuPosition = senju.GetWorldPosition();
+    PlayerTeam senjuTeam = senju.GetTeam();
+    
+    // Find all players within range
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer target in allPlayers)
+    {
+        if (target.UniqueID != senju.UniqueID && !target.IsDead)
+        {
+            Vector2 targetPosition = target.GetWorldPosition();
+            float distance = Vector2.Distance(senjuPosition, targetPosition);
+            
+            if (distance <= SENJU_JUMP_ATTACK_RANGE)
+            {
+                // Skip teammates - only affect enemies
+                if (target.GetTeam() != senjuTeam)
+                {
+                    // Make the player fall
+                    target.SetInputEnabled(false);
+                    target.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
+                
+                    // Create a timer to restore movement after stun duration
+                    IObjectTimerTrigger stunTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+                    stunTimer.SetIntervalTime(500);
+                    stunTimer.SetRepeatCount(1);
+                    stunTimer.SetScriptMethod("RestorePlayerMovement");
+                    stunTimer.Trigger();
+
+                    // Store original speeds
+                    PlayerModifiers targetMods = target.GetModifiers();
+                    slowedPlayersOriginalRunSpeed[target.UniqueID] = targetMods.RunSpeedModifier;
+                    slowedPlayersOriginalSprintSpeed[target.UniqueID] = targetMods.SprintSpeedModifier;
+                    
+                    // Set slow speed
+                    targetMods.RunSpeedModifier = SENJU_JUMP_ATTACK_SLOW_SPEED;
+                    targetMods.SprintSpeedModifier = SENJU_JUMP_ATTACK_SLOW_SPEED;
+                    target.SetModifiers(targetMods);
+                    
+                    // Create visual effect at target location
+                    Game.PlayEffect(EffectName.Dig, targetPosition);
+                }
+            }
+        }
+    }
+    
+    // Create main effect at Senju's location
+    Game.PlayEffect(EffectName.CameraShaker, senjuPosition, 10f, 100, true);
+    
+    // Show message
+    Game.ShowChatMessage("SENJU JUMP ATTACK! GROUND SLAM!", Color.Green);
+    
+    // Set up timer to restore speeds after duration
+    IObjectTimerTrigger restoreSpeedTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    restoreSpeedTimer.SetIntervalTime(SENJU_JUMP_ATTACK_SLOW_DURATION);
+    restoreSpeedTimer.SetRepeatCount(1);
+    restoreSpeedTimer.SetScriptMethod("RestoreSlowedPlayersSpeeds");
+    restoreSpeedTimer.Trigger();
+}
+
+public void RestoreSlowedPlayersSpeeds(TriggerArgs args)
+{
+    if (slowedPlayersOriginalRunSpeed.Count == 0) return;
+    
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer p in allPlayers)
+    {
+        if (slowedPlayersOriginalRunSpeed.ContainsKey(p.UniqueID) && !p.IsDead)
+        {
+            PlayerModifiers mods = p.GetModifiers();
+            mods.RunSpeedModifier = slowedPlayersOriginalRunSpeed[p.UniqueID];
+            mods.SprintSpeedModifier = slowedPlayersOriginalSprintSpeed[p.UniqueID];
+            p.SetModifiers(mods);
+        }
+    }
+    
+    // Clear the dictionaries
+    slowedPlayersOriginalRunSpeed.Clear();
+    slowedPlayersOriginalSprintSpeed.Clear();
 }
 
 public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
@@ -825,6 +923,20 @@ public void OnSenjuPlayerDeath(IPlayer player, PlayerDeathArgs args)
         {
             DestroyAllWoodenGolems();
             Game.ShowChatMessage("Senju died! All Wooden Golems destroyed!", Color.Yellow);
+        }
+    }
+}
+
+
+public void RestorePlayerMovement(TriggerArgs args)
+{
+    // Restore movement for all players (since we can't target specific players in timer callbacks)
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer player in allPlayers)
+    {
+        if (!player.IsDead)
+        {
+            player.SetInputEnabled(true);
         }
     }
 }
