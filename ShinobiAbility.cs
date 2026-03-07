@@ -677,6 +677,8 @@ private void SummonWoodenGolem()
         golemBehaviorSet.SearchItems = 0;
         woodenGolem.SetBotBehaviorSet(golemBehaviorSet);
 
+        woodenGolem.SetStrengthBoostTime(9999999);
+        
         // Set golem profile
         woodenGolem.SetProfile(GetWoodenGolemProfile());
         
