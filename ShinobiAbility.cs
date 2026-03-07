@@ -289,6 +289,36 @@ public void OnUchihaMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     
     float currentTime = Game.TotalElapsedGameTime;
     
+    // Check if any hit was blocked by a player (objects don't block)
+    bool wasBlocked = false;
+    bool hitSomething = false;
+    
+    foreach (PlayerMeleeHitArg arg in args)
+    {
+        if (arg.HitObject != null)
+        {
+            hitSomething = true;
+            // Only check for blocks on players, not objects
+            if (arg.IsPlayer && arg.IsBlocked)
+            {
+                wasBlocked = true;
+                break;
+            }
+        }
+    }
+    
+    // Don't count the punch if it was blocked by a player
+    if (wasBlocked)
+    {
+        return;
+    }
+    
+    // Only count if we actually hit something
+    if (!hitSomething)
+    {
+        return;
+    }
+    
     // Check if this punch is within the time window
     if (currentTime - lastUchihaPunchTime <= UCHIHA_PUNCH_WINDOW)
     {
@@ -517,7 +547,37 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     
     float currentTime = Game.TotalElapsedGameTime;
     
-    // Check if this punch is within the time window (50ms)
+    // Check if any hit was blocked by a player (objects don't block)
+    bool wasBlocked = false;
+    bool hitSomething = false;
+    
+    foreach (PlayerMeleeHitArg arg in args)
+    {
+        if (arg.HitObject != null)
+        {
+            hitSomething = true;
+            // Only check for blocks on players, not objects
+            if (arg.IsPlayer && arg.IsBlocked)
+            {
+                wasBlocked = true;
+                break;
+            }
+        }
+    }
+    
+    // Don't count the punch if it was blocked by a player
+    if (wasBlocked)
+    {
+        return;
+    }
+    
+    // Only count if we actually hit something
+    if (!hitSomething)
+    {
+        return;
+    }
+    
+    // Check if this punch is within the time window
     if (currentTime - lastSenjuPunchTime <= SENJU_PUNCH_WINDOW)
     {
         senjuPunchCount++;
