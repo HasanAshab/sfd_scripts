@@ -13,9 +13,9 @@ private const int UCHIHA_EYE_CONTACT_CHECK_INTERVAL = 500;
 
 private const int UCHIHA_SECOND_PUNCH_COUNT = 2;
 private const int UCHIHA_THIRD_PUNCH_COUNT = 3;
-private const int UCHIHA_PUNCH_WINDOW = 600;
+private const int UCHIHA_PUNCH_WINDOW = 400;
 private const int UCHIHA_SECOND_PUNCH_STUN_DURATION = 1000;
-private const int UCHIHA_SECOND_PUNCH_SHOCK_DAMAGE = 20;
+private const int UCHIHA_SECOND_PUNCH_SHOCK_DAMAGE = 10;
 
 private const float SENJU_MAX_ENERGY_MULTIPLIER = 3f;
 private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 1.3f;
@@ -23,7 +23,7 @@ private const int SENJU_HEAL_INTERVAL = 2000;
 private const float SENJU_HEAL_PERCENTAGE = 0.02f;
 
 private const int SENJU_THIRD_PUNCH_COUNT = 2;
-private const int SENJU_PUNCH_WINDOW = 600;
+private const int SENJU_PUNCH_WINDOW = 1000;
 private const float SENJU_THIRD_PUNCH_FORCE = 15f;
 private const float SENJU_THIRD_PUNCH_IMPACT_RESISTANCE = 0.05f;
 private const float SENJU_THIRD_PUNCH_DAMAGE_MULTIPLIER = 3f;
@@ -100,11 +100,11 @@ public void GiveUchihaAbility(IPlayer player)
     uchihaAbilityTimer.Trigger();
     
     // Set up health monitoring timer for Susano transformation
-    IObjectTimerTrigger healthMonitorTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    healthMonitorTimer.SetIntervalTime(HEALTH_MONITOR_INTERVAL);
-    healthMonitorTimer.SetRepeatCount(0); // Infinite repeats
-    healthMonitorTimer.SetScriptMethod("MonitorUchihaHealth");
-    healthMonitorTimer.Trigger();
+    // IObjectTimerTrigger healthMonitorTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    // healthMonitorTimer.SetIntervalTime(HEALTH_MONITOR_INTERVAL);
+    // healthMonitorTimer.SetRepeatCount(0); // Infinite repeats
+    // healthMonitorTimer.SetScriptMethod("MonitorUchihaHealth");
+    // healthMonitorTimer.Trigger();
     
     // Set up eye contact burning ability timer
     // IObjectTimerTrigger eyeContactTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -532,7 +532,8 @@ public void OnSenjuKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
                 // Summon golem after configured blocks required
                 if (senjuBlockCount >= SENJU_BLOCKS_REQUIRED)
                 {
-                    SummonWoodenGolem();
+                    // disabled for now
+                    // SummonWoodenGolem();
                     senjuBlockCount = 0; // Reset counter
                 }
             }
