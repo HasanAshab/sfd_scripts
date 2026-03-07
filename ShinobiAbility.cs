@@ -22,6 +22,11 @@ private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 1.3f;
 private const int SENJU_HEAL_INTERVAL = 2000; // 2 seconds
 private const float SENJU_HEAL_PERCENTAGE = 0.02f; // 2% of max HP
 
+private const int SENJU_THIRD_PUNCH_COUNT = 3; // Third punch triggers special ability
+private const int SENJU_PUNCH_WINDOW = 50; // 50ms window to count punches
+private const float SENJU_THIRD_PUNCH_FORCE = 100f; // 100x force multiplier
+private const float SENJU_THIRD_PUNCH_IMPACT_RESISTANCE = 0.3f; // 70% impact damage reduction for targets
+
 private const int SENJU_BLOCKS_REQUIRED = 2; // 2 blocks to summon golem
 private const float GOLEM_SUMMON_ENERGY_COST = 250f;
 private const float GOLEM_ENERGY_DRAIN_PER_SECOND = 20f;
@@ -45,6 +50,8 @@ private IProfile originalProfile = null;
 private IPlayer senjuPlayer = null;
 private List<IPlayer> woodenGolems = new List<IPlayer>();
 private int senjuBlockCount = 0;
+private int senjuPunchCount = 0;
+private float lastSenjuPunchTime = 0f;
 
 
 
@@ -295,12 +302,16 @@ public void GiveSenjuAbility(IPlayer player)
     // Set up player key input callback for block detection
     Events.PlayerKeyInputCallback.Start(OnSenjuKeyInput);
     
+    // Set up melee action callback for third punch ability
+    Events.PlayerMeleeActionCallback.Start(OnSenjuMeleeAction);
+    
     // Set up player death callback for golem cleanup
     Events.PlayerDeathCallback.Start(OnSenjuPlayerDeath);
     
     // Show ability granted message
     Game.ShowChatMessage("SENJU ABILITY GRANTED! " + (int)SENJU_MAX_ENERGY_MULTIPLIER + "x Energy + " + (int)SENJU_ENERGY_RECHARGE_MULTIPLIER + "x Recharge + Regeneration + Golem Summon", Color.Green);
 }
+
 
 public void HealSenjuPlayer(TriggerArgs args)
 {
@@ -349,6 +360,88 @@ public void OnSenjuKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
                     senjuBlockCount = 0; // Reset counter
                 }
             }
+        }
+    }
+}
+
+public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
+{
+    // Only track Senju player
+    if (attacker == null || senjuPlayer == null || attacker.UniqueID != senjuPlayer.UniqueID) return;
+    
+    float currentTime = Game.TotalElapsedGameTime;
+    
+    // Check if this punch is within the time window (50ms)
+    if (currentTime - lastSenjuPunchTime <= SENJU_PUNCH_WINDOW)
+    {
+        senjuPunchCount++;
+    }
+    else
+    {
+        // Reset counter if too much time has passed
+        senjuPunchCount = 1;
+    }
+    
+    lastSenjuPunchTime = currentTime;
+    
+    // Check if this is the third punch
+    if (senjuPunchCount >= SENJU_THIRD_PUNCH_COUNT)
+    {
+        // Apply super force to Senju player
+        PlayerModifiers senjuMods = senjuPlayer.GetModifiers();
+        float originalMeleeForce = senjuMods.MeleeForceModifier;
+        senjuMods.MeleeForceModifier = SENJU_THIRD_PUNCH_FORCE;
+        senjuPlayer.SetModifiers(senjuMods);
+        
+        // Apply impact resistance to all hit targets
+        foreach (PlayerMeleeHitArg arg in args)
+        {
+            if (arg.IsPlayer && arg.HitObject != null)
+            {
+                IPlayer hitPlayer = arg.HitObject as IPlayer;
+                if (hitPlayer != null && !hitPlayer.IsDead)
+                {
+                    PlayerModifiers hitMods = hitPlayer.GetModifiers();
+                    hitMods.ImpactDamageTakenModifier = SENJU_THIRD_PUNCH_IMPACT_RESISTANCE;
+                    hitPlayer.SetModifiers(hitMods);
+                    
+                    // Reset impact resistance after a short delay (using a timer)
+                    Game.RunScript("ResetImpactResistance", hitPlayer.UniqueID);
+                }
+            }
+        }
+        
+        // Show third punch message
+        Game.ShowChatMessage("SENJU THIRD PUNCH! MASSIVE KNOCKBACK!", Color.Cyan);
+        
+        // Reset punch counter
+        senjuPunchCount = 0;
+        
+        // Reset Senju's melee force after a tiny delay
+        Game.RunScript("ResetSenjuMeleeForce", originalMeleeForce);
+    }
+}
+
+public void ResetSenjuMeleeForce(float originalForce)
+{
+    if (senjuPlayer == null || senjuPlayer.IsDead) return;
+    
+    PlayerModifiers mods = senjuPlayer.GetModifiers();
+    mods.MeleeForceModifier = originalForce;
+    senjuPlayer.SetModifiers(mods);
+}
+
+public void ResetImpactResistance(int playerID)
+{
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer p in allPlayers)
+    {
+        if (p.UniqueID == playerID && !p.IsDead)
+        {
+            PlayerModifiers mods = p.GetModifiers();
+            mods.ImpactDamageTakenModifier = 1f; // Reset to normal
+            p.SetModifiers(mods);
+            break;
         }
     }
 }
