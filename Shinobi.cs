@@ -15,6 +15,7 @@ public void MakeEveryoneSmaller()
             PlayerModifiers mods = player.GetModifiers();
             mods.SizeModifier *= 0.85f;
             player.SetModifiers(mods);
+            player.SetSpeedBoostTime(999999);
         }
     }
 }
