@@ -17,6 +17,12 @@ private const float UCHIHA_EYE_CONTACT_RANGE = 160f;
 private const int UCHIHA_EYE_CONTACT_BURN_CHANCE = 75;
 private const int UCHIHA_EYE_CONTACT_CHECK_INTERVAL = 500;
 
+private const int UCHIHA_SECOND_PUNCH_COUNT = 2;
+private const int UCHIHA_THIRD_PUNCH_COUNT = 3;
+private const int UCHIHA_PUNCH_WINDOW = 600;
+private const int UCHIHA_SECOND_PUNCH_STUN_DURATION = 1000;
+private const int UCHIHA_SECOND_PUNCH_SHOCK_DAMAGE = 20;
+
 private const float SENJU_MAX_ENERGY_MULTIPLIER = 3f;
 private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 1.3f;
 private const int SENJU_HEAL_INTERVAL = 2000;
@@ -47,6 +53,9 @@ private int originalMaxHealth = 100;
 private float originalSizeModifier = 1f;
 private float originalMeleeForceModifier = 1f;
 private IProfile originalProfile = null;
+private int uchihaPunchCount = 0;
+private float lastUchihaPunchTime = 0f;
+private List<int> shockVictimIDs = new List<int>();
 private IPlayer senjuPlayer = null;
 private List<IPlayer> woodenGolems = new List<IPlayer>();
 private int senjuBlockCount = 0;
@@ -102,9 +111,12 @@ public void GiveUchihaAbility(IPlayer player)
     // Set up eye contact burning ability timer
     IObjectTimerTrigger eyeContactTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
     eyeContactTimer.SetIntervalTime(UCHIHA_EYE_CONTACT_CHECK_INTERVAL);
-    eyeContactTimer.SetRepeatCount(0); // Infinite repeats
+    eyeContactTimer.SetRepeatCount(0);
     eyeContactTimer.SetScriptMethod("CheckUchihaEyeContact");
     eyeContactTimer.Trigger();
+    
+    // Set up melee action callback for combat punch abilities
+    Events.PlayerMeleeActionCallback.Start(OnUchihaMeleeAction);
 }
 
 public void GiveUchihaSlowmo(TriggerArgs args)
@@ -268,6 +280,114 @@ public void CheckUchihaEyeContact(TriggerArgs args)
             Game.ShowChatMessage("SHARINGAN! " + player.GetProfile().Name + " burned by eye contact!", Color.Red);
         }
     }
+}
+
+public void OnUchihaMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
+{
+    if (attacker == null || uchihaPlayer == null || attacker.UniqueID != uchihaPlayer.UniqueID) return;
+    
+    float currentTime = Game.TotalElapsedGameTime;
+    
+    // Check if this punch is within the time window
+    if (currentTime - lastUchihaPunchTime <= UCHIHA_PUNCH_WINDOW)
+    {
+        uchihaPunchCount++;
+    }
+    else
+    {
+        uchihaPunchCount = 1;
+    }
+    
+    lastUchihaPunchTime = currentTime;
+    
+    // Check if this is the second punch (shock and stun)
+    if (uchihaPunchCount == UCHIHA_SECOND_PUNCH_COUNT)
+    {
+        foreach (PlayerMeleeHitArg arg in args)
+        {
+            if (arg.IsPlayer && arg.HitObject != null)
+            {
+                IPlayer hitPlayer = arg.HitObject as IPlayer;
+                if (hitPlayer != null && !hitPlayer.IsDead)
+                {
+                    // Apply shock damage
+                    PlayerModifiers hitMods = hitPlayer.GetModifiers();
+                    hitMods.CurrentHealth = hitMods.CurrentHealth - UCHIHA_SECOND_PUNCH_SHOCK_DAMAGE;
+                    
+                    if (hitMods.CurrentHealth <= 0)
+                    {
+                        hitMods.CurrentHealth = 0;
+                        hitPlayer.SetModifiers(hitMods);
+                        hitPlayer.Kill();
+                    }
+                    else
+                    {
+                        hitPlayer.SetModifiers(hitMods);
+                    }
+                    
+                    // Store victim ID for stun
+                    shockVictimIDs.Add(hitPlayer.UniqueID);
+                    
+                    // Stun the player
+                    hitPlayer.SetInputEnabled(false);
+                    
+                    // Create electric effect
+                    Game.PlayEffect(EffectName.Electric, hitPlayer.GetWorldPosition());
+                }
+            }
+        }
+        
+        // Show message
+        Game.ShowChatMessage("UCHIHA SECOND PUNCH! SHOCK!", Color.Red);
+        
+        // Set up timer to restore movement
+        IObjectTimerTrigger stunTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+        stunTimer.SetIntervalTime(UCHIHA_SECOND_PUNCH_STUN_DURATION);
+        stunTimer.SetRepeatCount(1);
+        stunTimer.SetScriptMethod("RestoreShockVictims");
+        stunTimer.Trigger();
+    }
+    // Check if this is the third punch (burn)
+    else if (uchihaPunchCount >= UCHIHA_THIRD_PUNCH_COUNT)
+    {
+        foreach (PlayerMeleeHitArg arg in args)
+        {
+            if (arg.IsPlayer && arg.HitObject != null)
+            {
+                IPlayer hitPlayer = arg.HitObject as IPlayer;
+                if (hitPlayer != null && !hitPlayer.IsDead)
+                {
+                    // Burn the player
+                    hitPlayer.SetMaxFire();
+                    
+                    // Create fire effect
+                    Game.PlayEffect(EffectName.Fire, hitPlayer.GetWorldPosition());
+                }
+            }
+        }
+        
+        // Show message
+        Game.ShowChatMessage("UCHIHA THIRD PUNCH! BURN!", Color.Red);
+        
+        // Reset punch counter
+        uchihaPunchCount = 0;
+    }
+}
+
+public void RestoreShockVictims(TriggerArgs args)
+{
+    if (shockVictimIDs.Count == 0) return;
+    
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer p in allPlayers)
+    {
+        if (shockVictimIDs.Contains(p.UniqueID) && !p.IsDead)
+        {
+            p.SetInputEnabled(true);
+        }
+    }
+    
+    shockVictimIDs.Clear();
 }
 
 
