@@ -18,16 +18,16 @@ private const int UCHIHA_EYE_CONTACT_BURN_CHANCE = 75; // 75% chance
 private const int UCHIHA_EYE_CONTACT_CHECK_INTERVAL = 500; // 500ms
 
 private const float SENJU_MAX_ENERGY_MULTIPLIER = 3f; // 3x max energy
-private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 2f; // 2x energy recharge
+private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 1.3f; 
 private const int SENJU_HEAL_INTERVAL = 2000; // 2 seconds
 private const float SENJU_HEAL_PERCENTAGE = 0.02f; // 2% of max HP
 
 private const int SENJU_BLOCKS_REQUIRED = 2; // 2 blocks to summon golem
-private const float GOLEM_SUMMON_ENERGY_COST = 0.3f; // 30 energy (30% of 100 base energy)
-private const float GOLEM_ENERGY_DRAIN_PER_SECOND = 0.05f; // 5 energy per second per golem
-private const int GOLEM_ENERGY_DRAIN_INTERVAL = 1000; // 1 second
+private const float GOLEM_SUMMON_ENERGY_COST = 250f;
+private const float GOLEM_ENERGY_DRAIN_PER_SECOND = 20f;
+private const int GOLEM_ENERGY_DRAIN_INTERVAL = 500;
 private const float GOLEM_MAX_HEALTH = 200f; // 200 HP
-private const float GOLEM_SIZE_MULTIPLIER = 1.3f; // 1.3x size
+private const float GOLEM_SIZE_MULTIPLIER = 1.6f; // 1.6x size
 private const float GOLEM_SPEED_MULTIPLIER = 0.7f; // 0.7x speed
 private const float GOLEM_MELEE_DAMAGE_MULTIPLIER = 1.5f; // 1.5x melee damage
 private const float GOLEM_DAMAGE_RESISTANCE = 0.6f; // 40% damage reduction (0.6 = 60% damage taken)
@@ -288,7 +288,7 @@ public void GiveSenjuAbility(IPlayer player)
     // Set up golem energy drain timer
     IObjectTimerTrigger golemEnergyTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
     golemEnergyTimer.SetIntervalTime(GOLEM_ENERGY_DRAIN_INTERVAL);
-    senjuHealTimer.SetRepeatCount(0); // Infinite repeats
+    golemEnergyTimer.SetRepeatCount(0); // Infinite repeats
     golemEnergyTimer.SetScriptMethod("DrainGolemEnergy");
     golemEnergyTimer.Trigger();
     
@@ -299,7 +299,7 @@ public void GiveSenjuAbility(IPlayer player)
     Events.PlayerDeathCallback.Start(OnSenjuPlayerDeath);
     
     // Show ability granted message
-    Game.ShowChatMessage("SENJU ABILITY GRANTED! 3x Energy + 2x Recharge + Regeneration + Golem Summon", Color.Green);
+    Game.ShowChatMessage("SENJU ABILITY GRANTED! " + (int)SENJU_MAX_ENERGY_MULTIPLIER + "x Energy + " + (int)SENJU_ENERGY_RECHARGE_MULTIPLIER + "x Recharge + Regeneration + Golem Summon", Color.Green);
 }
 
 public void HealSenjuPlayer(TriggerArgs args)
@@ -340,10 +340,10 @@ public void OnSenjuKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
             if (player.IsCrouching)
             {
                 senjuBlockCount++;
-                Game.ShowChatMessage("Senju Block Count: " + senjuBlockCount + "/2", Color.Green);
+                Game.ShowChatMessage("Senju Block Count: " + senjuBlockCount + "/" + SENJU_BLOCKS_REQUIRED, Color.Green);
                 
-                // Summon golem after 2 blocks
-                if (senjuBlockCount >= 2)
+                // Summon golem after configured blocks required
+                if (senjuBlockCount >= SENJU_BLOCKS_REQUIRED)
                 {
                     SummonWoodenGolem();
                     senjuBlockCount = 0; // Reset counter
@@ -357,17 +357,17 @@ private void SummonWoodenGolem()
 {
     if (senjuPlayer == null || senjuPlayer.IsDead) return;
     
-    // Check if player has enough energy (30 energy required)
+    // Check if player has enough energy (configured energy cost required)
     PlayerModifiers mods = senjuPlayer.GetModifiers();
     Game.ShowChatMessage("Current Energy: " + mods.CurrentEnergy, Color.Green);
-    if (mods.CurrentEnergy < 0.3f) // 30% of max energy (which is 3.0, so 0.3 = 30 energy)
+    if (mods.CurrentEnergy < GOLEM_SUMMON_ENERGY_COST)
     {
-        Game.ShowChatMessage("Not enough energy to summon golem! (30 energy required)", Color.Red);
+        Game.ShowChatMessage("Not enough energy to summon golem! (has " + (mods.CurrentEnergy) + ")", Color.Red);
         return;
     }
     
     // Deduct initial energy cost
-    mods.CurrentEnergy -= 0.3f; // 30 energy
+    mods.CurrentEnergy -= GOLEM_SUMMON_ENERGY_COST;
     senjuPlayer.SetModifiers(mods);
     
     // Create wooden golem at Senju's position
@@ -397,14 +397,14 @@ private void SummonWoodenGolem()
         
         // Give golem enhanced stats (tanky guardian)
         PlayerModifiers golemMods = new PlayerModifiers();
-        golemMods.MaxHealth = 200; // High health
-        golemMods.CurrentHealth = 200;
-        golemMods.SizeModifier = 1.3f; // Larger size
-        golemMods.RunSpeedModifier = 0.7f; // Slower movement
-        golemMods.SprintSpeedModifier = 0.7f;
-        golemMods.MeleeDamageDealtModifier = 1.5f; // Strong melee
-        golemMods.ProjectileDamageTakenModifier = 0.6f; // Damage resistance
-        golemMods.MeleeDamageTakenModifier = 0.6f;
+        golemMods.MaxHealth = (int)GOLEM_MAX_HEALTH;
+        golemMods.CurrentHealth = (int)GOLEM_MAX_HEALTH;
+        golemMods.SizeModifier = GOLEM_SIZE_MULTIPLIER;
+        golemMods.RunSpeedModifier = GOLEM_SPEED_MULTIPLIER;
+        golemMods.SprintSpeedModifier = GOLEM_SPEED_MULTIPLIER;
+        golemMods.MeleeDamageDealtModifier = GOLEM_MELEE_DAMAGE_MULTIPLIER;
+        golemMods.ProjectileDamageTakenModifier = GOLEM_DAMAGE_RESISTANCE;
+        golemMods.MeleeDamageTakenModifier = GOLEM_DAMAGE_RESISTANCE;
         woodenGolem.SetModifiers(golemMods);
         
         // Give golem weapons
@@ -414,7 +414,7 @@ private void SummonWoodenGolem()
         // Set golem profile
         woodenGolem.SetProfile(GetWoodenGolemProfile());
         
-        Game.ShowChatMessage("WOODEN GOLEM SUMMONED! (Total: " + woodenGolems.Count + ", -30 energy, -" + (woodenGolems.Count * 5) + " energy/sec)", Color.Green);
+        Game.ShowChatMessage("WOODEN GOLEM SUMMONED! (Total: " + woodenGolems.Count + ", -" + (GOLEM_SUMMON_ENERGY_COST * 100) + " energy, -" + (woodenGolems.Count * (GOLEM_ENERGY_DRAIN_PER_SECOND * 100)) + " energy/sec)", Color.Green);
     }
 }
 
@@ -428,8 +428,8 @@ public void DrainGolemEnergy(TriggerArgs args)
     
     PlayerModifiers mods = senjuPlayer.GetModifiers();
     
-    // Drain 5 energy per second per golem
-    float energyDrain = 0.05f * woodenGolems.Count; // 5 energy per golem per second
+    // Drain configured energy per second per golem
+    float energyDrain = GOLEM_ENERGY_DRAIN_PER_SECOND * woodenGolems.Count;
     mods.CurrentEnergy -= energyDrain;
     
     // Check if out of energy
