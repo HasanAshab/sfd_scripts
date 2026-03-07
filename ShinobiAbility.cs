@@ -1,17 +1,11 @@
-// ShinobiAbility - Special abilities for shinobi players
-// Provides Uchiha ability that grants SLOWMO_5 every 20 seconds
-// Susano transformation at 20% HP and breaks at 10% HP
-// Provides Senju ability with 3x max energy and health regeneration
-
 // Configuration Variables
 private const int UCHIHA_SLOWMO_INTERVAL = 20000;
 private const float SUSANO_ACTIVATE_THRESHOLD = 20f;
 private const float SUSANO_BREAK_THRESHOLD = 10f;
 private const float SUSANO_SIZE_MULTIPLIER = 2f;
 private const float SUSANO_HEALTH_MULTIPLIER = 3f;
-private const float SUSANO_MELEE_DAMAGE_MULTIPLIER = 2f;
-private const float SUSANO_PROJECTILE_DAMAGE_MULTIPLIER = 1.5f;
-private const int SUSANO_MAX_RESPAWNS = 3;
+private const float SUSANO_MELEE_DAMAGE_MULTIPLIER = 1.7f;
+private const float SUSANO_PROJECTILE_DAMAGE_MULTIPLIER = 1f;
 
 private const float UCHIHA_EYE_CONTACT_RANGE = 160f;
 private const int UCHIHA_EYE_CONTACT_BURN_CHANCE = 75;
@@ -40,10 +34,11 @@ private const float GOLEM_SUMMON_ENERGY_COST = 250f;
 private const float GOLEM_ENERGY_DRAIN_PER_SECOND = 20f;
 private const int GOLEM_ENERGY_DRAIN_INTERVAL = 500;
 private const float GOLEM_MAX_HEALTH = 200f;
-private const float GOLEM_SIZE_MULTIPLIER = 1.6f;
-private const float GOLEM_SPEED_MULTIPLIER = 0.7f;
+private const float GOLEM_SIZE_MULTIPLIER = 2f;
+private const float GOLEM_SPEED_MULTIPLIER = 0.5f;
 private const float GOLEM_MELEE_DAMAGE_MULTIPLIER = 1.5f;
 private const float GOLEM_DAMAGE_RESISTANCE = 0.6f;
+private const float GOLEM_FIRE_DAMAGE_MOD = 1.5f;
 
 private const int HEALTH_MONITOR_INTERVAL = 100;
 private const int FACING_TRACKING_INTERVAL = 30; // 30ms
@@ -112,11 +107,11 @@ public void GiveUchihaAbility(IPlayer player)
     healthMonitorTimer.Trigger();
     
     // Set up eye contact burning ability timer
-    IObjectTimerTrigger eyeContactTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    eyeContactTimer.SetIntervalTime(UCHIHA_EYE_CONTACT_CHECK_INTERVAL);
-    eyeContactTimer.SetRepeatCount(0);
-    eyeContactTimer.SetScriptMethod("CheckUchihaEyeContact");
-    eyeContactTimer.Trigger();
+    // IObjectTimerTrigger eyeContactTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    // eyeContactTimer.SetIntervalTime(UCHIHA_EYE_CONTACT_CHECK_INTERVAL);
+    // eyeContactTimer.SetRepeatCount(0);
+    // eyeContactTimer.SetScriptMethod("CheckUchihaEyeContact");
+    // eyeContactTimer.Trigger();
     
     // Set up melee action callback for combat punch abilities
     Events.PlayerMeleeActionCallback.Start(OnUchihaMeleeAction);
@@ -650,15 +645,15 @@ private void SummonWoodenGolem()
         woodenGolem.SetBotName("WOOD GOLEM");
         
         // Set as bot with defensive behavior
-        BotBehavior golemBehavior = new BotBehavior(true, PredefinedAIType.BotA);
+        BotBehavior golemBehavior = new BotBehavior(true, PredefinedAIType.CompanionD);
         woodenGolem.SetBotBehavior(golemBehavior);
         
         // Set golem to guard the Senju player
         woodenGolem.SetGuardTarget(senjuPlayer);
         
         // Set golem properties
-        woodenGolem.SetNametagVisible(true);
-        woodenGolem.SetStatusBarsVisible(true);
+        woodenGolem.SetNametagVisible(false);
+        woodenGolem.SetStatusBarsVisible(false);
         woodenGolem.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
         
         // Give golem enhanced stats (tanky guardian)
@@ -671,12 +666,17 @@ private void SummonWoodenGolem()
         golemMods.MeleeDamageDealtModifier = GOLEM_MELEE_DAMAGE_MULTIPLIER;
         golemMods.ProjectileDamageTakenModifier = GOLEM_DAMAGE_RESISTANCE;
         golemMods.MeleeDamageTakenModifier = GOLEM_DAMAGE_RESISTANCE;
+        golemMods.FireDamageTakenModifier = GOLEM_FIRE_DAMAGE_MOD;
         woodenGolem.SetModifiers(golemMods);
         
         // Give golem weapons
         woodenGolem.GiveWeaponItem(WeaponItem.HAMMER);
-        woodenGolem.GiveWeaponItem(WeaponItem.GRENADES);
-        
+
+        BotBehaviorSet golemBehaviorSet = woodenGolem.GetBotBehaviorSet();
+        golemBehaviorSet.SetMeleeActionsToExpert();
+        golemBehaviorSet.SearchItems = 0;
+        woodenGolem.SetBotBehaviorSet(golemBehaviorSet);
+
         // Set golem profile
         woodenGolem.SetProfile(GetWoodenGolemProfile());
         
