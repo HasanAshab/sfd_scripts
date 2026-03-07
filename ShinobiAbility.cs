@@ -305,34 +305,48 @@ public void OnUchihaMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     {
         foreach (PlayerMeleeHitArg arg in args)
         {
-            if (arg.IsPlayer && arg.HitObject != null)
+            if (arg.HitObject != null)
             {
-                IPlayer hitPlayer = arg.HitObject as IPlayer;
-                if (hitPlayer != null && !hitPlayer.IsDead)
+                // Create electric effect at hit location
+                Game.PlayEffect(EffectName.Electric, arg.HitObject.GetWorldPosition());
+                
+                if (arg.IsPlayer)
                 {
-                    // Apply shock damage
-                    PlayerModifiers hitMods = hitPlayer.GetModifiers();
-                    hitMods.CurrentHealth = hitMods.CurrentHealth - UCHIHA_SECOND_PUNCH_SHOCK_DAMAGE;
-                    
-                    if (hitMods.CurrentHealth <= 0)
+                    IPlayer hitPlayer = arg.HitObject as IPlayer;
+                    if (hitPlayer != null && !hitPlayer.IsDead)
                     {
-                        hitMods.CurrentHealth = 0;
-                        hitPlayer.SetModifiers(hitMods);
-                        hitPlayer.Kill();
+                        // Apply shock damage
+                        PlayerModifiers hitMods = hitPlayer.GetModifiers();
+                        hitMods.CurrentHealth = hitMods.CurrentHealth - UCHIHA_SECOND_PUNCH_SHOCK_DAMAGE;
+                        
+                        if (hitMods.CurrentHealth <= 0)
+                        {
+                            hitMods.CurrentHealth = 0;
+                            hitPlayer.SetModifiers(hitMods);
+                            hitPlayer.Kill();
+                        }
+                        else
+                        {
+                            hitPlayer.SetModifiers(hitMods);
+                        }
+                        
+                        // Store victim ID for stun
+                        shockVictimIDs.Add(hitPlayer.UniqueID);
+                        
+                        // Stun the player
+                        hitPlayer.SetInputEnabled(false);
                     }
-                    else
+                }
+                else
+                {
+                    // Hit an object - apply shock effect
+                    IObject hitObject = arg.HitObject;
+                    
+                    // Destroy destructible objects
+                    if (hitObject.DestructionInitiated == false)
                     {
-                        hitPlayer.SetModifiers(hitMods);
+                        hitObject.Destroy();
                     }
-                    
-                    // Store victim ID for stun
-                    shockVictimIDs.Add(hitPlayer.UniqueID);
-                    
-                    // Stun the player
-                    hitPlayer.SetInputEnabled(false);
-                    
-                    // Create electric effect
-                    Game.PlayEffect(EffectName.Electric, hitPlayer.GetWorldPosition());
                 }
             }
         }
@@ -352,16 +366,25 @@ public void OnUchihaMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     {
         foreach (PlayerMeleeHitArg arg in args)
         {
-            if (arg.IsPlayer && arg.HitObject != null)
+            if (arg.HitObject != null)
             {
-                IPlayer hitPlayer = arg.HitObject as IPlayer;
-                if (hitPlayer != null && !hitPlayer.IsDead)
+                // Create fire effect at hit location
+                Game.PlayEffect(EffectName.Fire, arg.HitObject.GetWorldPosition());
+                
+                if (arg.IsPlayer)
                 {
-                    // Burn the player
-                    hitPlayer.SetMaxFire();
-                    
-                    // Create fire effect
-                    Game.PlayEffect(EffectName.Fire, hitPlayer.GetWorldPosition());
+                    IPlayer hitPlayer = arg.HitObject as IPlayer;
+                    if (hitPlayer != null && !hitPlayer.IsDead)
+                    {
+                        // Burn the player
+                        hitPlayer.SetMaxFire();
+                    }
+                }
+                else
+                {
+                    // Hit an object - set it on fire
+                    IObject hitObject = arg.HitObject;
+                    hitObject.SetMaxFire();
                 }
             }
         }
