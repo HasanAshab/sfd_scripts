@@ -286,6 +286,9 @@ public void OnUchihaMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
 {
     if (attacker == null || uchihaPlayer == null || attacker.UniqueID != uchihaPlayer.UniqueID) return;
     
+    // Don't use combat punch abilities when Susano is active
+    if (susanoActive) return;
+    
     float currentTime = Game.TotalElapsedGameTime;
     
     // Check if this punch is within the time window
