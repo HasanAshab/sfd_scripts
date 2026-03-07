@@ -4,40 +4,40 @@
 // Provides Senju ability with 3x max energy and health regeneration
 
 // Configuration Variables
-private const int UCHIHA_SLOWMO_INTERVAL = 20000; // 20 seconds
-private const float SUSANO_ACTIVATE_THRESHOLD = 20f; // 20% HP
-private const float SUSANO_BREAK_THRESHOLD = 10f; // 10% HP
-private const float SUSANO_SIZE_MULTIPLIER = 2f; // 2x size
-private const float SUSANO_HEALTH_MULTIPLIER = 3f; // 3x health
-private const float SUSANO_MELEE_DAMAGE_MULTIPLIER = 2f; // 2x melee damage
-private const float SUSANO_PROJECTILE_DAMAGE_MULTIPLIER = 1.5f; // 1.5x projectile damage
-private const int SUSANO_MAX_RESPAWNS = 3; // 3 respawns max
+private const int UCHIHA_SLOWMO_INTERVAL = 20000;
+private const float SUSANO_ACTIVATE_THRESHOLD = 20f;
+private const float SUSANO_BREAK_THRESHOLD = 10f;
+private const float SUSANO_SIZE_MULTIPLIER = 2f;
+private const float SUSANO_HEALTH_MULTIPLIER = 3f;
+private const float SUSANO_MELEE_DAMAGE_MULTIPLIER = 2f;
+private const float SUSANO_PROJECTILE_DAMAGE_MULTIPLIER = 1.5f;
+private const int SUSANO_MAX_RESPAWNS = 3;
 
-private const float UCHIHA_EYE_CONTACT_RANGE = 160f; // 5 tiles * 32 pixels
-private const int UCHIHA_EYE_CONTACT_BURN_CHANCE = 75; // 75% chance
-private const int UCHIHA_EYE_CONTACT_CHECK_INTERVAL = 500; // 500ms
+private const float UCHIHA_EYE_CONTACT_RANGE = 160f;
+private const int UCHIHA_EYE_CONTACT_BURN_CHANCE = 75;
+private const int UCHIHA_EYE_CONTACT_CHECK_INTERVAL = 500;
 
-private const float SENJU_MAX_ENERGY_MULTIPLIER = 3f; // 3x max energy
-private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 1.3f; 
-private const int SENJU_HEAL_INTERVAL = 2000; // 2 seconds
-private const float SENJU_HEAL_PERCENTAGE = 0.02f; // 2% of max HP
+private const float SENJU_MAX_ENERGY_MULTIPLIER = 3f;
+private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 1.3f;
+private const int SENJU_HEAL_INTERVAL = 2000;
+private const float SENJU_HEAL_PERCENTAGE = 0.02f;
 
-private const int SENJU_THIRD_PUNCH_COUNT = 2; // Third punch triggers special ability
-private const int SENJU_PUNCH_WINDOW = 600; 
-private const float SENJU_THIRD_PUNCH_FORCE = 15f; 
-private const float SENJU_THIRD_PUNCH_IMPACT_RESISTANCE = 0.05f; 
+private const int SENJU_THIRD_PUNCH_COUNT = 2;
+private const int SENJU_PUNCH_WINDOW = 600;
+private const float SENJU_THIRD_PUNCH_FORCE = 15f;
+private const float SENJU_THIRD_PUNCH_IMPACT_RESISTANCE = 0.05f;
 
-private const int SENJU_BLOCKS_REQUIRED = 2; // 2 blocks to summon golem
+private const int SENJU_BLOCKS_REQUIRED = 2;
 private const float GOLEM_SUMMON_ENERGY_COST = 250f;
 private const float GOLEM_ENERGY_DRAIN_PER_SECOND = 20f;
 private const int GOLEM_ENERGY_DRAIN_INTERVAL = 500;
-private const float GOLEM_MAX_HEALTH = 200f; // 200 HP
-private const float GOLEM_SIZE_MULTIPLIER = 1.6f; // 1.6x size
-private const float GOLEM_SPEED_MULTIPLIER = 0.7f; // 0.7x speed
-private const float GOLEM_MELEE_DAMAGE_MULTIPLIER = 1.5f; // 1.5x melee damage
-private const float GOLEM_DAMAGE_RESISTANCE = 0.6f; // 40% damage reduction (0.6 = 60% damage taken)
+private const float GOLEM_MAX_HEALTH = 200f;
+private const float GOLEM_SIZE_MULTIPLIER = 1.6f;
+private const float GOLEM_SPEED_MULTIPLIER = 0.7f;
+private const float GOLEM_MELEE_DAMAGE_MULTIPLIER = 1.5f;
+private const float GOLEM_DAMAGE_RESISTANCE = 0.6f;
 
-private const int HEALTH_MONITOR_INTERVAL = 100; // 100ms
+private const int HEALTH_MONITOR_INTERVAL = 100;
 private const int FACING_TRACKING_INTERVAL = 30; // 30ms
 
 private IPlayer uchihaPlayer = null;
