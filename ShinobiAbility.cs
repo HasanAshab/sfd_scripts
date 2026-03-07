@@ -22,10 +22,10 @@ private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 1.3f;
 private const int SENJU_HEAL_INTERVAL = 2000; // 2 seconds
 private const float SENJU_HEAL_PERCENTAGE = 0.02f; // 2% of max HP
 
-private const int SENJU_THIRD_PUNCH_COUNT = 3; // Third punch triggers special ability
-private const int SENJU_PUNCH_WINDOW = 50; // 50ms window to count punches
-private const float SENJU_THIRD_PUNCH_FORCE = 100f; // 100x force multiplier
-private const float SENJU_THIRD_PUNCH_IMPACT_RESISTANCE = 0.3f; // 70% impact damage reduction for targets
+private const int SENJU_THIRD_PUNCH_COUNT = 2; // Third punch triggers special ability
+private const int SENJU_PUNCH_WINDOW = 600; 
+private const float SENJU_THIRD_PUNCH_FORCE = 15f; 
+private const float SENJU_THIRD_PUNCH_IMPACT_RESISTANCE = 0.05f; 
 
 private const int SENJU_BLOCKS_REQUIRED = 2; // 2 blocks to summon golem
 private const float GOLEM_SUMMON_ENERGY_COST = 250f;
@@ -52,6 +52,8 @@ private List<IPlayer> woodenGolems = new List<IPlayer>();
 private int senjuBlockCount = 0;
 private int senjuPunchCount = 0;
 private float lastSenjuPunchTime = 0f;
+private float senjuOriginalMeleeForce = 1f;
+private List<int> thirdPunchVictimIDs = new List<int>();
 
 
 
@@ -383,7 +385,7 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     }
     
     lastSenjuPunchTime = currentTime;
-    
+    Game.ShowChatMessage("SENJU PUNCH COUNT: " + senjuPunchCount, Color.Green);
     // Check if this is the third punch
     if (senjuPunchCount >= SENJU_THIRD_PUNCH_COUNT)
     {
@@ -405,8 +407,8 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
                     hitMods.ImpactDamageTakenModifier = SENJU_THIRD_PUNCH_IMPACT_RESISTANCE;
                     hitPlayer.SetModifiers(hitMods);
                     
-                    // Reset impact resistance after a short delay (using a timer)
-                    Game.RunScript("ResetImpactResistance", hitPlayer.UniqueID);
+                    // Store victim ID for reset
+                    thirdPunchVictimIDs.Add(hitPlayer.UniqueID);
                 }
             }
         }
@@ -417,33 +419,51 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
         // Reset punch counter
         senjuPunchCount = 0;
         
-        // Reset Senju's melee force after a tiny delay
-        Game.RunScript("ResetSenjuMeleeForce", originalMeleeForce);
+        // Store original melee force
+        senjuOriginalMeleeForce = originalMeleeForce;
+        
+        // Reset Senju's melee force after a tiny delay (500ms)
+        IObjectTimerTrigger resetForceTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+        resetForceTimer.SetIntervalTime(500);
+        resetForceTimer.SetRepeatCount(1);
+        resetForceTimer.SetScriptMethod("ResetSenjuMeleeForce");
+        resetForceTimer.Trigger();
+        
+        // Reset impact resistance after a short delay (1s)
+        IObjectTimerTrigger resetImpactTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+        resetImpactTimer.SetIntervalTime(1000);
+        resetImpactTimer.SetRepeatCount(1);
+        resetImpactTimer.SetScriptMethod("ResetImpactResistance");
+        resetImpactTimer.Trigger();
     }
 }
 
-public void ResetSenjuMeleeForce(float originalForce)
+public void ResetSenjuMeleeForce(TriggerArgs args)
 {
     if (senjuPlayer == null || senjuPlayer.IsDead) return;
     
     PlayerModifiers mods = senjuPlayer.GetModifiers();
-    mods.MeleeForceModifier = originalForce;
+    mods.MeleeForceModifier = senjuOriginalMeleeForce;
     senjuPlayer.SetModifiers(mods);
 }
 
-public void ResetImpactResistance(int playerID)
+public void ResetImpactResistance(TriggerArgs args)
 {
+    if (thirdPunchVictimIDs.Count == 0) return;
+    
     IPlayer[] allPlayers = Game.GetPlayers();
     foreach (IPlayer p in allPlayers)
     {
-        if (p.UniqueID == playerID && !p.IsDead)
+        if (thirdPunchVictimIDs.Contains(p.UniqueID) && !p.IsDead)
         {
             PlayerModifiers mods = p.GetModifiers();
             mods.ImpactDamageTakenModifier = 1f; // Reset to normal
             p.SetModifiers(mods);
-            break;
         }
     }
+    
+    // Clear the victim list
+    thirdPunchVictimIDs.Clear();
 }
 
 private void SummonWoodenGolem()
