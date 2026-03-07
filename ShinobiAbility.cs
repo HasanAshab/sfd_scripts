@@ -32,6 +32,8 @@ private const int SENJU_THIRD_PUNCH_COUNT = 2;
 private const int SENJU_PUNCH_WINDOW = 600;
 private const float SENJU_THIRD_PUNCH_FORCE = 15f;
 private const float SENJU_THIRD_PUNCH_IMPACT_RESISTANCE = 0.05f;
+private const float SENJU_THIRD_PUNCH_DAMAGE_MULTIPLIER = 3f;
+private const int SENJU_THIRD_PUNCH_DAMAGE_DURATION = 100;
 
 private const int SENJU_BLOCKS_REQUIRED = 2;
 private const float GOLEM_SUMMON_ENERGY_COST = 250f;
@@ -62,6 +64,7 @@ private int senjuBlockCount = 0;
 private int senjuPunchCount = 0;
 private float lastSenjuPunchTime = 0f;
 private float senjuOriginalMeleeForce = 1f;
+private float senjuOriginalMeleeDamage = 1f;
 private List<int> thirdPunchVictimIDs = new List<int>();
 
 
@@ -535,10 +538,12 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     // Check if this is the third punch
     if (senjuPunchCount >= SENJU_THIRD_PUNCH_COUNT)
     {
-        // Apply super force to Senju player
+        // Apply super force and damage to Senju player
         PlayerModifiers senjuMods = senjuPlayer.GetModifiers();
         float originalMeleeForce = senjuMods.MeleeForceModifier;
+        float originalMeleeDamage = senjuMods.MeleeDamageDealtModifier;
         senjuMods.MeleeForceModifier = SENJU_THIRD_PUNCH_FORCE;
+        senjuMods.MeleeDamageDealtModifier = SENJU_THIRD_PUNCH_DAMAGE_MULTIPLIER;
         senjuPlayer.SetModifiers(senjuMods);
         
         // Apply impact resistance to all hit targets
@@ -565,12 +570,13 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
         // Reset punch counter
         senjuPunchCount = 0;
         
-        // Store original melee force
+        // Store original melee force and damage
         senjuOriginalMeleeForce = originalMeleeForce;
+        senjuOriginalMeleeDamage = originalMeleeDamage;
         
-        // Reset Senju's melee force after a tiny delay (500ms)
+        // Reset Senju's melee force and damage after a tiny delay
         IObjectTimerTrigger resetForceTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-        resetForceTimer.SetIntervalTime(500);
+        resetForceTimer.SetIntervalTime(SENJU_THIRD_PUNCH_DAMAGE_DURATION);
         resetForceTimer.SetRepeatCount(1);
         resetForceTimer.SetScriptMethod("ResetSenjuMeleeForce");
         resetForceTimer.Trigger();
@@ -590,6 +596,7 @@ public void ResetSenjuMeleeForce(TriggerArgs args)
     
     PlayerModifiers mods = senjuPlayer.GetModifiers();
     mods.MeleeForceModifier = senjuOriginalMeleeForce;
+    mods.MeleeDamageDealtModifier = senjuOriginalMeleeDamage;
     senjuPlayer.SetModifiers(mods);
 }
 
