@@ -289,7 +289,7 @@ public void OnUchihaMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     
     float currentTime = Game.TotalElapsedGameTime;
     
-    // Check if any hit was blocked by a player (objects don't block)
+    // Check if any hit was blocked by a player (blocked hits deal 0 damage)
     bool wasBlocked = false;
     bool hitSomething = false;
     
@@ -298,8 +298,8 @@ public void OnUchihaMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
         if (arg.HitObject != null)
         {
             hitSomething = true;
-            // Only check for blocks on players, not objects
-            if (arg.IsPlayer && arg.IsBlocked)
+            // Check if this was a blocked hit (blocked hits deal 0 damage on players)
+            if (arg.IsPlayer && arg.HitDamage == 0)
             {
                 wasBlocked = true;
                 break;
@@ -547,7 +547,7 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     
     float currentTime = Game.TotalElapsedGameTime;
     
-    // Check if any hit was blocked by a player (objects don't block)
+    // Check if any hit was blocked by a player (blocked hits deal 0 damage)
     bool wasBlocked = false;
     bool hitSomething = false;
     
@@ -556,8 +556,8 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
         if (arg.HitObject != null)
         {
             hitSomething = true;
-            // Only check for blocks on players, not objects
-            if (arg.IsPlayer && arg.IsBlocked)
+            // Check if this was a blocked hit (blocked hits deal 0 damage on players)
+            if (arg.IsPlayer && arg.HitDamage == 0)
             {
                 wasBlocked = true;
                 break;
