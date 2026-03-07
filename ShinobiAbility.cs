@@ -667,6 +667,7 @@ private void SummonWoodenGolem()
         golemMods.ProjectileDamageTakenModifier = GOLEM_DAMAGE_RESISTANCE;
         golemMods.MeleeDamageTakenModifier = GOLEM_DAMAGE_RESISTANCE;
         golemMods.FireDamageTakenModifier = GOLEM_FIRE_DAMAGE_MOD;
+        golemMods.MeleeStunImmunity = 1;
         woodenGolem.SetModifiers(golemMods);
         
         // Give golem weapons
