@@ -19,8 +19,8 @@ private const int UCHIHA_SECOND_PUNCH_SHOCK_DAMAGE = 10;
 
 private const float SENJU_MAX_ENERGY_MULTIPLIER = 3f;
 private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 1.3f;
-private const int SENJU_HEAL_INTERVAL = 2000;
-private const float SENJU_HEAL_PERCENTAGE = 0.02f;
+private const int SENJU_HEAL_INTERVAL = 3000;
+private const float SENJU_HEAL_PERCENTAGE = 0.01f;
 
 private const int SENJU_THIRD_PUNCH_COUNT = 2;
 private const int SENJU_PUNCH_WINDOW = 1000;
@@ -646,7 +646,12 @@ private void PerformSenjuJumpAttack(IPlayer senju)
     {
         if (obj != null && !(obj is IPlayer) && !obj.DestructionInitiated)
         {
-            obj.Destroy();
+            Vector2 objPosition = obj.GetWorldPosition();
+            Game.ShowChatMessage("Destroying object at " + objPosition.X + ", " + objPosition.Y, Color.Green);
+            if (objPosition.Y > -80)
+            {
+                obj.Destroy();
+            }
         }
     }
     

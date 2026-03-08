@@ -13,7 +13,9 @@ public void MakeEveryoneSmaller()
         if (!player.IsDead)
         {
             PlayerModifiers mods = player.GetModifiers();
-            mods.SizeModifier *= 0.85f;
+            mods.SizeModifier *= 0.9f;
+            mods.MaxHealth = 500;
+            mods.CurrentHealth = 500;
             player.SetModifiers(mods);
             player.SetSpeedBoostTime(999999);
         }
