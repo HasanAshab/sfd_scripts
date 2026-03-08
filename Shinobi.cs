@@ -89,6 +89,12 @@ public void MakeEveryoneSmaller()
     {
         if (!player.IsDead)
         {
+            if (player.IsBot) {
+                BotBehaviorSet behSet = player.GetBotBehaviorSet();
+                behSet.SearchItems = 0;
+                player.SetBotBehaviorSet(behSet);
+            }
+
             int hp = player.IsBot ? 200 : 500;
             PlayerModifiers mods = player.GetModifiers();
             mods.SizeModifier *= 0.8f;
