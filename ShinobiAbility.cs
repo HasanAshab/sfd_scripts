@@ -617,14 +617,14 @@ private void PerformSenjuJumpAttack(IPlayer senju)
                     stunTimer.Trigger();
 
                     // Store original speeds
-                    PlayerModifiers targetMods = target.GetModifiers();
-                    slowedPlayersOriginalRunSpeed[target.UniqueID] = targetMods.RunSpeedModifier;
-                    slowedPlayersOriginalSprintSpeed[target.UniqueID] = targetMods.SprintSpeedModifier;
+                    PlayerModifiers targetMods2 = target.GetModifiers();
+                    slowedPlayersOriginalRunSpeed[target.UniqueID] = targetMods2.RunSpeedModifier;
+                    slowedPlayersOriginalSprintSpeed[target.UniqueID] = targetMods2.SprintSpeedModifier;
                     
                     // Set slow speed
-                    targetMods.RunSpeedModifier = SENJU_JUMP_ATTACK_SLOW_SPEED;
-                    targetMods.SprintSpeedModifier = SENJU_JUMP_ATTACK_SLOW_SPEED;
-                    target.SetModifiers(targetMods);
+                    targetMods2.RunSpeedModifier = SENJU_JUMP_ATTACK_SLOW_SPEED;
+                    targetMods2.SprintSpeedModifier = SENJU_JUMP_ATTACK_SLOW_SPEED;
+                    target.SetModifiers(targetMods2);
                     
                     // Create visual effect at target location
                     Game.PlayEffect(EffectName.Dig, targetPosition);
@@ -633,23 +633,20 @@ private void PerformSenjuJumpAttack(IPlayer senju)
         }
     }
     
-    // Destroy all objects within range
-    IObject[] allObjects = Game.GetObjects();
-    foreach (IObject obj in allObjects)
+    // Destroy all objects within range using area-based search for better performance
+    Area attackArea = new Area(
+        senjuPosition.Y + SENJU_JUMP_ATTACK_RANGE,
+        senjuPosition.X - SENJU_JUMP_ATTACK_RANGE,
+        senjuPosition.Y - SENJU_JUMP_ATTACK_RANGE,
+        senjuPosition.X + SENJU_JUMP_ATTACK_RANGE
+    );
+    
+    IObject[] objectsInArea = Game.GetObjectsByArea(attackArea);
+    foreach (IObject obj in objectsInArea)
     {
-        if (obj != null)
+        if (obj != null && !(obj is IPlayer) && !obj.DestructionInitiated)
         {
-            Vector2 objPosition = obj.GetWorldPosition();
-            float distance = Vector2.Distance(senjuPosition, objPosition);
-            
-            if (distance <= SENJU_JUMP_ATTACK_RANGE)
-            {
-                // Destroy the object if it's destructible
-                if (!obj.DestructionInitiated)
-                {
-                    obj.Destroy();
-                }
-            }
+            obj.Destroy();
         }
     }
     
