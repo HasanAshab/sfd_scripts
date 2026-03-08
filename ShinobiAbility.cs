@@ -1,4 +1,5 @@
 // Configuration Variables
+private const int UCHIHA_MOLOTOV_INTERVAL = 20000;
 private const float SUSANO_ACTIVATE_THRESHOLD = 20f;
 private const float SUSANO_BREAK_THRESHOLD = 10f;
 private const float SUSANO_SIZE_MULTIPLIER = 2f;
@@ -94,10 +95,24 @@ public void GiveUchihaAbility(IPlayer player)
     originalMaxHealth = originalMods.MaxHealth;
     originalSizeModifier = originalMods.SizeModifier;
     originalMeleeForceModifier = originalMods.MeleeForceModifier;
+    originalMods.CanBurn = 0;
+    originalMods.SizeModifier *= 1.1f;
+    player.SetModifiers(originalMods);
+
     originalProfile = player.GetProfile();
     
-    // Give initial SLOWMO_5
-    // Give initial SLOWMO_5 removed - moved to Senju
+    // Give initial Molotov
+    if (uchihaPlayer != null && !uchihaPlayer.IsDead)
+    {   
+        uchihaPlayer.GiveWeaponItem(WeaponItem.MOLOTOVS);
+    }
+    
+    // Set up timer to give Molotov every 20 seconds
+    IObjectTimerTrigger uchihaAbilityTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    uchihaAbilityTimer.SetIntervalTime(UCHIHA_MOLOTOV_INTERVAL);
+    uchihaAbilityTimer.SetRepeatCount(0); // Infinite repeats
+    uchihaAbilityTimer.SetScriptMethod("GiveUchihaMolotov");
+    uchihaAbilityTimer.Trigger();
     
     // Set up health monitoring timer for Susano transformation
     // IObjectTimerTrigger healthMonitorTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -125,6 +140,15 @@ public void GiveUchihaSlowmo(TriggerArgs args)
     {
         uchihaPlayer.RemoveWeaponItemType(WeaponItemType.Powerup);
         uchihaPlayer.GiveWeaponItem(WeaponItem.SLOWMO_5);
+    }
+}
+
+public void GiveUchihaMolotov(TriggerArgs args)
+{
+    // Give Molotov to the Uchiha player every 20 seconds
+    if (uchihaPlayer != null && !uchihaPlayer.IsDead)
+    {
+        uchihaPlayer.GiveWeaponItem(WeaponItem.MOLOTOVS);
     }
 }
 
@@ -469,7 +493,7 @@ public void GiveSenjuAbility(IPlayer player)
     mods.MaxEnergy = (int)(mods.MaxEnergy * SENJU_MAX_ENERGY_MULTIPLIER);
     mods.CurrentEnergy = (int)(mods.CurrentEnergy * SENJU_MAX_ENERGY_MULTIPLIER);
     mods.EnergyRechargeModifier = SENJU_ENERGY_RECHARGE_MULTIPLIER;
-
+    mods.SizeModifier *= 1.15f;
     // Apply modifiers
     player.SetModifiers(mods);
     
@@ -615,9 +639,6 @@ private void PerformSenjuJumpAttack(IPlayer senju)
             
             if (distance <= SENJU_JUMP_ATTACK_RANGE)
             {
-                // Skip teammates - only affect enemies
-                if (target.GetTeam() != senjuTeam)
-                {
                     // Deal damage to the target
                     PlayerModifiers targetMods = target.GetModifiers();
                     targetMods.CurrentHealth -= SENJU_JUMP_ATTACK_DAMAGE;
@@ -656,7 +677,6 @@ private void PerformSenjuJumpAttack(IPlayer senju)
                     
                     // Create visual effect at target location
                     Game.PlayEffect(EffectName.Dig, targetPosition);
-                }
             }
         }
     }
@@ -721,7 +741,7 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     float currentTime = Game.TotalElapsedGameTime;
     
     // Check if any hit was blocked by a player (blocked hits deal 0 damage)
-    bool wasBlocked = false;
+    // bool wasBlocked = false;
     bool hitSomething = false;
     
     foreach (PlayerMeleeHitArg arg in args)
@@ -732,7 +752,7 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
             // Check if this was a blocked hit (blocked hits deal 0 damage on players)
             if (arg.IsPlayer && arg.HitDamage == 0)
             {
-                wasBlocked = true;
+                // wasBlocked = true;
                 break;
             }
         }
