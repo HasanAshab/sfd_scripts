@@ -605,7 +605,7 @@ private void PerformSenjuJumpAttack(IPlayer senju)
     }
     
     // Create main effect at Senju's location
-    Game.PlayEffect(EffectName.CameraShaker, senjuPosition, 10f, 100, true);
+    Game.PlayEffect(EffectName.CameraShaker, senjuPosition, 10.0f, 700.5f, false);
     
     // Show message
     Game.ShowChatMessage("SENJU JUMP ATTACK! GROUND SLAM!", Color.Green);
