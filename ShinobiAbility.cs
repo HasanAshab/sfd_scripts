@@ -621,7 +621,7 @@ private void PerformSenjuJumpAttack(IPlayer senju)
                     // Deal damage to the target
                     PlayerModifiers targetMods = target.GetModifiers();
                     targetMods.CurrentHealth -= SENJU_JUMP_ATTACK_DAMAGE;
-                    
+
                     if (targetMods.CurrentHealth <= 0)
                     {
                         targetMods.CurrentHealth = 0;
@@ -636,10 +636,10 @@ private void PerformSenjuJumpAttack(IPlayer senju)
                     // Make the player fall
                     target.SetInputEnabled(false);
                     target.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
-                
+
                     // Create a timer to restore movement after stun duration
                     IObjectTimerTrigger stunTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-                    stunTimer.SetIntervalTime(500);
+                    stunTimer.SetIntervalTime(5000);
                     stunTimer.SetRepeatCount(1);
                     stunTimer.SetScriptMethod("RestorePlayerMovement");
                     stunTimer.Trigger();
