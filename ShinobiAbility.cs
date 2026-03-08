@@ -1,5 +1,4 @@
 // Configuration Variables
-private const int UCHIHA_SLOWMO_INTERVAL = 20000;
 private const float SUSANO_ACTIVATE_THRESHOLD = 20f;
 private const float SUSANO_BREAK_THRESHOLD = 10f;
 private const float SUSANO_SIZE_MULTIPLIER = 2f;
@@ -21,6 +20,7 @@ private const float SENJU_MAX_ENERGY_MULTIPLIER = 3f;
 private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 1.3f;
 private const int SENJU_HEAL_INTERVAL = 3000;
 private const float SENJU_HEAL_PERCENTAGE = 0.01f;
+private const int SENJU_SLOWMO_INTERVAL = 20000;
 
 private const int SENJU_SECOND_PUNCH_COUNT = 1;
 private const int SENJU_THIRD_PUNCH_COUNT = 2;
@@ -97,18 +97,7 @@ public void GiveUchihaAbility(IPlayer player)
     originalProfile = player.GetProfile();
     
     // Give initial SLOWMO_5
-    if (uchihaPlayer != null && !uchihaPlayer.IsDead)
-    {   
-        uchihaPlayer.RemoveWeaponItemType(WeaponItemType.Powerup);
-        uchihaPlayer.GiveWeaponItem(WeaponItem.SLOWMO_5);
-    }
-    
-    // Set up timer to give SLOWMO_5 every 20 seconds
-    IObjectTimerTrigger uchihaAbilityTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    uchihaAbilityTimer.SetIntervalTime(UCHIHA_SLOWMO_INTERVAL);
-    uchihaAbilityTimer.SetRepeatCount(0); // Infinite repeats
-    uchihaAbilityTimer.SetScriptMethod("GiveUchihaSlowmo");
-    uchihaAbilityTimer.Trigger();
+    // Give initial SLOWMO_5 removed - moved to Senju
     
     // Set up health monitoring timer for Susano transformation
     // IObjectTimerTrigger healthMonitorTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -471,6 +460,13 @@ public void GiveSenjuAbility(IPlayer player)
 
     // Apply modifiers
     player.SetModifiers(mods);
+    
+    // Give initial SLOWMO_5
+    if (senjuPlayer != null && !senjuPlayer.IsDead)
+    {   
+        senjuPlayer.RemoveWeaponItemType(WeaponItemType.Powerup);
+        senjuPlayer.GiveWeaponItem(WeaponItem.SLOWMO_5);
+    }
 
     // Set up timer to heal configured percentage of max HP every configured interval
     IObjectTimerTrigger senjuHealTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -478,6 +474,13 @@ public void GiveSenjuAbility(IPlayer player)
     senjuHealTimer.SetRepeatCount(0); // Infinite repeats
     senjuHealTimer.SetScriptMethod("HealSenjuPlayer");
     senjuHealTimer.Trigger();
+    
+    // Set up timer to give SLOWMO_5 every 20 seconds
+    IObjectTimerTrigger senjuSlowmoTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    senjuSlowmoTimer.SetIntervalTime(SENJU_SLOWMO_INTERVAL);
+    senjuSlowmoTimer.SetRepeatCount(0); // Infinite repeats
+    senjuSlowmoTimer.SetScriptMethod("GiveSenjuSlowmo");
+    senjuSlowmoTimer.Trigger();
     
     // Set up golem energy drain timer
     IObjectTimerTrigger golemEnergyTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -522,6 +525,16 @@ public void HealSenjuPlayer(TriggerArgs args)
     // Apply healing
     mods.CurrentHealth = newHealth;
     senjuPlayer.SetModifiers(mods);
+}
+
+public void GiveSenjuSlowmo(TriggerArgs args)
+{
+    // Give SLOWMO_5 to the Senju player every 20 seconds
+    if (senjuPlayer != null && !senjuPlayer.IsDead)
+    {
+        senjuPlayer.RemoveWeaponItemType(WeaponItemType.Powerup);
+        senjuPlayer.GiveWeaponItem(WeaponItem.SLOWMO_5);
+    }
 }
 
 public void OnSenjuKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
