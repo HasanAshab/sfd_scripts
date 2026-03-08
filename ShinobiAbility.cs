@@ -633,6 +633,26 @@ private void PerformSenjuJumpAttack(IPlayer senju)
         }
     }
     
+    // Destroy all objects within range
+    IObject[] allObjects = Game.GetObjects();
+    foreach (IObject obj in allObjects)
+    {
+        if (obj != null)
+        {
+            Vector2 objPosition = obj.GetWorldPosition();
+            float distance = Vector2.Distance(senjuPosition, objPosition);
+            
+            if (distance <= SENJU_JUMP_ATTACK_RANGE)
+            {
+                // Destroy the object if it's destructible
+                if (!obj.DestructionInitiated)
+                {
+                    obj.Destroy();
+                }
+            }
+        }
+    }
+    
     // Create main effect at Senju's location
     Game.PlayEffect(EffectName.CameraShaker, senjuPosition, 10.0f, 700.5f, false);
     
