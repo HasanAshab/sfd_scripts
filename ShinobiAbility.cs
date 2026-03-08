@@ -644,14 +644,9 @@ private void PerformSenjuJumpAttack(IPlayer senju)
     IObject[] objectsInArea = Game.GetObjectsByArea(attackArea);
     foreach (IObject obj in objectsInArea)
     {
-        if (obj != null && !(obj is IPlayer) && !obj.DestructionInitiated)
+        if (obj != null && !(obj is IPlayer) && obj.GetBodyType() == BodyType.Dynamic && !obj.DestructionInitiated)
         {
-            Vector2 objPosition = obj.GetWorldPosition();
-            Game.ShowChatMessage("Destroying object at " + objPosition.X + ", " + objPosition.Y, Color.Green);
-            if (objPosition.Y > -80)
-            {
-                obj.Destroy();
-            }
+            obj.Destroy();
         }
     }
     
@@ -716,17 +711,17 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     }
     
     // Don't count the punch if it was blocked by a player
-    if (wasBlocked)
-    {
-        return;
-    }
+    // if (wasBlocked)
+    // {
+    //     return;
+    // }
     
     // Only count if we actually hit something
     if (!hitSomething)
     {
         return;
     }
-    
+
     // Check if this punch is within the time window
     if (currentTime - lastSenjuPunchTime <= SENJU_PUNCH_WINDOW)
     {
