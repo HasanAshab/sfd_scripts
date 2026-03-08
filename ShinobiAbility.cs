@@ -449,6 +449,18 @@ public void GiveSenjuAbility(IPlayer player)
 {
     // Store the player reference
     senjuPlayer = player;
+    senjuPlayer.SetProfile(new IProfile()
+    {
+        Name = "kushi saul",
+        Gender = Gender.Male,
+        Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGray"),
+        Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightRed"),
+        ChestOver = new IProfileClothingItem("Coat", "ClothingPurple", "ClothingPurple"),
+        Hands = new IProfileClothingItem("FingerlessGlovesBlack", "ClothingGray"),
+        Legs = new IProfileClothingItem("Pants", "ClothingPurple"),
+        Feet = new IProfileClothingItem("ShoesBlack", "ClothingDarkGray"),
+        Accesory = new IProfileClothingItem("GasMask", "ClothingDarkGray", "ClothingLightRed"),
+    });
 
     // Get current modifiers
     PlayerModifiers mods = player.GetModifiers();
