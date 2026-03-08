@@ -13,9 +13,9 @@ private const int UCHIHA_EYE_CONTACT_CHECK_INTERVAL = 500;
 
 private const int UCHIHA_SECOND_PUNCH_COUNT = 2;
 private const int UCHIHA_THIRD_PUNCH_COUNT = 3;
-private const int UCHIHA_PUNCH_WINDOW = 400;
+private const int UCHIHA_PUNCH_WINDOW = 600;
 private const int UCHIHA_SECOND_PUNCH_STUN_DURATION = 1000;
-private const int UCHIHA_SECOND_PUNCH_SHOCK_DAMAGE = 10;
+private const int UCHIHA_SECOND_PUNCH_SHOCK_DAMAGE = 30;
 
 private const float SENJU_MAX_ENERGY_MULTIPLIER = 3f;
 private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 1.3f;

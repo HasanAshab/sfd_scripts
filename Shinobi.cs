@@ -12,6 +12,7 @@ public void MakeEveryoneSmaller()
     {
         if (!player.IsDead)
         {
+            int hp = player.IsBot ? 200 : 500;
             PlayerModifiers mods = player.GetModifiers();
             mods.SizeModifier *= 0.9f;
             mods.MaxHealth = 500;
