@@ -32,6 +32,8 @@ private const int SENJU_THIRD_PUNCH_DAMAGE_DURATION = 500;
 private const float SENJU_JUMP_ATTACK_RANGE = 40f;
 private const float SENJU_JUMP_ATTACK_SLOW_SPEED = 0.005f;
 private const int SENJU_JUMP_ATTACK_SLOW_DURATION = 5000;
+private const float SENJU_JUMP_ATTACK_ENERGY_COST = 200f;
+private const int SENJU_JUMP_ATTACK_DAMAGE = 20;
 
 private const int SENJU_BLOCKS_REQUIRED = 2;
 private const float GOLEM_SUMMON_ENERGY_COST = 250f;
@@ -559,6 +561,18 @@ public void OnSenjuKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
 
 private void PerformSenjuJumpAttack(IPlayer senju)
 {
+    // Check if Senju has enough energy
+    PlayerModifiers senjuMods = senju.GetModifiers();
+    if (senjuMods.CurrentEnergy < SENJU_JUMP_ATTACK_ENERGY_COST)
+    {
+        Game.ShowChatMessage("Not enough energy for jump attack! (" + SENJU_JUMP_ATTACK_ENERGY_COST + " required)", Color.Red);
+        return;
+    }
+    
+    // Deduct energy cost
+    senjuMods.CurrentEnergy -= SENJU_JUMP_ATTACK_ENERGY_COST;
+    senju.SetModifiers(senjuMods);
+    
     Vector2 senjuPosition = senju.GetWorldPosition();
     PlayerTeam senjuTeam = senju.GetTeam();
     
@@ -576,6 +590,21 @@ private void PerformSenjuJumpAttack(IPlayer senju)
                 // Skip teammates - only affect enemies
                 if (target.GetTeam() != senjuTeam)
                 {
+                    // Deal damage to the target
+                    PlayerModifiers targetMods = target.GetModifiers();
+                    targetMods.CurrentHealth -= SENJU_JUMP_ATTACK_DAMAGE;
+                    
+                    if (targetMods.CurrentHealth <= 0)
+                    {
+                        targetMods.CurrentHealth = 0;
+                        target.SetModifiers(targetMods);
+                        target.Kill();
+                    }
+                    else
+                    {
+                        target.SetModifiers(targetMods);
+                    }
+                    
                     // Make the player fall
                     target.SetInputEnabled(false);
                     target.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
