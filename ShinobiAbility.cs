@@ -89,6 +89,20 @@ public void GiveUchihaAbility(IPlayer player)
 {
     // Store the player reference
     uchihaPlayer = player;
+
+    uchihaPlayer.SetProfile(
+        new IProfile()
+        {
+            Name = "hasan",
+            Gender = Gender.Female,
+            Skin = new IProfileClothingItem("Normal_fem", "Skin3", "ClothingLightGreen"),
+            Head = new IProfileClothingItem("Headband", "ClothingDarkGray"),
+            ChestOver = new IProfileClothingItem("Coat_fem", "ClothingRed", "ClothingRed"),
+            ChestUnder = new IProfileClothingItem("BodyArmor_fem", "ClothingDarkYellow"),
+            Legs = new IProfileClothingItem("StripedPants_fem", "ClothingDarkGray"),
+            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+        }
+    );
     
     // Store original stats
     PlayerModifiers originalMods = player.GetModifiers();
@@ -101,9 +115,10 @@ public void GiveUchihaAbility(IPlayer player)
 
     originalProfile = player.GetProfile();
     
-    // Give initial Molotov
+    // Give initial Weeapons
     if (uchihaPlayer != null && !uchihaPlayer.IsDead)
     {   
+        uchihaPlayer.GiveWeaponItem(WeaponItem.KATANA);
         uchihaPlayer.GiveWeaponItem(WeaponItem.MOLOTOVS);
     }
     
