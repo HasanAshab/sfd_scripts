@@ -22,18 +22,20 @@ private const float SENJU_ENERGY_RECHARGE_MULTIPLIER = 1.3f;
 private const int SENJU_HEAL_INTERVAL = 3000;
 private const float SENJU_HEAL_PERCENTAGE = 0.01f;
 
+private const int SENJU_SECOND_PUNCH_COUNT = 1;
 private const int SENJU_THIRD_PUNCH_COUNT = 2;
 private const int SENJU_PUNCH_WINDOW = 1000;
 private const float SENJU_THIRD_PUNCH_FORCE = 15f;
-private const float SENJU_THIRD_PUNCH_IMPACT_RESISTANCE = 0.05f;
+private const float SENJU_THIRD_PUNCH_IMPACT_RESISTANCE = 0.1f;
 private const float SENJU_THIRD_PUNCH_DAMAGE_MULTIPLIER = 3f;
 private const int SENJU_THIRD_PUNCH_DAMAGE_DURATION = 500;
+private const int SENJU_SECOND_PUNCH_STUN_DURATION = 1000;
 
 private const float SENJU_JUMP_ATTACK_RANGE = 40f;
 private const float SENJU_JUMP_ATTACK_SLOW_SPEED = 0.005f;
 private const int SENJU_JUMP_ATTACK_SLOW_DURATION = 5000;
 private const float SENJU_JUMP_ATTACK_ENERGY_COST = 200f;
-private const int SENJU_JUMP_ATTACK_DAMAGE = 20;
+private const int SENJU_JUMP_ATTACK_DAMAGE = 40;
 
 private const int SENJU_BLOCKS_REQUIRED = 2;
 private const float GOLEM_SUMMON_ENERGY_COST = 250f;
@@ -67,6 +69,7 @@ private float lastSenjuPunchTime = 0f;
 private float senjuOriginalMeleeForce = 1f;
 private float senjuOriginalMeleeDamage = 1f;
 private List<int> thirdPunchVictimIDs = new List<int>();
+private List<int> secondPunchStunnedIDs = new List<int>();
 private Dictionary<int, float> slowedPlayersOriginalRunSpeed = new Dictionary<int, float>();
 private Dictionary<int, float> slowedPlayersOriginalSprintSpeed = new Dictionary<int, float>();
 
@@ -735,8 +738,38 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     
     lastSenjuPunchTime = currentTime;
     Game.ShowChatMessage("SENJU PUNCH COUNT: " + senjuPunchCount, Color.Green);
+    
+    // Check if this is the second punch (stun)
+    if (senjuPunchCount == SENJU_SECOND_PUNCH_COUNT)
+    {
+        foreach (PlayerMeleeHitArg arg in args)
+        {
+            if (arg.IsPlayer && arg.HitObject != null)
+            {
+                IPlayer hitPlayer = arg.HitObject as IPlayer;
+                if (hitPlayer != null && !hitPlayer.IsDead)
+                {
+                    // Store victim ID for stun
+                    secondPunchStunnedIDs.Add(hitPlayer.UniqueID);
+                    
+                    // Stun the player
+                    hitPlayer.SetInputEnabled(false);
+                }
+            }
+        }
+        
+        // Show message
+        Game.ShowChatMessage("SENJU SECOND PUNCH! STUN!", Color.Cyan);
+        
+        // Set up timer to restore movement
+        IObjectTimerTrigger stunTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+        stunTimer.SetIntervalTime(SENJU_SECOND_PUNCH_STUN_DURATION);
+        stunTimer.SetRepeatCount(1);
+        stunTimer.SetScriptMethod("RestoreSecondPunchStunnedPlayers");
+        stunTimer.Trigger();
+    }
     // Check if this is the third punch
-    if (senjuPunchCount >= SENJU_THIRD_PUNCH_COUNT)
+    else if (senjuPunchCount >= SENJU_THIRD_PUNCH_COUNT)
     {
         // Apply super force and damage to Senju player
         PlayerModifiers senjuMods = senjuPlayer.GetModifiers();
@@ -788,6 +821,22 @@ public void OnSenjuMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
         resetImpactTimer.SetScriptMethod("ResetImpactResistance");
         resetImpactTimer.Trigger();
     }
+}
+
+public void RestoreSecondPunchStunnedPlayers(TriggerArgs args)
+{
+    if (secondPunchStunnedIDs.Count == 0) return;
+    
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer p in allPlayers)
+    {
+        if (secondPunchStunnedIDs.Contains(p.UniqueID) && !p.IsDead)
+        {
+            p.SetInputEnabled(true);
+        }
+    }
+    
+    secondPunchStunnedIDs.Clear();
 }
 
 public void ResetSenjuMeleeForce(TriggerArgs args)
