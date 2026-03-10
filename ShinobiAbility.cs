@@ -652,7 +652,7 @@ private void PerformSenjuJumpAttack(IPlayer senju)
             Vector2 targetPosition = target.GetWorldPosition();
             float distance = Vector2.Distance(senjuPosition, targetPosition);
             
-            if (distance <= SENJU_JUMP_ATTACK_RANGE)
+            if (distance <= SENJU_JUMP_ATTACK_RANGE && target.IsOnGround)
             {
                     // Deal damage to the target
                     PlayerModifiers targetMods = target.GetModifiers();
