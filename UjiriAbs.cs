@@ -260,16 +260,13 @@ public void SetupBots()
         pakhiBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.CompanionD));
         pakhiBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
         pakhiBot.SetProfile(new IProfile()
-{
-    Name = "Pakhi",
-    Gender = Gender.Female,
-    Skin = new IProfileClothingItem("Normal_fem", "Skin3", "ClothingLightGreen"),
-    Head = new IProfileClothingItem("SantaHat", "ClothingLightGray"),
-    ChestOver = new IProfileClothingItem("Coat_fem", "ClothingLightGray", "ClothingLightGray"),
-    ChestUnder = new IProfileClothingItem("SleevelessShirt_fem", "ClothingLightGray"),
-    Legs = new IProfileClothingItem("Skirt_fem", "ClothingBlue"),
-    Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-});
+        {
+            Name = "pakhi",
+            Gender = Gender.Female,
+            Skin = new IProfileClothingItem("Normal_fem", "Skin3", "ClothingLightGray"),
+            Legs = new IProfileClothingItem("Shorts_fem", "ClothingDarkGray"),
+            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+        });
     }
     botsCreated = true;
 }

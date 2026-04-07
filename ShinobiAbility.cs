@@ -635,11 +635,11 @@ private void PerformSenjuJumpAttack(IPlayer senju)
         Game.ShowChatMessage("Not enough energy for jump attack! (" + SENJU_JUMP_ATTACK_ENERGY_COST + " required)", Color.Red);
         return;
     }
-    
+
     // Deduct energy cost
     senjuMods.CurrentEnergy -= SENJU_JUMP_ATTACK_ENERGY_COST;
     senju.SetModifiers(senjuMods);
-    
+
     Vector2 senjuPosition = senju.GetWorldPosition();
     PlayerTeam senjuTeam = senju.GetTeam();
     
