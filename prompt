@@ -1,14 +1,32 @@
+Kokola:
+1. targets Saul (cholo hoten namaz pori)
+2. when explodes (hataan)
+2. when he is alone alive on his team and opponent team has more than 1 alive (aaii dihaad, nise naam kuta basa)
 
-now add a kid boss named Psythic. she is child of xray. Team 2
-her special powers are:
-a) when he hit a player there will be 
-    1. 70% chance to gib enemy (use IPlayer.Gib)
-    2. 50% chance to stun enemy for 2 seconds (do similar to p1 stun ability but dont play any effect)
-b) always targets opponent player with lowest HP on the game (use IPlayer.SetForcedBotTarget)
-c) Has 2X speed than normal players 
-d) xray will guard her (use IPlayer.SetGuardTarget).
+Bichi:
+1. when falls (dih)
+2. grabed (Hhaaah)
+3. out of ammo or need reload (are vaih)
 
-Ujiri
+Edur:
+1. when gets a listed weapon (bangladesh unnoto)
+
+Xray:
+1. when falls (o ma re)
+2. 
+
+Pakhi:
+1. when hits or shoots his own team member (sunkee)
+2. when he is alone alive on his team and opponent team has more than 1 alive (ekhon amr ki hnoobee)
+3. when explodes (jotto shob pagol sagol paisi)
+4. when drived by (suttu vaaii nia jaitase ga)
+5. when on fire (amr aguun keu paani dia nivaa)
+
+Timpa:
+1. when hits by friendly fire (amr upor lagaia dise)
+2. when on fire (zhuuu burnol)
 
 
-COOP
+
+Additional:
+1. when no human players (janaja)
