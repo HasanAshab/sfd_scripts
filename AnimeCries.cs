@@ -39,7 +39,7 @@ private void FindBotReferences()
     {
         if (!player.IsBot) continue;
         
-        string botName = player.GetBotName();
+        string botName = player.GetProfile().Name;
         switch (botName)
         {
             case "Timpa": timpaBot = player; break;
