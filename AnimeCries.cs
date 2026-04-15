@@ -20,9 +20,6 @@ private const float AMMO_CHECK_INTERVAL = 1000; // Check ammo every 1 second
 
 public void OnStartup()
 {
-    // Find bot references by name
-    FindBotReferences();
-    
     // Set up event callbacks
     Events.PlayerDamageCallback.Start(OnPlayerDamage);
     Events.PlayerDeathCallback.Start(OnPlayerDeath);
@@ -30,9 +27,16 @@ public void OnStartup()
     Events.UpdateCallback.Start(OnUpdate, 100); // Check every 100ms
     Events.ExplosionHitCallback.Start(OnExplosionHit);
     Events.ObjectCreatedCallback.Start(OnObjectCreated);
+    
+    // Find bot references after 1 second delay (to ensure bots are created)
+    IObjectTimerTrigger botRefTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    botRefTimer.SetIntervalTime(1000); // 1 second delay
+    botRefTimer.SetRepeatCount(1); // Run once
+    botRefTimer.SetScriptMethod("FindBotReferences");
+    botRefTimer.Trigger();
 }
 
-private void FindBotReferences()
+public void FindBotReferences(TriggerArgs args)
 {
     IPlayer[] allPlayers = Game.GetPlayers();
     foreach (IPlayer player in allPlayers)
@@ -397,5 +401,5 @@ private void Crie(string botName, string tag)
 {
     // TODO: Implement actual sound effect playback
     // For now, just log the event
-    Game.WriteToConsole(botName + " - " + tag);
+    Game.ShowChatMessage(botName + " - " + tag);
 }
