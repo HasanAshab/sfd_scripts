@@ -18,6 +18,12 @@ private Dictionary<int, bool> playerWasDriven = new Dictionary<int, bool>();
 // Constants
 private const float AMMO_CHECK_INTERVAL = 1000; // Check ammo every 1 second
 
+// Edur special weapons list (by weapon item name)
+private string[] edurSpecialWeapons = {
+    "PISTOL",
+    "CHAINSAW"
+};
+
 public void OnStartup()
 {
     // Set up event callbacks
@@ -27,6 +33,7 @@ public void OnStartup()
     Events.UpdateCallback.Start(OnUpdate, 100); // Check every 100ms
     Events.ExplosionHitCallback.Start(OnExplosionHit);
     Events.ObjectCreatedCallback.Start(OnObjectCreated);
+    Events.PlayerWeaponAddedActionCallback.Start(OnPlayerWeaponAdded);
     
     // Find bot references after 1 second delay (to ensure bots are created)
     IObjectTimerTrigger botRefTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -170,12 +177,24 @@ public void OnExplosionHit(ExplosionData explosionData, ExplosionHitArg[] args)
 
 public void OnObjectCreated(IObject[] objects)
 {
-    // Check for weapon pickups by Edur
-    foreach (IObject obj in objects)
+    // Placeholder for future use
+}
+
+public void OnPlayerWeaponAdded(IPlayer player, PlayerWeaponAddedArg arg)
+{
+    if (player == null || player.IsDead) return;
+    
+    string botName = GetBotName(player);
+    if (botName != "Edur") return;
+    
+    // Check if the picked up weapon is in the special weapons list
+    string weaponItem = arg.WeaponItem.ToString();
+    foreach (string specialWeapon in edurSpecialWeapons)
     {
-        if (obj is IObjectWeaponItem)
+        if (weaponItem == specialWeapon)
         {
-            // This will be checked in OnUpdate when Edur picks up weapons
+            Crie("Edur", "gets_weapon");
+            break;
         }
     }
 }
@@ -308,12 +327,6 @@ public void OnUpdate(float elapsed)
             CheckLastAliveVsMultiple(player, botName);
         }
 
-        // Check for Edur getting listed weapons
-        if (botName == "Edur")
-        {
-            CheckEdurWeaponPickup(player);
-        }
-
         // Clear fire status when no longer on fire
         PlayerModifiers playerMods = player.GetModifiers();
         if (playerOnFire.ContainsKey(player.UniqueID) && playerOnFire[player.UniqueID])
@@ -355,29 +368,6 @@ private void CheckLastAliveVsMultiple(IPlayer player, string botName)
     if (aliveTeammates == 0 && aliveEnemies >= 2)
     {
         Crie(botName, "last_alive_vs_multiple");
-    }
-}
-
-private void CheckEdurWeaponPickup(IPlayer player)
-{
-    if (player.IsDead) return;
-    
-    WeaponItemType currentWeapon = player.CurrentWeaponDrawn;
-    
-    // List of special weapons Edur might pick up
-    WeaponItemType[] specialWeapons = {
-        WeaponItemType.Rifle,
-        WeaponItemType.Thrown,
-        WeaponItemType.Powerup
-    };
-    
-    foreach (WeaponItemType weaponType in specialWeapons)
-    {
-        if (currentWeapon == weaponType)
-        {
-            Crie("Edur", "gets_weapon");
-            break;
-        }
     }
 }
 
