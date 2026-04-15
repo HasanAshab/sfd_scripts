@@ -141,13 +141,13 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
     }
 }
 
-public void OnExplosionHit(IObject[] objects, ExplosionData explosionData)
+public void OnExplosionHit(ExplosionData explosionData, ExplosionHitArg[] args)
 {
-    foreach (IObject obj in objects)
+    foreach (ExplosionHitArg hitArg in args)
     {
-        if (obj is IPlayer)
+        if (hitArg.IsPlayer && hitArg.HitObject != null)
         {
-            IPlayer player = obj as IPlayer;
+            IPlayer player = Game.GetPlayer(hitArg.HitObject.UniqueID);
             if (player != null && !player.IsDead)
             {
                 string botName = GetBotName(player);
