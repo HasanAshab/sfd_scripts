@@ -271,7 +271,7 @@ public void OnUpdate(float elapsed)
         }
 
         // Check for grabbed state
-        bool isGrabbed = player.IsGrabbed;
+        bool isGrabbed = player.IsCaughtByPlayerInGrab;
         bool wasGrabbed = playerWasGrabbed.ContainsKey(player.UniqueID) && playerWasGrabbed[player.UniqueID];
         
         if (isGrabbed && !wasGrabbed && botName == "Bichi")
