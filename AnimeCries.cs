@@ -284,16 +284,16 @@ public void OnUpdate(float elapsed)
             playerWasGrabbed[player.UniqueID] = false;
         }
 
-        // Check for being driven (in vehicle)
-        bool isDriven = player.IsInVehicle;
-        bool wasDriven = playerWasDriven.ContainsKey(player.UniqueID) && playerWasDriven[player.UniqueID];
+        // Check for being caught in dive
+        bool isCaughtInDive = player.IsCaughtByPlayerInDive;
+        bool wasCaughtInDive = playerWasDriven.ContainsKey(player.UniqueID) && playerWasDriven[player.UniqueID];
         
-        if (isDriven && !wasDriven && botName == "Pakhi")
+        if (isCaughtInDive && !wasCaughtInDive && botName == "Pakhi")
         {
             playerWasDriven[player.UniqueID] = true;
-            Crie("Pakhi", "driven");
+            Crie("Pakhi", "dive_caught");
         }
-        else if (!isDriven && wasDriven)
+        else if (!isCaughtInDive && wasCaughtInDive)
         {
             playerWasDriven[player.UniqueID] = false;
         }
