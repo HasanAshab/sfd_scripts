@@ -10,13 +10,17 @@ private IPlayer psythicBot = null;
 
 // Tracking dictionaries
 private Dictionary<int, bool> playerOnFire = new Dictionary<int, bool>();
+private Dictionary<int, float> playerLastFireCryTime = new Dictionary<int, float>();
 private Dictionary<int, bool> playerStrengthBoosted = new Dictionary<int, bool>();
 private Dictionary<int, float> playerLastAmmoCheckTime = new Dictionary<int, float>();
 private Dictionary<int, bool> playerWasGrabbed = new Dictionary<int, bool>();
 private Dictionary<int, bool> playerWasDriven = new Dictionary<int, bool>();
+private Dictionary<int, int> kokolaLastTargetedPlayer = new Dictionary<int, int>();
+private Dictionary<int, bool> playerLastAliveEventFired = new Dictionary<int, bool>();
 
 // Constants
 private const float AMMO_CHECK_INTERVAL = 1000; // Check ammo every 1 second
+private const float FIRE_CRY_COOLDOWN = 10000; // Fire cry cooldown: 10 seconds
 
 // Edur special weapons list (by weapon item name)
 private string[] edurSpecialWeapons = {
@@ -92,9 +96,20 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
     // Check for fire damage
     if (args.DamageType == PlayerDamageEventType.Fire)
     {
+        float currentTime = Game.TotalElapsedGameTime;
+        
         if (!playerOnFire.ContainsKey(player.UniqueID) || !playerOnFire[player.UniqueID])
         {
             playerOnFire[player.UniqueID] = true;
+        }
+        
+        // Check cooldown before firing cry event
+        bool canFireCry = !playerLastFireCryTime.ContainsKey(player.UniqueID) || 
+                          (currentTime - playerLastFireCryTime[player.UniqueID] >= FIRE_CRY_COOLDOWN);
+        
+        if (canFireCry)
+        {
+            playerLastFireCryTime[player.UniqueID] = currentTime;
             
             if (botName == "Pakhi")
             {
@@ -134,18 +149,50 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
         Crie("Edur", "hand_to_hand");
     }
 
-    // Check if Kokola is being targeted by other bots
-    foreach (PlayerMeleeHitArg hitArg in args)
+    // Check if Kokola is targeting any player
+    if (botName == "Kokola")
     {
-        if (hitArg.IsPlayer && hitArg.HitObject != null)
+        foreach (PlayerMeleeHitArg hitArg in args)
         {
-            IPlayer target = Game.GetPlayer(hitArg.HitObject.UniqueID);
-            if (target != null)
+            if (hitArg.IsPlayer && hitArg.HitObject != null)
             {
-                string targetBotName = GetBotName(target);
-                if (targetBotName == "Kokola" && player.IsBot && player.UniqueID != target.UniqueID)
+                IPlayer target = Game.GetPlayer(hitArg.HitObject.UniqueID);
+                if (target != null && target.UniqueID != player.UniqueID)
                 {
-                    Crie("Kokola", "targeted_by_bot");
+                    // Check if this is a different player than last targeted
+                    int lastTargetID = kokolaLastTargetedPlayer.ContainsKey(player.UniqueID) ? kokolaLastTargetedPlayer[player.UniqueID] : 0;
+                    
+                    if (lastTargetID != target.UniqueID)
+                    {
+                        kokolaLastTargetedPlayer[player.UniqueID] = target.UniqueID;
+                        Crie("Kokola", "targeted_a_player");
+                        
+                        // Check if target has strength boost
+                        if (target.GetStrengthBoostTime() > 0)
+                        {
+                            Crie("Kokola", "opponent_strength_boost");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Check if Pakhi is targeting any player
+    if (botName == "Pakhi")
+    {
+        foreach (PlayerMeleeHitArg hitArg in args)
+        {
+            if (hitArg.IsPlayer && hitArg.HitObject != null)
+            {
+                IPlayer target = Game.GetPlayer(hitArg.HitObject.UniqueID);
+                if (target != null && target.UniqueID != player.UniqueID)
+                {
+                    // Check if target has strength boost
+                    if (target.GetStrengthBoostTime() > 0)
+                    {
+                        Crie("Pakhi", "opponent_strength_boost");
+                    }
                 }
             }
         }
@@ -248,22 +295,6 @@ public void OnUpdate(float elapsed)
             {
                 Crie("Pakhi", "strength_boost");
             }
-            
-            // Check if opponent got strength boost (for Kokola and Pakhi)
-            if (player.GetTeam() != PlayerTeam.Team1)
-            {
-                if (kokolaBot != null && !kokolaBot.IsDead)
-                {
-                    Crie("Kokola", "opponent_strength_boost");
-                }
-            }
-            if (player.GetTeam() != PlayerTeam.Team2)
-            {
-                if (pakhiBot != null && !pakhiBot.IsDead)
-                {
-                    Crie("Pakhi", "opponent_strength_boost");
-                }
-            }
         }
         else if (!hasStrengthBoost && wasStrengthBoosted)
         {
@@ -322,9 +353,15 @@ public void OnUpdate(float elapsed)
         }
 
         // Check for last alive vs multiple opponents
-        if (botName == "Bichi" || botName == "Pakhi")
+        if (botName == "Bichi" || botName == "Pakhi" || botName == "Kokola")
         {
             CheckLastAliveVsMultiple(player, botName);
+        }
+
+        // Check for weapon pickups
+        if (botName == "Edur" || botName == "Bichi" || botName == "Xray")
+        {
+            CheckWeaponPickup(player, botName);
         }
 
         // Clear fire status when no longer on fire
@@ -344,6 +381,12 @@ public void OnUpdate(float elapsed)
 private void CheckLastAliveVsMultiple(IPlayer player, string botName)
 {
     if (player.IsDead) return;
+    
+    // Check if event already fired for this player
+    if (playerLastAliveEventFired.ContainsKey(player.UniqueID) && playerLastAliveEventFired[player.UniqueID])
+    {
+        return;
+    }
     
     PlayerTeam playerTeam = player.GetTeam();
     int aliveTeammates = 0;
@@ -367,7 +410,31 @@ private void CheckLastAliveVsMultiple(IPlayer player, string botName)
     // Last alive on team vs 2+ enemies
     if (aliveTeammates == 0 && aliveEnemies >= 2)
     {
+        playerLastAliveEventFired[player.UniqueID] = true;
         Crie(botName, "last_alive_vs_multiple");
+    }
+}
+
+private void CheckWeaponPickup(IPlayer player, string botName)
+{
+    if (player.IsDead) return;
+    
+    WeaponItemType currentWeapon = player.CurrentWeaponDrawn;
+    
+    // List of special weapons to track
+    WeaponItemType[] specialWeapons = {
+        WeaponItemType.Rifle,
+        WeaponItemType.Thrown,
+        WeaponItemType.Powerup
+    };
+    
+    foreach (WeaponItemType weaponType in specialWeapons)
+    {
+        if (currentWeapon == weaponType)
+        {
+            Crie(botName, "gets_weapon");
+            break;
+        }
     }
 }
 
@@ -391,5 +458,5 @@ private void Crie(string botName, string tag)
 {
     // TODO: Implement actual sound effect playback
     // For now, just log the event
-    Game.ShowChatMessage(botName + " - " + tag);
+    Game.Show(botName + " - " + tag);
 }
