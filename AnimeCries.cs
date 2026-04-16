@@ -458,5 +458,5 @@ private void Crie(string botName, string tag)
 {
     // TODO: Implement actual sound effect playback
     // For now, just log the event
-    Game.Show(botName + " - " + tag);
+    Game.ShowChatMessage(botName + " - " + tag);
 }
