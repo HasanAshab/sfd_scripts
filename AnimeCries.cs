@@ -17,10 +17,13 @@ private Dictionary<int, bool> playerWasGrabbed = new Dictionary<int, bool>();
 private Dictionary<int, bool> playerWasDriven = new Dictionary<int, bool>();
 private Dictionary<int, int> kokolaLastTargetedPlayer = new Dictionary<int, int>();
 private Dictionary<int, bool> playerLastAliveEventFired = new Dictionary<int, bool>();
+private Dictionary<int, WeaponItemType> playerLastWeapon = new Dictionary<int, WeaponItemType>();
+private Dictionary<int, float> playerLastWeaponCryTime = new Dictionary<int, float>();
 
 // Constants
 private const float AMMO_CHECK_INTERVAL = 1000; // Check ammo every 1 second
 private const float FIRE_CRY_COOLDOWN = 10000; // Fire cry cooldown: 10 seconds
+private const float WEAPON_CRY_COOLDOWN = 10000; // Weapon cry cooldown: 10 seconds
 
 // Edur special weapons list (by weapon item name)
 private string[] edurSpecialWeapons = {
@@ -420,6 +423,7 @@ private void CheckWeaponPickup(IPlayer player, string botName)
     if (player.IsDead) return;
     
     WeaponItemType currentWeapon = player.CurrentWeaponDrawn;
+    float currentTime = Game.TotalElapsedGameTime;
     
     // List of special weapons to track
     WeaponItemType[] specialWeapons = {
@@ -428,13 +432,37 @@ private void CheckWeaponPickup(IPlayer player, string botName)
         WeaponItemType.Powerup
     };
     
+    // Check if current weapon is a special weapon
+    bool isSpecialWeapon = false;
     foreach (WeaponItemType weaponType in specialWeapons)
     {
         if (currentWeapon == weaponType)
         {
-            Crie(botName, "gets_weapon");
+            isSpecialWeapon = true;
             break;
         }
+    }
+    
+    if (!isSpecialWeapon) return;
+    
+    // Check if this is a different weapon than last time
+    WeaponItemType lastWeapon = playerLastWeapon.ContainsKey(player.UniqueID) ? playerLastWeapon[player.UniqueID] : WeaponItemType.NONE;
+    
+    // Check cooldown
+    bool canFireCry = !playerLastWeaponCryTime.ContainsKey(player.UniqueID) || 
+                      (currentTime - playerLastWeaponCryTime[player.UniqueID] >= WEAPON_CRY_COOLDOWN);
+    
+    // Fire event if weapon changed and cooldown passed
+    if (currentWeapon != lastWeapon && canFireCry)
+    {
+        playerLastWeapon[player.UniqueID] = currentWeapon;
+        playerLastWeaponCryTime[player.UniqueID] = currentTime;
+        Crie(botName, "gets_weapon");
+    }
+    else if (currentWeapon != lastWeapon)
+    {
+        // Update last weapon even if cooldown hasn't passed
+        playerLastWeapon[player.UniqueID] = currentWeapon;
     }
 }
 
