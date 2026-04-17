@@ -8,6 +8,10 @@ private IPlayer xrayBot = null;
 private IPlayer pakhiBot = null;
 private IPlayer psythicBot = null;
 
+// Non-bot player references
+private IPlayer bondukPlayer = null;
+private IPlayer hateliPlayer = null;
+
 // Tracking dictionaries
 private Dictionary<int, bool> playerOnFire = new Dictionary<int, bool>();
 private Dictionary<int, float> playerLastFireCryTime = new Dictionary<int, float>();
@@ -16,14 +20,18 @@ private Dictionary<int, float> playerLastAmmoCheckTime = new Dictionary<int, flo
 private Dictionary<int, bool> playerWasGrabbed = new Dictionary<int, bool>();
 private Dictionary<int, bool> playerWasDriven = new Dictionary<int, bool>();
 private Dictionary<int, int> kokolaLastTargetedPlayer = new Dictionary<int, int>();
+private Dictionary<int, float> kokolaLastTargetCryTime = new Dictionary<int, float>();
 private Dictionary<int, bool> playerLastAliveEventFired = new Dictionary<int, bool>();
 private Dictionary<int, WeaponItemType> playerLastWeapon = new Dictionary<int, WeaponItemType>();
 private Dictionary<int, float> playerLastWeaponCryTime = new Dictionary<int, float>();
+private Dictionary<int, float> playerLastFallingCryTime = new Dictionary<int, float>();
 
 // Constants
 private const float AMMO_CHECK_INTERVAL = 1000; // Check ammo every 1 second
 private const float FIRE_CRY_COOLDOWN = 10000; // Fire cry cooldown: 10 seconds
 private const float WEAPON_CRY_COOLDOWN = 10000; // Weapon cry cooldown: 10 seconds
+private const float FALLING_CRY_COOLDOWN = 1500; // Falling cry cooldown: 1.5 seconds
+private const float TARGET_CRY_COOLDOWN = 10000; // Target cry cooldown: 10 seconds
 
 // Edur special weapons list (by weapon item name)
 private string[] edurSpecialWeapons = {
@@ -55,18 +63,30 @@ public void FindBotReferences(TriggerArgs args)
     IPlayer[] allPlayers = Game.GetPlayers();
     foreach (IPlayer player in allPlayers)
     {
-        if (!player.IsBot) continue;
+        string playerName = player.GetProfile().Name;
         
-        string botName = player.GetProfile().Name;
-        switch (botName)
+        // Find bots
+        if (player.IsBot)
         {
-            case "Timpa": timpaBot = player; break;
-            case "Bichi": bichiBot = player; break;
-            case "Kokola": kokolaBot = player; break;
-            case "Edur": edurBot = player; break;
-            case "Xray": xrayBot = player; break;
-            case "Pakhi": pakhiBot = player; break;
-            case "Psythic": psythicBot = player; break;
+            switch (playerName)
+            {
+                case "Timpa": timpaBot = player; break;
+                case "Bichi": bichiBot = player; break;
+                case "Kokola": kokolaBot = player; break;
+                case "Edur": edurBot = player; break;
+                case "Xray": xrayBot = player; break;
+                case "Pakhi": pakhiBot = player; break;
+                case "Psythic": psythicBot = player; break;
+            }
+        }
+        else
+        {
+            // Find non-bot players
+            switch (playerName)
+            {
+                case "Bonduk": bondukPlayer = player; break;
+                case "Hateli": hateliPlayer = player; break;
+            }
         }
     }
 }
@@ -91,7 +111,11 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
             }
             else if (botName == "Timpa")
             {
-                Crie("Timpa", "hit_by_teammate");
+                Crie("Timpa", "friendly_fire");
+            }
+            else if (botName == "Bichi")
+            {
+                Crie("Bichi", "friendly_fire");
             }
         }
     }
@@ -130,13 +154,13 @@ public void OnPlayerDeath(IPlayer player, PlayerDeathArgs args)
 {
     if (player == null) return;
     
-    string botName = GetBotName(player);
-    if (botName == null) return;
+    string playerName = GetPlayerName(player);
+    if (playerName == null) return;
 
-    // Check if player was gibbed
+    // Check if player was gibbed - fire for all tracked players
     if (args.Removed)
     {
-        Crie(botName, "gibbed");
+        Crie(playerName, "gibbed");
     }
 }
 
@@ -162,12 +186,20 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
                 IPlayer target = Game.GetPlayer(hitArg.HitObject.UniqueID);
                 if (target != null && target.UniqueID != player.UniqueID)
                 {
+                    float currentTime = Game.TotalElapsedGameTime;
+                    
                     // Check if this is a different player than last targeted
                     int lastTargetID = kokolaLastTargetedPlayer.ContainsKey(player.UniqueID) ? kokolaLastTargetedPlayer[player.UniqueID] : 0;
                     
-                    if (lastTargetID != target.UniqueID)
+                    // Check cooldown
+                    bool canFireCry = !kokolaLastTargetCryTime.ContainsKey(player.UniqueID) || 
+                                      (currentTime - kokolaLastTargetCryTime[player.UniqueID] >= TARGET_CRY_COOLDOWN);
+                    
+                    // Fire if target changed and cooldown passed
+                    if (lastTargetID != target.UniqueID && canFireCry)
                     {
                         kokolaLastTargetedPlayer[player.UniqueID] = target.UniqueID;
+                        kokolaLastTargetCryTime[player.UniqueID] = currentTime;
                         Crie("Kokola", "targeted_a_player");
                         
                         // Check if target has strength boost
@@ -175,6 +207,11 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
                         {
                             Crie("Kokola", "opponent_strength_boost");
                         }
+                    }
+                    else if (lastTargetID != target.UniqueID)
+                    {
+                        // Update last target even if cooldown hasn't passed
+                        kokolaLastTargetedPlayer[player.UniqueID] = target.UniqueID;
                     }
                 }
             }
@@ -264,17 +301,25 @@ public void OnUpdate(float elapsed)
         // Check for falling
         if (player.IsInMidAir && player.GetLinearVelocity().Y < -5)
         {
-            if (botName == "Kokola")
+            bool canFireFallingCry = !playerLastFallingCryTime.ContainsKey(player.UniqueID) || 
+                                      (currentTime - playerLastFallingCryTime[player.UniqueID] >= FALLING_CRY_COOLDOWN);
+            
+            if (canFireFallingCry)
             {
-                Crie("Kokola", "falling");
-            }
-            else if (botName == "Bichi")
-            {
-                Crie("Bichi", "falling");
-            }
-            else if (botName == "Xray")
-            {
-                Crie("Xray", "falling");
+                playerLastFallingCryTime[player.UniqueID] = currentTime;
+                
+                if (botName == "Kokola")
+                {
+                    Crie("Kokola", "falling");
+                }
+                else if (botName == "Bichi")
+                {
+                    Crie("Bichi", "falling");
+                }
+                else if (botName == "Xray")
+                {
+                    Crie("Xray", "falling");
+                }
             }
         }
 
@@ -477,6 +522,31 @@ private string GetBotName(IPlayer player)
     if (xrayBot != null && player.UniqueID == xrayBot.UniqueID) return "Xray";
     if (pakhiBot != null && player.UniqueID == pakhiBot.UniqueID) return "Pakhi";
     if (psythicBot != null && player.UniqueID == psythicBot.UniqueID) return "Psythic";
+    
+    return null;
+}
+
+private string GetPlayerName(IPlayer player)
+{
+    if (player == null) return null;
+    
+    // Check bots
+    if (player.IsBot)
+    {
+        if (timpaBot != null && player.UniqueID == timpaBot.UniqueID) return "Timpa";
+        if (bichiBot != null && player.UniqueID == bichiBot.UniqueID) return "Bichi";
+        if (kokolaBot != null && player.UniqueID == kokolaBot.UniqueID) return "Kokola";
+        if (edurBot != null && player.UniqueID == edurBot.UniqueID) return "Edur";
+        if (xrayBot != null && player.UniqueID == xrayBot.UniqueID) return "Xray";
+        if (pakhiBot != null && player.UniqueID == pakhiBot.UniqueID) return "Pakhi";
+        if (psythicBot != null && player.UniqueID == psythicBot.UniqueID) return "Psythic";
+    }
+    else
+    {
+        // Check non-bot players
+        if (bondukPlayer != null && player.UniqueID == bondukPlayer.UniqueID) return "Bonduk";
+        if (hateliPlayer != null && player.UniqueID == hateliPlayer.UniqueID) return "Hateli";
+    }
     
     return null;
 }
