@@ -25,6 +25,7 @@ private Dictionary<int, bool> playerLastAliveEventFired = new Dictionary<int, bo
 private Dictionary<int, WeaponItemType> playerLastWeapon = new Dictionary<int, WeaponItemType>();
 private Dictionary<int, float> playerLastWeaponCryTime = new Dictionary<int, float>();
 private Dictionary<int, float> playerLastFallingCryTime = new Dictionary<int, float>();
+private Dictionary<int, float> playerLastFriendlyFireCryTime = new Dictionary<int, float>();
 
 // Constants
 private const float AMMO_CHECK_INTERVAL = 1000; // Check ammo every 1 second
@@ -32,6 +33,7 @@ private const float FIRE_CRY_COOLDOWN = 10000; // Fire cry cooldown: 10 seconds
 private const float WEAPON_CRY_COOLDOWN = 10000; // Weapon cry cooldown: 10 seconds
 private const float FALLING_CRY_COOLDOWN = 1500; // Falling cry cooldown: 1.5 seconds
 private const float TARGET_CRY_COOLDOWN = 10000; // Target cry cooldown: 10 seconds
+private const float FRIENDLY_FIRE_CRY_COOLDOWN = 5000; // Friendly fire cry cooldown: 5 seconds
 
 // Edur special weapons list (by weapon item name)
 private string[] edurSpecialWeapons = {
@@ -106,18 +108,29 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
       
         if (attacker != null && attacker.GetTeam() == player.GetTeam() && attacker.UniqueID != player.UniqueID)
         {
-            // Friendly fire detected
-            if (botName == "Pakhi")
+            float currentTime = Game.TotalElapsedGameTime;
+            
+            // Check cooldown before firing cry event
+            bool canFireFriendlyFireCry = !playerLastFriendlyFireCryTime.ContainsKey(player.UniqueID) || 
+                                          (currentTime - playerLastFriendlyFireCryTime[player.UniqueID] >= FRIENDLY_FIRE_CRY_COOLDOWN);
+            
+            if (canFireFriendlyFireCry)
             {
-                Crie("Pakhi", "friendly_fire");
-            }
-            else if (botName == "Timpa")
-            {
-                Crie("Timpa", "friendly_fire");
-            }
-            else if (botName == "Bichi")
-            {
-                Crie("Bichi", "friendly_fire");
+                playerLastFriendlyFireCryTime[player.UniqueID] = currentTime;
+                
+                // Friendly fire detected
+                if (botName == "Pakhi")
+                {
+                    Crie("Pakhi", "friendly_fire");
+                }
+                else if (botName == "Timpa")
+                {
+                    Crie("Timpa", "friendly_fire");
+                }
+                else if (botName == "Bichi")
+                {
+                    Crie("Bichi", "friendly_fire");
+                }
             }
         }
     }
