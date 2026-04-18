@@ -93,15 +93,17 @@ public void FindBotReferences(TriggerArgs args)
 
 public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
 {
-    if (player == null || player.IsDead) return;
-    
+    if (player == null || player.IsDead || args.DamageType != PlayerDamageEventType.Projectile) return;
+
     string botName = GetBotName(player);
     if (botName == null) return;
 
     // Check for friendly fire (hit by own team member)
     if (args.SourceID != 0)
     {
-        IPlayer attacker = Game.GetPlayer(args.SourceID);
+        IProjectile projectile = Game.GetProjectile(args.SourceID)
+        IPlayer attacker = Game.GetPlayer(projectile.InitialOwnerPlayerID);
+      
         if (attacker != null && attacker.GetTeam() == player.GetTeam() && attacker.UniqueID != player.UniqueID)
         {
             // Friendly fire detected
