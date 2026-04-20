@@ -216,12 +216,6 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
                         kokolaLastTargetedPlayer[player.UniqueID] = target.UniqueID;
                         kokolaLastTargetCryTime[player.UniqueID] = currentTime;
                         Crie("Kokola", "targeted_a_player");
-                        
-                        // Check if target has strength boost
-                        if (target.GetStrengthBoostTime() > 0)
-                        {
-                            Crie("Kokola", "opponent_strength_boost");
-                        }
                     }
                     else if (lastTargetID != target.UniqueID)
                     {
@@ -426,6 +420,12 @@ public void OnUpdate(float elapsed)
         {
             CheckWeaponPickup(player, botName);
         }
+        
+        // Check for nearby enemies with strength boost (Kokola and Pakhi)
+        if (botName == "Kokola" || botName == "Pakhi")
+        {
+            CheckNearbyEnemyStrengthBoost(player, botName);
+        }
 
         // Clear fire status when no longer on fire
         PlayerModifiers playerMods = player.GetModifiers();
@@ -523,6 +523,40 @@ private void CheckWeaponPickup(IPlayer player, string botName)
     {
         // Update last weapon even if cooldown hasn't passed
         playerLastWeapon[player.UniqueID] = currentWeapon;
+    }
+}
+
+private void CheckNearbyEnemyStrengthBoost(IPlayer player, string botName)
+{
+    if (player.IsDead) return;
+    
+    Vector2 playerPosition = player.GetWorldPosition();
+    PlayerTeam playerTeam = player.GetTeam();
+    const float STRENGTH_BOOST_CHECK_RADIUS = 50f;
+    
+    // Check all players for nearby enemies with strength boost
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer otherPlayer in allPlayers)
+    {
+        if (otherPlayer.IsDead || otherPlayer.UniqueID == player.UniqueID) continue;
+        
+        // Check if other player is on a different team
+        if (otherPlayer.GetTeam() != playerTeam && otherPlayer.GetTeam() != PlayerTeam.Independent)
+        {
+            // Check if other player has strength boost
+            if (otherPlayer.GetStrengthBoostTime() > 0)
+            {
+                // Check distance
+                Vector2 otherPosition = otherPlayer.GetWorldPosition();
+                float distance = Vector2.Distance(playerPosition, otherPosition);
+                
+                if (distance <= STRENGTH_BOOST_CHECK_RADIUS)
+                {
+                    Crie(botName, "opponent_strength_boost");
+                    return; // Fire once per update cycle
+                }
+            }
+        }
     }
 }
 
