@@ -416,7 +416,7 @@ public void OnUpdate(float elapsed)
         }
 
         // Check for last alive vs multiple opponents
-        if (botName == "Bichi" || botName == "Pakhi" || botName == "Kokola")
+        if (botName == "Bichi" || botName == "Pakhi" || botName == "Kokola" || botName == "Timpa")
         {
             CheckLastAliveVsMultiple(player, botName);
         }
