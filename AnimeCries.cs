@@ -103,7 +103,7 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
     // Check for friendly fire (hit by own team member)
     if (args.SourceID != 0)
     {
-        IProjectile projectile = Game.GetProjectile(args.SourceID)
+        IProjectile projectile = Game.GetProjectile(args.SourceID);
         IPlayer attacker = Game.GetPlayer(projectile.InitialOwnerPlayerID);
       
         if (attacker != null && attacker.GetTeam() == player.GetTeam() && attacker.UniqueID != player.UniqueID)
