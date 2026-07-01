@@ -59,20 +59,19 @@ private void SetupP1()
     p1Mods.ProjectileCritChanceDealtModifier *= 1.3f;
     p1.SetModifiers(p1Mods);
     
-    // Set P1 profile
+    // Set P1 profile - Bonduk
     string primeColor = GetPrimeColor(p1.GetTeam());
     p1.SetProfile(new IProfile()
     {
-        Name = "Commander Alpha",
-        Gender = Gender.Male,
-        Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingLightGray"),
-        Head = new IProfileClothingItem("Beret", primeColor),
-        ChestOver = new IProfileClothingItem("KevlarVest", primeColor, "ClothingDarkGray"),
-        ChestUnder = new IProfileClothingItem("MilitaryShirt", primeColor, "ClothingLightBlue"),
-        Hands = new IProfileClothingItem("GlovesBlack", "ClothingDarkGray"),
-        Waist = new IProfileClothingItem("SatchelBelt", primeColor),
-        Legs = new IProfileClothingItem("CamoPants", primeColor, primeColor),
-        Feet = new IProfileClothingItem("BootsBlack", "ClothingDarkGray"),
+        Name = "Bonduk",
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGreen"),
+        ChestOver = new IProfileClothingItem("KevlarVest_fem", primeColor),
+        ChestUnder = new IProfileClothingItem("LumberjackShirt2_fem", primeColor, "ClothingLightYellow"),
+        Hands = new IProfileClothingItem("GlovesBlack", "ClothingLightGray"),
+        Legs = new IProfileClothingItem("Pants_fem", primeColor),
+        Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+        Accesory = new IProfileClothingItem("SunGlasses", "", "ClothingLightGray"),
     });
 }
 
@@ -98,20 +97,19 @@ private void SetupP2()
     p2Mods.MeleeForceModifier *= 1.3f;
     p2.SetModifiers(p2Mods);
     
-    // Set P2 profile
+    // Set P2 profile - Hateli
     string primeColor = GetPrimeColor(p2.GetTeam());
     p2.SetProfile(new IProfile()
     {
-        Name = "Commander Bravo",
-        Gender = Gender.Female,
-        Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGray"),
-        Head = new IProfileClothingItem("Beret", primeColor),
-        ChestOver = new IProfileClothingItem("KevlarVest_fem", primeColor, "ClothingDarkGray"),
-        ChestUnder = new IProfileClothingItem("MilitaryShirt_fem", primeColor, "ClothingLightBlue"),
-        Hands = new IProfileClothingItem("GlovesBlack", "ClothingDarkGray"),
-        Waist = new IProfileClothingItem("SatchelBelt_fem", primeColor),
-        Legs = new IProfileClothingItem("CamoPants_fem", primeColor, primeColor),
-        Feet = new IProfileClothingItem("BootsBlack", "ClothingDarkGray"),
+        Name = "Hateli",
+        Gender = Gender.Male,
+        Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGray"),
+        ChestOver = new IProfileClothingItem("MilitaryJacket", primeColor, "ClothingLightGray"),
+        ChestUnder = new IProfileClothingItem("SleevelessShirt", "ClothingLightGray"),
+        Hands = new IProfileClothingItem("GlovesBlack", "ClothingLightGray"),
+        Legs = new IProfileClothingItem("Pants", primeColor),
+        Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+        Accesory = new IProfileClothingItem("Cigar", "ClothingDarkGray"),
     });
 }
 
