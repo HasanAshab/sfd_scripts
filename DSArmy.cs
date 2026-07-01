@@ -53,10 +53,10 @@ private void SetupP1()
     
     // Set P1 modifiers - 30% more speed, energy recharge, and crit chance
     PlayerModifiers p1Mods = p1.GetModifiers();
-    p1Mods.RunSpeedModifier *= 1.3f;
-    p1Mods.SprintSpeedModifier *= 1.3f;
-    p1Mods.EnergyRechargeModifier *= 1.3f;
-    p1Mods.ProjectileCritChanceDealtModifier *= 1.3f;
+    p1Mods.RunSpeedModifier = 1.3f;
+    p1Mods.SprintSpeedModifier = 1.3f;
+    p1Mods.EnergyRechargeModifier = 1.3f;
+    p1Mods.ProjectileCritChanceDealtModifier = 1.3f;
     p1.SetModifiers(p1Mods);
     
     // Set P1 profile - Bonduk
@@ -93,8 +93,8 @@ private void SetupP2()
     
     // Set P2 modifiers - 30% more melee damage and force
     PlayerModifiers p2Mods = p2.GetModifiers();
-    p2Mods.MeleeDamageDealtModifier *= 1.3f;
-    p2Mods.MeleeForceModifier *= 1.3f;
+    p2Mods.MeleeDamageDealtModifier = 1.3f;
+    p2Mods.MeleeForceModifier = 1.3f;
     p2Mods.SizeModifier = (float) 1.15;
     p2Mods.RunSpeedModifier = 0.95f;
     p2Mods.SprintSpeedModifier = 0.95f;
