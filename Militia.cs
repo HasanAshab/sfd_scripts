@@ -152,11 +152,11 @@ public void OnStartup()
     respawnTimer.Trigger();
     
     // Set up winner check timer
-    IObjectTimerTrigger winnerTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    winnerTimer.SetIntervalTime(2000); // Check every 2 seconds
-    winnerTimer.SetRepeatCount(0); // Infinite repeats
-    winnerTimer.SetScriptMethod("CheckForWinner");
-    winnerTimer.Trigger();
+    // IObjectTimerTrigger winnerTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    // winnerTimer.SetIntervalTime(2000); // Check every 2 seconds
+    // winnerTimer.SetRepeatCount(0); // Infinite repeats
+    // winnerTimer.SetScriptMethod("CheckForWinner");
+    // winnerTimer.Trigger();
     
     // Set up colonel identification timer (after players are equipped)
     IObjectTimerTrigger colonelTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");

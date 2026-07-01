@@ -1,5 +1,39 @@
 // NinjaEra - Ninja-themed gameplay with shurikens, bows, knives, and katanas
 
+
+
+public void OnStartup()
+{
+    SetupBots();
+
+    IPlayer[] players = Game.GetPlayers();
+    p1 = players.Length >= 1 ? players[0] : null;
+    p2 = players.Length >= 2 ? players[1] : null;
+
+    PlayerModifiers p1Mods = p1.GetModifiers();
+
+    p1Mods.RunSpeedModifier = 1.15f;
+    p1Mods.SprintSpeedModifier = 1.3f;
+
+    p1Mods.MaxEnergy = (int)(p1Mods.MaxEnergy * 1.2f);
+    p1Mods.CurrentEnergy = (int)(p1Mods.CurrentEnergy * 1.2f);
+    p1Mods.EnergyRechargeModifier *= 1.2f;
+    p1.SetModifiers(p1Mods);
+
+
+    PlayerModifiers p2Mods = p2.GetModifiers();
+
+    p2Mods.SizeModifier = 1.12f;
+    p2Mods.RunSpeedModifier = 0.8f;
+    p2Mods.SprintSpeedModifier = 0.95f;
+    p2Mods.MeleeForceModifier *= 1.2f;
+    p2Mods.MeleeDamageDealtModifier *= 1.4f;
+
+    p2.SetModifiers(p2Mods);
+
+    TransformPlayersToUjiri();
+}
+
 public void OnStartup()
 {
     // Enable infinite ammo using console command
@@ -41,21 +75,15 @@ private void EquipNinjaWeapons(IPlayer player)
     player.RemoveWeaponItemType(WeaponItemType.Thrown);
     
     // Check if this player is the highest difficulty bot on their team
-    bool isEliteBot = IsHighestDifficultyBot(player);
+    // bool isEliteBot = IsHighestDifficultyBot(player);
     
     // Give basic ninja weapons to everyone
     player.GiveWeaponItem(WeaponItem.SHURIKEN);
     player.GiveWeaponItem(WeaponItem.BOW);
+    player.GiveWeaponItem(WeaponItem.KNIFE);
+
     
-    // Give katana to elite bots, knife to everyone else
-    if (isEliteBot)
-    {
-        player.GiveWeaponItem(WeaponItem.KATANA);
-    }
-    else
-    {
-        player.GiveWeaponItem(WeaponItem.KNIFE);
-    }
+
 }
 
 private bool IsHighestDifficultyBot(IPlayer player)
