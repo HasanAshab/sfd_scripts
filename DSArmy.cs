@@ -95,7 +95,7 @@ private void SetupP2()
     PlayerModifiers p2Mods = p2.GetModifiers();
     p2Mods.MeleeDamageDealtModifier *= 1.3f;
     p2Mods.MeleeForceModifier *= 1.3f;
-    p2Mods.SizeModifier = 1.15;
+    p2Mods.SizeModifier = (float) 1.15;
     p2Mods.RunSpeedModifier = 0.95f;
     p2Mods.SprintSpeedModifier = 0.95f;
     p2.SetModifiers(p2Mods);
