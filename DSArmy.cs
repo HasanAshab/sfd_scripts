@@ -51,10 +51,12 @@ private void SetupP1()
     p1.GiveWeaponItem(WeaponItem.PISTOL45);
     p1.GiveWeaponItem(WeaponItem.GRENADES);
     
-    // Set P1 modifiers - 30% more speed, energy recharge, and crit chance
+    // Set P1 modifiers - base speed boost + 30% more speed, energy recharge, and crit chance
     PlayerModifiers p1Mods = p1.GetModifiers();
-    p1Mods.RunSpeedModifier = 1.3f;
-    p1Mods.SprintSpeedModifier = 1.3f;
+    p1Mods.RunSpeedModifier *= 1.35f;
+    p1Mods.SprintSpeedModifier *= 1.45f;
+    p1Mods.RunSpeedModifier *= 1.3f; // Additional 30% for P1
+    p1Mods.SprintSpeedModifier *= 1.3f; // Additional 30% for P1
     p1Mods.EnergyRechargeModifier = 1.3f;
     p1Mods.ProjectileCritChanceDealtModifier = 1.3f;
     p1.SetModifiers(p1Mods);
@@ -91,13 +93,13 @@ private void SetupP2()
     p2.GiveWeaponItem(WeaponItem.PISTOL45);
     p2.GiveWeaponItem(WeaponItem.GRENADES);
     
-    // Set P2 modifiers - 30% more melee damage and force
+    // Set P2 modifiers - base speed boost + 30% more melee damage and force
     PlayerModifiers p2Mods = p2.GetModifiers();
+    p2Mods.RunSpeedModifier *= 1.35f;
+    p2Mods.SprintSpeedModifier *= 1.45f;
     p2Mods.MeleeDamageDealtModifier = 1.3f;
     p2Mods.MeleeForceModifier = 1.3f;
     p2Mods.SizeModifier = (float) 1.15;
-    p2Mods.RunSpeedModifier = 0.95f;
-    p2Mods.SprintSpeedModifier = 0.95f;
     p2.SetModifiers(p2Mods);
     
     // Set P2 profile - Hateli
@@ -175,6 +177,12 @@ private void SpawnCommando(IPlayer commander, ref List<IPlayer> commandoList)
         commando.GiveWeaponItem(WeaponItem.KNIFE);
         commando.GiveWeaponItem(WeaponItem.PISTOL45);
         commando.GiveWeaponItem(WeaponItem.SMG);
+        
+        // Set commando speed modifiers
+        PlayerModifiers commandoMods = commando.GetModifiers();
+        commandoMods.RunSpeedModifier *= 1.35f;
+        commandoMods.SprintSpeedModifier *= 1.45f;
+        commando.SetModifiers(commandoMods);
         
         // Set commando profile
         string primeColor = GetPrimeColor(commanderTeam);
