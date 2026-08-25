@@ -44,13 +44,14 @@ private void SetupP1()
     p1.GiveWeaponItem(WeaponItem.BOW);
     p1.GiveWeaponItem(WeaponItem.SLOWMO_5);
     
-    // Set P1 modifiers - 2x speed, 2.5x energy, 1.1x energy regen
+    // Set P1 modifiers - 2x speed, 2.5x energy, 1.1x energy regen, 1.2x size
     PlayerModifiers p1Mods = p1.GetModifiers();
     p1Mods.RunSpeedModifier *= 2.0f;
     p1Mods.SprintSpeedModifier *= 2.0f;
     p1Mods.MaxEnergy = (int)(p1Mods.MaxEnergy * 2.5f);
     p1Mods.CurrentEnergy = (int)(p1Mods.CurrentEnergy * 2.5f);
     p1Mods.EnergyRechargeModifier *= 1.1f;
+    p1Mods.SizeModifier = 1.2f;
     p1.SetModifiers(p1Mods);
     
     // Set P1 profile - ThorsBonduk
@@ -79,15 +80,17 @@ private void SetupP2()
     p2.RemoveWeaponItemType(WeaponItemType.Thrown);
     p2.RemoveWeaponItemType(WeaponItemType.Powerup);
     
-    // Give P2 melee weapons (let them pick up weapons from the map)
-    // P2 is a brawler focused on melee combat
+    // Give P2 weapons: katana and bow
+    p2.GiveWeaponItem(WeaponItem.KATANA);
+    p2.GiveWeaponItem(WeaponItem.BOW);
     
-    // Set P2 modifiers - 2.5x health, 2x melee damage, 2x melee force
+    // Set P2 modifiers - 2.5x health, 2x melee damage, 2x melee force, 1.4x size
     PlayerModifiers p2Mods = p2.GetModifiers();
     p2Mods.MaxHealth = (int)(p2Mods.MaxHealth * 2.5f);
     p2Mods.CurrentHealth = (int)(p2Mods.CurrentHealth * 2.5f);
     p2Mods.MeleeDamageDealtModifier *= 2.0f;
     p2Mods.MeleeForceModifier *= 2.0f;
+    p2Mods.SizeModifier = 1.4f;
     p2.SetModifiers(p2Mods);
     
     // Set P2 profile - ThorsHateli
@@ -107,9 +110,14 @@ private void SetupP2()
 
 public void GiveP1Slowmo(TriggerArgs args)
 {
-    // Give P1 slowmo powerup every 12 seconds if alive
+    // Give P1 slowmo powerup every 12 seconds if alive and doesn't have one
     if (p1 != null && !p1.IsDead)
     {
-        p1.GiveWeaponItem(WeaponItem.SLOWMO_5);
+        // Check if P1 already has a powerup item in the powerup slot
+        PlayerWeaponCollection weapons = p1.GetWeaponCollection();
+        if (weapons.Powerup == null || weapons.Powerup.WeaponItem == WeaponItem.NONE)
+        {
+            p1.GiveWeaponItem(WeaponItem.SLOWMO_5);
+        }
     }
 }
