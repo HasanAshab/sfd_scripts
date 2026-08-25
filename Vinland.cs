@@ -114,8 +114,8 @@ public void GiveP1Slowmo(TriggerArgs args)
     if (p1 != null && !p1.IsDead)
     {
         // Check if P1 already has a powerup item in the powerup slot
-        PlayerWeaponCollection weapons = p1.GetWeaponCollection();
-        if (weapons.Powerup == null || weapons.Powerup.WeaponItem == WeaponItem.NONE)
+        PowerupItem currentPowerup = p1.CurrentPowerupItem;
+        if (currentPowerup == PowerupItem.NONE)
         {
             p1.GiveWeaponItem(WeaponItem.SLOWMO_5);
         }
