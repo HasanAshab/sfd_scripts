@@ -56,26 +56,30 @@ public void OnStartup()
     ammoTimer.SetRepeatCount(0); // Infinite repeats
     ammoTimer.SetScriptMethod("RefillAmmo");
     ammoTimer.Trigger();
+    
+    // Set up player key input callback for guard toggle
+    Events.PlayerKeyInputCallback.Start(OnPlayerKeyInput);
 }
 
-public void OnPlayerKeyInput(TriggerArgs args)
+public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
 {
     // Check for sheathe weapon toggle to enable/disable guard mode
-    IPlayer player = Game.GetPlayer(args.Sender.UniqueID);
     if (player == null) return;
     
-    PlayerKeyState keyState = player.GetPlayerKeyState();
-    if (keyState.PressedKeys.Contains(VirtualKey.SHEATHE_WEAPON))
+    foreach (VirtualKeyInfo keyInfo in keyInfos)
     {
-        if (player.UniqueID == p1.UniqueID)
+        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.BLOCK)
         {
-            p1GuardEnabled = !p1GuardEnabled;
-            UpdateTroopGuards(p1Troops, p1, p1GuardEnabled);
-        }
-        else if (player.UniqueID == p2.UniqueID)
-        {
-            p2GuardEnabled = !p2GuardEnabled;
-            UpdateTroopGuards(p2Troops, p2, p2GuardEnabled);
+            if (p1 != null && player.UniqueID == p1.UniqueID)
+            {
+                p1GuardEnabled = !p1GuardEnabled;
+                UpdateTroopGuards(p1Troops, p1, p1GuardEnabled);
+            }
+            else if (p2 != null && player.UniqueID == p2.UniqueID)
+            {
+                p2GuardEnabled = !p2GuardEnabled;
+                UpdateTroopGuards(p2Troops, p2, p2GuardEnabled);
+            }
         }
     }
 }
@@ -394,7 +398,7 @@ public void TrySpawnTroops(TriggerArgs args)
 private void SpawnTroopsForLeader(IPlayer leader, List<IPlayer> troopList)
 {
     PlayerModifiers mods = leader.GetModifiers();
-    int availableEnergy = mods.CurrentEnergy;
+    float availableEnergy = mods.CurrentEnergy;
     
     // Define troop types with their energy requirements
     List<TroopSpawnData> troopTypes = new List<TroopSpawnData>()
@@ -457,7 +461,7 @@ public void RefillAmmo(TriggerArgs args)
 private void RefillPlayerAmmo(IPlayer player, WeaponItem meleeWeapon, WeaponItem rangedWeapon)
 {
     // Check melee slot
-    RifleWeaponItem currentMelee = player.CurrentMeleeWeapon;
+    MeleeWeaponItem currentMelee = player.CurrentMeleeWeapon;
     if (currentMelee.WeaponItem == WeaponItem.NONE)
     {
         player.GiveWeaponItem(meleeWeapon);
@@ -513,7 +517,7 @@ private void RefillTroopAmmo(List<IPlayer> troops)
         {
             if (slot == WeaponItemType.Melee)
             {
-                RifleWeaponItem currentMelee = troop.CurrentMeleeWeapon;
+                MeleeWeaponItem currentMelee = troop.CurrentMeleeWeapon;
                 if (currentMelee.WeaponItem == WeaponItem.NONE)
                 {
                     troop.GiveWeaponItem(weapon);
