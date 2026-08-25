@@ -50,9 +50,9 @@ public void OnStartup()
     troopTimer.SetScriptMethod("TrySpawnTroops");
     troopTimer.Trigger();
     
-    // Set up ammo refill timer (every 3 seconds)
+    // Set up ammo refill timer
     IObjectTimerTrigger ammoTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    ammoTimer.SetIntervalTime(3000); // 3 seconds
+    ammoTimer.SetIntervalTime(30000); // 30 seconds
     ammoTimer.SetRepeatCount(0); // Infinite repeats
     ammoTimer.SetScriptMethod("RefillAmmo");
     ammoTimer.Trigger();
