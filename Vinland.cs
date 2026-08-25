@@ -181,18 +181,21 @@ public void GiveP1Slowmo(TriggerArgs args)
 private void SpawnInitialTroops()
 {
     // Spawn initial troops for P1: 4 Stickman, 2 Knife, 2 Bowman, 1 Knight, 1 Axeman
-    for (int i = 0; i < 4; i++) SpawnTroop("Stickman", p1, p1.GetWorldPosition(), p1Troops);
-    for (int i = 0; i < 2; i++) SpawnTroop("Knifeman", p1, p1.GetWorldPosition(), p1Troops);
-    for (int i = 0; i < 2; i++) SpawnTroop("Bowman", p1, p1.GetWorldPosition(), p1Troops);
-    SpawnTroop("Knight", p1, p1.GetWorldPosition(), p1Troops);
-    SpawnTroop("Axeman", p1, p1.GetWorldPosition(), p1Troops);
+    // for (int i = 0; i < 4; i++) SpawnTroop("Stickman", p1, p1.GetWorldPosition(), p1Troops);
+    // for (int i = 0; i < 2; i++) SpawnTroop("Knifeman", p1, p1.GetWorldPosition(), p1Troops);
+    // for (int i = 0; i < 2; i++) SpawnTroop("Bowman", p1, p1.GetWorldPosition(), p1Troops);
+    // SpawnTroop("Knight", p1, p1.GetWorldPosition(), p1Troops);
+    // SpawnTroop("Axeman", p1, p1.GetWorldPosition(), p1Troops);
     
-    // Spawn initial troops for P2: 4 Stickman, 2 Knife, 2 Bowman, 1 Knight, 1 Axeman
-    for (int i = 0; i < 4; i++) SpawnTroop("Stickman", p2, p2.GetWorldPosition(), p2Troops);
-    for (int i = 0; i < 2; i++) SpawnTroop("Knifeman", p2, p2.GetWorldPosition(), p2Troops);
-    for (int i = 0; i < 2; i++) SpawnTroop("Bowman", p2, p2.GetWorldPosition(), p2Troops);
-    SpawnTroop("Knight", p2, p2.GetWorldPosition(), p2Troops);
-    SpawnTroop("Axeman", p2, p2.GetWorldPosition(), p2Troops);
+    // // Spawn initial troops for P2: 4 Stickman, 2 Knife, 2 Bowman, 1 Knight, 1 Axeman
+    // for (int i = 0; i < 4; i++) SpawnTroop("Stickman", p2, p2.GetWorldPosition(), p2Troops);
+    // for (int i = 0; i < 2; i++) SpawnTroop("Knifeman", p2, p2.GetWorldPosition(), p2Troops);
+    // for (int i = 0; i < 2; i++) SpawnTroop("Bowman", p2, p2.GetWorldPosition(), p2Troops);
+    // SpawnTroop("Knight", p2, p2.GetWorldPosition(), p2Troops);
+    // SpawnTroop("Axeman", p2, p2.GetWorldPosition(), p2Troops);
+
+    SpawnTroopsForLeader(p1, p1Troops);
+    SpawnTroopsForLeader(p2, p2Troops);
 }
 
 private void SpawnTroop(string troopType, IPlayer leader, Vector2 position, List<IPlayer> troopList)
