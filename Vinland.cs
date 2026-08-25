@@ -45,7 +45,7 @@ public void OnStartup()
     
     // Set up troop spawn timer
     IObjectTimerTrigger troopTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    troopTimer.SetIntervalTime(7000); // 7 seconds
+    troopTimer.SetIntervalTime(10000); // 10 seconds
     troopTimer.SetRepeatCount(0); // Infinite repeats
     troopTimer.SetScriptMethod("TrySpawnTroops");
     troopTimer.Trigger();
@@ -104,9 +104,9 @@ private void SetupP1()
     PlayerModifiers p1Mods = p1.GetModifiers();
     p1Mods.RunSpeedModifier *= 2.0f;
     p1Mods.SprintSpeedModifier *= 2.0f;
-    p1Mods.MaxEnergy = (int)(p1Mods.MaxEnergy * 2.5f);
-    p1Mods.CurrentEnergy = (int)(p1Mods.CurrentEnergy * 2.5f);
-    p1Mods.EnergyRechargeModifier *= 1.1f;
+    p1Mods.MaxEnergy = (int)(p1Mods.MaxEnergy * 1.2f);
+    p1Mods.CurrentEnergy = (int)(p1Mods.CurrentEnergy * 1.2f);
+    // p1Mods.EnergyRechargeModifier *= 1.05f;
     // p1Mods.SizeModifier = 1.1f;
     p1.SetModifiers(p1Mods);
     
@@ -142,10 +142,10 @@ private void SetupP2()
     
     // Set P2 modifiers - 2.5x health, 2x melee damage, 2x melee force, 1.4x size
     PlayerModifiers p2Mods = p2.GetModifiers();
-    p2Mods.MaxHealth = (int)(p2Mods.MaxHealth * 2.5f);
-    p2Mods.CurrentHealth = (int)(p2Mods.CurrentHealth * 2.5f);
-    p2Mods.MeleeDamageDealtModifier *= 2.0f;
-    p2Mods.MeleeForceModifier *= 2.0f;
+    p2Mods.MaxHealth = (int)(p2Mods.MaxHealth * 2.0f);
+    p2Mods.CurrentHealth = (int)(p2Mods.CurrentHealth * 2.0f);
+    p2Mods.MeleeDamageDealtModifier *= 1.5f;
+    p2Mods.MeleeForceModifier *= 1.8f;
     p2Mods.SizeModifier = 1.2f;
     p2.SetModifiers(p2Mods);
     
