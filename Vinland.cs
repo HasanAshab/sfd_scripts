@@ -43,9 +43,9 @@ public void OnStartup()
     slowmoTimer.SetScriptMethod("GiveP1Slowmo");
     slowmoTimer.Trigger();
     
-    // Set up troop spawn timer (every 7 seconds)
+    // Set up troop spawn timer
     IObjectTimerTrigger troopTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    troopTimer.SetIntervalTime(7000); // 7 seconds
+    troopTimer.SetIntervalTime(10000); // 10 seconds
     troopTimer.SetRepeatCount(0); // Infinite repeats
     troopTimer.SetScriptMethod("TrySpawnTroops");
     troopTimer.Trigger();
@@ -68,7 +68,7 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
     
     foreach (VirtualKeyInfo keyInfo in keyInfos)
     {
-        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.BLOCK)
+        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.SHEATHE)
         {
             if (p1 != null && player.UniqueID == p1.UniqueID)
             {
