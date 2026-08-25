@@ -45,7 +45,7 @@ public void OnStartup()
     
     // Set up troop spawn timer
     IObjectTimerTrigger troopTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    troopTimer.SetIntervalTime(10000); // 10 seconds
+    troopTimer.SetIntervalTime(7000); // 7 seconds
     troopTimer.SetRepeatCount(0); // Infinite repeats
     troopTimer.SetScriptMethod("TrySpawnTroops");
     troopTimer.Trigger();
@@ -403,11 +403,11 @@ private void SpawnTroopsForLeader(IPlayer leader, List<IPlayer> troopList)
     // Define troop types with their energy requirements
     List<TroopSpawnData> troopTypes = new List<TroopSpawnData>()
     {
-        new TroopSpawnData("Stickman", 15),
-        new TroopSpawnData("Knifeman", 30),
-        new TroopSpawnData("Bowman", 30),
-        new TroopSpawnData("Knight", 50),
-        new TroopSpawnData("Axeman", 50),
+        new TroopSpawnData("Stickman", 30),
+        new TroopSpawnData("Knifeman", 60),
+        new TroopSpawnData("Bowman", 60),
+        new TroopSpawnData("Knight", 100),
+        new TroopSpawnData("Axeman", 100),
     };
     
     Vector2 spawnPos = leader.GetWorldPosition();
