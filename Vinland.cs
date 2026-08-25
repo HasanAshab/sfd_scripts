@@ -246,7 +246,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             troop.GiveWeaponItem(WeaponItem.CUESTICK);
             mods.MaxHealth = (int)(1 * HIT_POINT);
             mods.CurrentHealth = (int)(1 * HIT_POINT);
-            mods.SizeModifier = 0.8f;
+            // mods.SizeModifier = 0.8f;
             troop.SetProfile(new IProfile()
             {
                 Name = "Stickman",
@@ -265,7 +265,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             troop.GiveWeaponItem(WeaponItem.KNIFE);
             mods.MaxHealth = (int)(2 * HIT_POINT);
             mods.CurrentHealth = (int)(2 * HIT_POINT);
-            mods.SizeModifier = 0.8f;
+            // mods.SizeModifier = 0.8f;
             troop.SetProfile(new IProfile()
             {
                 Name = "Knifeman",
@@ -286,7 +286,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             troop.GiveWeaponItem(WeaponItem.BOW);
             mods.MaxHealth = (int)(1 * HIT_POINT);
             mods.CurrentHealth = (int)(1 * HIT_POINT);
-            mods.SizeModifier = 0.8f;
+            // mods.SizeModifier = 0.8f;
             mods.RunSpeedModifier *= 1.3f;
             mods.SprintSpeedModifier *= 1.3f;
             troop.SetProfile(new IProfile()
@@ -330,6 +330,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             mods.CurrentHealth = (int)(4 * HIT_POINT);
             mods.RunSpeedModifier *= 0.7f;
             mods.SprintSpeedModifier *= 0.7f;
+            mods.SizeModifier = 1.2f;
             troop.SetProfile(new IProfile()
             {
                 Name = "Axeman",
