@@ -52,7 +52,7 @@ public void OnStartup()
     
     // Set up ammo refill timer
     IObjectTimerTrigger ammoTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    ammoTimer.SetIntervalTime(30000); // 30 seconds
+    ammoTimer.SetIntervalTime(20000); // 20 seconds
     ammoTimer.SetRepeatCount(0); // Infinite repeats
     ammoTimer.SetScriptMethod("RefillAmmo");
     ammoTimer.Trigger();
