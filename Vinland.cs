@@ -51,7 +51,7 @@ private void SetupP1()
     p1Mods.MaxEnergy = (int)(p1Mods.MaxEnergy * 2.5f);
     p1Mods.CurrentEnergy = (int)(p1Mods.CurrentEnergy * 2.5f);
     p1Mods.EnergyRechargeModifier *= 1.1f;
-    p1Mods.SizeModifier = 1.2f;
+    p1Mods.SizeModifier = 1.1f;
     p1.SetModifiers(p1Mods);
     
     // Set P1 profile - ThorsBonduk
