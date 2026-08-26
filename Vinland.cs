@@ -812,7 +812,7 @@ private void DisarmPlayer(IPlayer player)
     MeleeWeaponItem currentMelee = player.CurrentMeleeWeapon;
     if (currentMelee.WeaponItem != WeaponItem.NONE)
     {
-        player.RemoveWeaponItemType(WeaponItemType.Melee);
+        player.Disarm(WeaponItemType.Melee);
     }
 }
 
