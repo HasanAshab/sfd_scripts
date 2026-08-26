@@ -66,6 +66,19 @@ public void OnStartup()
     
     // Set up player death callback for auto-gib and might cleanup
     Events.PlayerDeathCallback.Start(OnTroopDeath);
+    
+    // Set up player facing direction tracking timer (every 30ms)
+    IObjectTimerTrigger facingTrackingTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    facingTrackingTimer.SetIntervalTime(30); // 30ms for precise tracking
+    facingTrackingTimer.SetRepeatCount(0); // Infinite repeats
+    facingTrackingTimer.SetScriptMethod("UpdatePlayerFacingDirections");
+    facingTrackingTimer.Trigger();
+    
+    // Set up melee hit callback for P1 backstab mechanics
+    Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
+    
+    // Set up damage callback for P1 backstab projectile damage
+    Events.PlayerDamageCallback.Start(OnPlayerDamage);
 }
 
 public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
@@ -675,5 +688,84 @@ private class TroopSpawnData
     {
         TroopType = troopType;
         EnergyCost = energyCost;
+    }
+}
+
+public void UpdatePlayerFacingDirections(TriggerArgs args)
+{
+    // Update facing directions for all alive players
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer player in allPlayers)
+    {
+        if (!player.IsDead)
+        {
+            playerFacingDirections[player.UniqueID] = player.FacingDirection;
+        }
+    }
+}
+
+public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
+{
+    // Only P1 has backstab ability
+    if (p1 == null || attacker.UniqueID != p1.UniqueID) return;
+    
+    // Check each target hit by P1
+    foreach (PlayerMeleeHitArg hitArg in args)
+    {
+        // Check if the hit object is a player
+        if (!hitArg.IsPlayer) continue;
+        
+        IPlayer target = hitArg.HitObject as IPlayer;
+        if (target == null || target.IsDead) continue;
+        
+        // Don't backstab self
+        if (target.UniqueID == p1.UniqueID) continue;
+        
+        // Check if both players are facing the same direction (backstab condition)
+        // Use stored facing direction from before the hit
+        int attackerFacing = attacker.FacingDirection;
+        int targetFacing = playerFacingDirections.ContainsKey(target.UniqueID) ? 
+                          playerFacingDirections[target.UniqueID] : 
+                          target.FacingDirection;
+        
+        if (attackerFacing == targetFacing)
+        {
+            // Backstab! Apply 2x damage
+            // Calculate damage dealt by getting the target's current health before and after
+            float currentHealth = target.GetHealth();
+            float meleeBaseDamage = 15f; // Approximate base melee damage
+            float extraDamage = meleeBaseDamage; // 2x damage = base + extra base
+            
+            // Deal extra damage to simulate 2x total damage
+            target.DealDamage(extraDamage);
+        }
+    }
+}
+
+public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
+{
+    // Only P1 has backstab ability
+    if (p1 == null || args.SourcePlayer == null || args.SourcePlayer.UniqueID != p1.UniqueID) return;
+    
+    // Only apply to projectile damage
+    if (args.DamageType != PlayerDamageEventType.Projectile) return;
+    
+    IPlayer target = player;
+    if (target == null || target.IsDead) return;
+    
+    // Don't backstab self
+    if (target.UniqueID == p1.UniqueID) return;
+    
+    // Check if both players are facing the same direction (backstab condition)
+    int attackerFacing = p1.FacingDirection;
+    int targetFacing = playerFacingDirections.ContainsKey(target.UniqueID) ? 
+                      playerFacingDirections[target.UniqueID] : 
+                      target.FacingDirection;
+    
+    if (attackerFacing == targetFacing)
+    {
+        // Backstab! Apply extra damage to simulate 2x total damage
+        float extraDamage = args.Damage; // Double the damage by adding same amount again
+        target.DealDamage(extraDamage);
     }
 }
