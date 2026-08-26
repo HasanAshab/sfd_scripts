@@ -737,7 +737,7 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
             float extraDamage = meleeBaseDamage * 3; // 2x damage = base + extra base
 
             
-            // Deal extra damage to simulate 2x total damage
+            // Deal extra damage to simulate 4x total damage
             target.DealDamage(extraDamage);
             Game.PlayEffect(EffectName.Gib, target.GetWorldPosition());
         }
