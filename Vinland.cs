@@ -745,7 +745,10 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
 public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
 {
     // Only P1 has backstab ability
-    if (p1 == null || args.SourcePlayer == null || args.SourcePlayer.UniqueID != p1.UniqueID) return;
+    if (p1 == null || args.SourceID == 0) return;
+    
+    // Check if source is P1
+    if (args.SourceID != p1.UniqueID) return;
     
     // Only apply to projectile damage
     if (args.DamageType != PlayerDamageEventType.Projectile) return;
