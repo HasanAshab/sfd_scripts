@@ -4,11 +4,14 @@
 
 private const int HIT_POINT = 28;
 private const int BLOCKS_REQUIRED = 2; // Number of blocks required while crouching to spawn troops
+private const int MAX_MIGHT_PER_SIDE = 400; // Maximum total might (energy cost) of deployed troops per side
 
 private IPlayer p1 = null;
 private IPlayer p2 = null;
 
-// Troop lists for each leader
+// Troop lists for each leader with might tracking
+private Dictionary<int, int> p1TroopMight = new Dictionary<int, int>(); // UniqueID -> Might
+private Dictionary<int, int> p2TroopMight = new Dictionary<int, int>(); // UniqueID -> Might
 private List<IPlayer> p1Troops = new List<IPlayer>();
 private List<IPlayer> p2Troops = new List<IPlayer>();
 
@@ -57,6 +60,9 @@ public void OnStartup()
     
     // Set up player key input callback for guard toggle and troop spawning
     Events.PlayerKeyInputCallback.Start(OnPlayerKeyInput);
+    
+    // Set up player death callback for auto-gib and might cleanup
+    Events.PlayerDeathCallback.Start(OnTroopDeath);
 }
 
 public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
@@ -216,7 +222,7 @@ private void SpawnInitialTroops()
     SpawnTroopsForLeader(p2, p2Troops);
 }
 
-private void SpawnTroop(string troopType, IPlayer leader, Vector2 position, List<IPlayer> troopList)
+private void SpawnTroop(string troopType, IPlayer leader, Vector2 position, List<IPlayer> troopList, Dictionary<int, int> troopMightDict, int mightCost)
 {
     IPlayer troop = Game.CreatePlayer(position);
     if (troop == null) return;
@@ -232,8 +238,9 @@ private void SpawnTroop(string troopType, IPlayer leader, Vector2 position, List
     // Configure based on troop type
     ConfigureTroop(troop, troopType, leader);
     
-    // Add to troop list
+    // Add to troop list and track might
     troopList.Add(troop);
+    troopMightDict[troop.UniqueID] = mightCost;
     
     // Set guard behavior if enabled
     bool guardEnabled = (leader.UniqueID == p1.UniqueID) ? p1GuardEnabled : p2GuardEnabled;
@@ -412,15 +419,35 @@ private void SpawnTroopsForLeader(IPlayer leader, List<IPlayer> troopList)
     PlayerModifiers mods = leader.GetModifiers();
     float availableEnergy = mods.CurrentEnergy;
     
+    // Determine which might dictionary to use
+    Dictionary<int, int> troopMightDict = (leader.UniqueID == p1.UniqueID) ? p1TroopMight : p2TroopMight;
+    string leaderName = (leader.UniqueID == p1.UniqueID) ? "P1" : "P2";
+    
+    // Calculate current total might
+    int currentMight = CalculateTotalMight(troopMightDict, troopList);
+    int availableMight = MAX_MIGHT_PER_SIDE - currentMight;
+    
+    // Check if at max might
+    if (availableMight <= 0)
+    {
+        Game.ShowChatMessage(leaderName + " has deployed the maximum troops! (Might: " + currentMight + "/" + MAX_MIGHT_PER_SIDE + ")", Color.Red);
+        return;
+    }
+    
     // Check if leader has any energy
     if (availableEnergy <= 0)
     {
-        string leaderName = (leader.UniqueID == p1.UniqueID) ? "P1" : "P2";
         Game.ShowChatMessage(leaderName + " has no energy to spawn troops!", Color.Red);
         return;
     }
     
-    // Define troop types with their energy requirements
+    // Limit available energy by available might
+    if (availableEnergy > availableMight)
+    {
+        availableEnergy = availableMight;
+    }
+    
+    // Define troop types with their energy requirements (might = energy cost)
     List<TroopSpawnData> troopTypes = new List<TroopSpawnData>()
     {
         new TroopSpawnData("Stickman", 30),
@@ -453,8 +480,8 @@ private void SpawnTroopsForLeader(IPlayer leader, List<IPlayer> troopList)
         // Select random eligible troop
         TroopSpawnData selectedTroop = eligibleTroops[rnd.Next(eligibleTroops.Count)];
         
-        // Spawn the troop
-        SpawnTroop(selectedTroop.TroopType, leader, spawnPos, troopList);
+        // Spawn the troop with might tracking
+        SpawnTroop(selectedTroop.TroopType, leader, spawnPos, troopList, troopMightDict, selectedTroop.EnergyCost);
         
         // Deduct energy cost
         availableEnergy -= selectedTroop.EnergyCost;
@@ -468,8 +495,74 @@ private void SpawnTroopsForLeader(IPlayer leader, List<IPlayer> troopList)
         mods.CurrentEnergy -= totalEnergyCost;
         leader.SetModifiers(mods);
         
-        string leaderName = (leader.UniqueID == p1.UniqueID) ? "P1" : "P2";
-        Game.ShowChatMessage(leaderName + " spawned " + troopsSpawned + " troops! (-" + totalEnergyCost + " energy)", Color.Green);
+        int newTotalMight = CalculateTotalMight(troopMightDict, troopList);
+        Game.ShowChatMessage(leaderName + " spawned " + troopsSpawned + " troops! (-" + totalEnergyCost + " energy, Might: " + newTotalMight + "/" + MAX_MIGHT_PER_SIDE + ")", Color.Green);
+    }
+}
+
+private int CalculateTotalMight(Dictionary<int, int> troopMightDict, List<IPlayer> troopList)
+{
+    int totalMight = 0;
+    
+    // Clean up dead troops from the dictionary
+    List<int> deadTroopIds = new List<int>();
+    foreach (var entry in troopMightDict)
+    {
+        int troopId = entry.Key;
+        bool troopExists = false;
+        
+        foreach (IPlayer troop in troopList)
+        {
+            if (troop != null && troop.UniqueID == troopId && !troop.IsDead)
+            {
+                troopExists = true;
+                totalMight += entry.Value;
+                break;
+            }
+        }
+        
+        if (!troopExists)
+        {
+            deadTroopIds.Add(troopId);
+        }
+    }
+    
+    // Remove dead troops from dictionary
+    foreach (int deadId in deadTroopIds)
+    {
+        troopMightDict.Remove(deadId);
+    }
+    
+    return totalMight;
+}
+
+public void OnTroopDeath(IPlayer player, PlayerDeathArgs args)
+{
+    if (player == null) return;
+    
+    // Check if this is a P1 troop
+    if (p1TroopMight.ContainsKey(player.UniqueID))
+    {
+        // Gib the troop to remove body
+        player.Gib();
+        
+        // Remove from might tracking
+        p1TroopMight.Remove(player.UniqueID);
+        
+        // Remove from troop list
+        p1Troops.RemoveAll(t => t != null && t.UniqueID == player.UniqueID);
+    }
+    // Check if this is a P2 troop
+    else if (p2TroopMight.ContainsKey(player.UniqueID))
+    {
+        // Gib the troop to remove body
+        player.Gib();
+        
+        // Remove from might tracking
+        p2TroopMight.Remove(player.UniqueID);
+        
+        // Remove from troop list
+        p2Troops.RemoveAll(t => t != null && t.UniqueID == player.UniqueID);
     }
 }
 
