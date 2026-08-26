@@ -4,7 +4,7 @@
 
 private const int HIT_POINT = 28;
 private const int BLOCKS_REQUIRED = 2; // Number of blocks required while crouching to spawn troops
-private const int MAX_MIGHT_PER_SIDE = 400; // Maximum total might (energy cost) of deployed troops per side
+private const int MAX_MIGHT_PER_SIDE = 200; // Maximum total might (energy cost) of deployed troops per side
 
 private IPlayer p1 = null;
 private IPlayer p2 = null;
@@ -65,7 +65,7 @@ public void OnStartup()
     Events.PlayerKeyInputCallback.Start(OnPlayerKeyInput);
     
     // Set up player death callback for auto-gib and might cleanup
-    Events.PlayerDeathCallback.Start(OnTroopDeath);
+    // Events.PlayerDeathCallback.Start(OnTroopDeath);
     
     // Set up player facing direction tracking timer (every 30ms)
     IObjectTimerTrigger facingTrackingTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -111,7 +111,7 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
             if (p1 != null && player.UniqueID == p1.UniqueID && player.IsCrouching)
             {
                 p1BlockCount++;
-                Game.ShowChatMessage("P1 Block Count: " + p1BlockCount + "/" + BLOCKS_REQUIRED, Color.Cyan);
+                // Game.ShowChatMessage("P1 Block Count: " + p1BlockCount + "/" + BLOCKS_REQUIRED, Color.Cyan);
                 
                 // Spawn troops after required blocks
                 if (p1BlockCount >= BLOCKS_REQUIRED)
@@ -734,10 +734,12 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
             // Calculate damage dealt by getting the target's current health before and after
             float currentHealth = target.GetHealth();
             float meleeBaseDamage = 15f; // Approximate base melee damage
-            float extraDamage = meleeBaseDamage; // 2x damage = base + extra base
+            float extraDamage = meleeBaseDamage * 3; // 2x damage = base + extra base
+
             
             // Deal extra damage to simulate 2x total damage
             target.DealDamage(extraDamage);
+            Game.PlayEffect(EffectName.Gib, target.GetWorldPosition());
         }
     }
 }
@@ -767,8 +769,9 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
     
     if (attackerFacing == targetFacing)
     {
-        // Backstab! Apply extra damage to simulate 2x total damage
-        float extraDamage = args.Damage; // Double the damage by adding same amount again
+        // Backstab! Apply extra damage to simulate 4x total damage
+        float extraDamage = args.Damage * 3;
         target.DealDamage(extraDamage);
+        Game.PlayEffect(EffectName.Gib, target.GetWorldPosition());
     }
 }
