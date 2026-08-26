@@ -407,11 +407,11 @@ private void SpawnTroopsForLeader(IPlayer leader, List<IPlayer> troopList)
     // Define troop types with their energy requirements
     List<TroopSpawnData> troopTypes = new List<TroopSpawnData>()
     {
-        new TroopSpawnData("Stickman", 30),
-        new TroopSpawnData("Knifeman", 60),
-        new TroopSpawnData("Bowman", 60),
-        new TroopSpawnData("Knight", 100),
-        new TroopSpawnData("Axeman", 100),
+        new TroopSpawnData("Stickman", 15),
+        new TroopSpawnData("Knifeman", 30),
+        new TroopSpawnData("Bowman", 30),
+        new TroopSpawnData("Knight", 50),
+        new TroopSpawnData("Axeman", 50),
     };
     
     Vector2 spawnPos = leader.GetWorldPosition();

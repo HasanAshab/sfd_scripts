@@ -617,8 +617,7 @@ public void OnSenjuKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
                 // Summon golem after configured blocks required
                 if (senjuBlockCount >= SENJU_BLOCKS_REQUIRED)
                 {
-                    // disabled for now
-                    // SummonWoodenGolem();
+                    SummonWoodenGolem();
                     senjuBlockCount = 0; // Reset counter
                 }
             }
