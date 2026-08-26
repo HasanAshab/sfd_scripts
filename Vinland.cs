@@ -3,6 +3,7 @@
 // P2 (ThorsHateli) - Strength and durability focused melee fighter
 
 private const int HIT_POINT = 14;
+private const int BLOCKS_REQUIRED = 2; // Number of blocks required while crouching to spawn troops
 
 private IPlayer p1 = null;
 private IPlayer p2 = null;
@@ -14,6 +15,10 @@ private List<IPlayer> p2Troops = new List<IPlayer>();
 // Track guard mode for each leader
 private bool p1GuardEnabled = true;
 private bool p2GuardEnabled = true;
+
+// Track block count for troop spawning
+private int p1BlockCount = 0;
+private int p2BlockCount = 0;
 
 // Random generator
 private Random rnd = new Random();
@@ -43,13 +48,6 @@ public void OnStartup()
     slowmoTimer.SetScriptMethod("GiveP1Slowmo");
     slowmoTimer.Trigger();
     
-    // Set up troop spawn timer
-    IObjectTimerTrigger troopTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    troopTimer.SetIntervalTime(10000); // 10 seconds
-    troopTimer.SetRepeatCount(0); // Infinite repeats
-    troopTimer.SetScriptMethod("TrySpawnTroops");
-    troopTimer.Trigger();
-    
     // Set up ammo refill timer
     IObjectTimerTrigger ammoTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
     ammoTimer.SetIntervalTime(20000); // 20 seconds
@@ -57,28 +55,61 @@ public void OnStartup()
     ammoTimer.SetScriptMethod("RefillAmmo");
     ammoTimer.Trigger();
     
-    // Set up player key input callback for guard toggle
+    // Set up player key input callback for guard toggle and troop spawning
     Events.PlayerKeyInputCallback.Start(OnPlayerKeyInput);
 }
 
 public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
 {
-    // Check for sheathe weapon toggle to enable/disable guard mode
     if (player == null) return;
     
     foreach (VirtualKeyInfo keyInfo in keyInfos)
     {
+        // Check for SHEATHE key to toggle guard mode
         if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.SHEATHE)
         {
             if (p1 != null && player.UniqueID == p1.UniqueID)
             {
                 p1GuardEnabled = !p1GuardEnabled;
                 UpdateTroopGuards(p1Troops, p1, p1GuardEnabled);
+                Game.ShowChatMessage("P1 Guard Mode: " + (p1GuardEnabled ? "ON" : "OFF"), Color.Yellow);
             }
             else if (p2 != null && player.UniqueID == p2.UniqueID)
             {
                 p2GuardEnabled = !p2GuardEnabled;
                 UpdateTroopGuards(p2Troops, p2, p2GuardEnabled);
+                Game.ShowChatMessage("P2 Guard Mode: " + (p2GuardEnabled ? "ON" : "OFF"), Color.Yellow);
+            }
+        }
+        
+        // Check for BLOCK key while crouching to spawn troops
+        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.BLOCK)
+        {
+            // Check if P1 is crouching
+            if (p1 != null && player.UniqueID == p1.UniqueID && player.IsCrouching)
+            {
+                p1BlockCount++;
+                Game.ShowChatMessage("P1 Block Count: " + p1BlockCount + "/" + BLOCKS_REQUIRED, Color.Cyan);
+                
+                // Spawn troops after required blocks
+                if (p1BlockCount >= BLOCKS_REQUIRED)
+                {
+                    SpawnTroopsForLeader(p1, p1Troops);
+                    p1BlockCount = 0; // Reset counter
+                }
+            }
+            // Check if P2 is crouching
+            else if (p2 != null && player.UniqueID == p2.UniqueID && player.IsCrouching)
+            {
+                p2BlockCount++;
+                Game.ShowChatMessage("P2 Block Count: " + p2BlockCount + "/" + BLOCKS_REQUIRED, Color.Cyan);
+                
+                // Spawn troops after required blocks
+                if (p2BlockCount >= BLOCKS_REQUIRED)
+                {
+                    SpawnTroopsForLeader(p2, p2Troops);
+                    p2BlockCount = 0; // Reset counter
+                }
             }
         }
     }
@@ -180,20 +211,7 @@ public void GiveP1Slowmo(TriggerArgs args)
 
 private void SpawnInitialTroops()
 {
-    // Spawn initial troops for P1: 4 Stickman, 2 Knife, 2 Bowman, 1 Knight, 1 Axeman
-    // for (int i = 0; i < 4; i++) SpawnTroop("Stickman", p1, p1.GetWorldPosition(), p1Troops);
-    // for (int i = 0; i < 2; i++) SpawnTroop("Knifeman", p1, p1.GetWorldPosition(), p1Troops);
-    // for (int i = 0; i < 2; i++) SpawnTroop("Bowman", p1, p1.GetWorldPosition(), p1Troops);
-    // SpawnTroop("Knight", p1, p1.GetWorldPosition(), p1Troops);
-    // SpawnTroop("Axeman", p1, p1.GetWorldPosition(), p1Troops);
-    
-    // // Spawn initial troops for P2: 4 Stickman, 2 Knife, 2 Bowman, 1 Knight, 1 Axeman
-    // for (int i = 0; i < 4; i++) SpawnTroop("Stickman", p2, p2.GetWorldPosition(), p2Troops);
-    // for (int i = 0; i < 2; i++) SpawnTroop("Knifeman", p2, p2.GetWorldPosition(), p2Troops);
-    // for (int i = 0; i < 2; i++) SpawnTroop("Bowman", p2, p2.GetWorldPosition(), p2Troops);
-    // SpawnTroop("Knight", p2, p2.GetWorldPosition(), p2Troops);
-    // SpawnTroop("Axeman", p2, p2.GetWorldPosition(), p2Troops);
-
+    // Initial troops are spawned automatically on startup
     SpawnTroopsForLeader(p1, p1Troops);
     SpawnTroopsForLeader(p2, p2Troops);
 }
@@ -386,23 +404,21 @@ private void UpdateTroopGuards(List<IPlayer> troops, IPlayer leader, bool enable
 
 public void TrySpawnTroops(TriggerArgs args)
 {
-    // Try to spawn troops for P1
-    if (p1 != null && !p1.IsDead)
-    {
-        SpawnTroopsForLeader(p1, p1Troops);
-    }
-    
-    // Try to spawn troops for P2
-    if (p2 != null && !p2.IsDead)
-    {
-        SpawnTroopsForLeader(p2, p2Troops);
-    }
+    // This method is no longer used - troop spawning is now triggered by block key while crouching
 }
 
 private void SpawnTroopsForLeader(IPlayer leader, List<IPlayer> troopList)
 {
     PlayerModifiers mods = leader.GetModifiers();
     float availableEnergy = mods.CurrentEnergy;
+    
+    // Check if leader has any energy
+    if (availableEnergy <= 0)
+    {
+        string leaderName = (leader.UniqueID == p1.UniqueID) ? "P1" : "P2";
+        Game.ShowChatMessage(leaderName + " has no energy to spawn troops!", Color.Red);
+        return;
+    }
     
     // Define troop types with their energy requirements
     List<TroopSpawnData> troopTypes = new List<TroopSpawnData>()
@@ -415,6 +431,8 @@ private void SpawnTroopsForLeader(IPlayer leader, List<IPlayer> troopList)
     };
     
     Vector2 spawnPos = leader.GetWorldPosition();
+    int troopsSpawned = 0;
+    float totalEnergyCost = 0;
     
     // Keep spawning until no eligible troops remain
     while (availableEnergy > 0)
@@ -438,8 +456,20 @@ private void SpawnTroopsForLeader(IPlayer leader, List<IPlayer> troopList)
         // Spawn the troop
         SpawnTroop(selectedTroop.TroopType, leader, spawnPos, troopList);
         
-        // Deduct energy cost (but don't actually modify player energy)
+        // Deduct energy cost
         availableEnergy -= selectedTroop.EnergyCost;
+        totalEnergyCost += selectedTroop.EnergyCost;
+        troopsSpawned++;
+    }
+    
+    // Actually deduct energy from the leader
+    if (totalEnergyCost > 0)
+    {
+        mods.CurrentEnergy -= totalEnergyCost;
+        leader.SetModifiers(mods);
+        
+        string leaderName = (leader.UniqueID == p1.UniqueID) ? "P1" : "P2";
+        Game.ShowChatMessage(leaderName + " spawned " + troopsSpawned + " troops! (-" + totalEnergyCost + " energy)", Color.Green);
     }
 }
 
