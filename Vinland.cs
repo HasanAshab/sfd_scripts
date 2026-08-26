@@ -706,6 +706,29 @@ public void UpdatePlayerFacingDirections(TriggerArgs args)
 
 public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
 {
+    // Check P1's block disarm ability first
+    if (p1 != null)
+    {
+        foreach (PlayerMeleeHitArg hitArg in args)
+        {
+            // Check if P1 blocked this hit (hit P1 with 0 damage = blocked)
+            if (hitArg.IsPlayer && hitArg.HitDamage == 0)
+            {
+                IPlayer target = hitArg.HitObject as IPlayer;
+                if (target != null && target.UniqueID == p1.UniqueID)
+                {
+                    // P1 successfully blocked! 70% chance to disarm the attacker
+                    if (rnd.NextDouble() < 0.7)
+                    {
+                        DisarmPlayer(attacker);
+                    }
+                    // Don't process backstab for this hit
+                    continue;
+                }
+            }
+        }
+    }
+    
     // Only P1 has backstab ability
     if (p1 == null || attacker.UniqueID != p1.UniqueID) return;
     
@@ -749,24 +772,6 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
 
 public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
 {
-    // Handle P1's block disarm ability
-    if (p1 != null && player.UniqueID == p1.UniqueID && args.DamageType == PlayerDamageEventType.Melee)
-    {
-        // Check if P1 is blocking
-        if (p1.IsBlocking && args.SourceID != 0)
-        {
-            // 70% chance to disarm the attacker
-            if (rnd.NextDouble() < 0.7)
-            {
-                IPlayer attacker = Game.GetPlayer(args.SourceID);
-                if (attacker != null && !attacker.IsDead)
-                {
-                    DisarmPlayer(attacker);
-                }
-            }
-        }
-    }
-    
     // P1's backstab ability for projectiles
     if (p1 == null || args.SourceID == 0) return;
     
