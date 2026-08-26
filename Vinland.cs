@@ -721,6 +721,9 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
         // Don't backstab self
         if (target.UniqueID == p1.UniqueID) continue;
         
+        // Don't backstab teammates (same team)
+        if (target.GetTeam() == p1.GetTeam()) continue;
+        
         // Check if both players are facing the same direction (backstab condition)
         // Use stored facing direction from before the hit
         int attackerFacing = attacker.FacingDirection;
@@ -746,7 +749,25 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
 
 public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
 {
-    // Only P1 has backstab ability
+    // Handle P1's block disarm ability
+    if (p1 != null && player.UniqueID == p1.UniqueID && args.DamageType == PlayerDamageEventType.Melee)
+    {
+        // Check if P1 is blocking
+        if (p1.IsBlocking && args.SourceID != 0)
+        {
+            // 70% chance to disarm the attacker
+            if (rnd.NextDouble() < 0.7)
+            {
+                IPlayer attacker = Game.GetPlayer(args.SourceID);
+                if (attacker != null && !attacker.IsDead)
+                {
+                    DisarmPlayer(attacker);
+                }
+            }
+        }
+    }
+    
+    // P1's backstab ability for projectiles
     if (p1 == null || args.SourceID == 0) return;
     
     // Check if source is P1
@@ -760,6 +781,9 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
     
     // Don't backstab self
     if (target.UniqueID == p1.UniqueID) return;
+    
+    // Don't backstab teammates (same team)
+    if (target.GetTeam() == p1.GetTeam()) return;
     
     // Check if both players are facing the same direction (backstab condition)
     int attackerFacing = p1.FacingDirection;
@@ -775,3 +799,15 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
         Game.PlayEffect(EffectName.Gib, target.GetWorldPosition());
     }
 }
+
+private void DisarmPlayer(IPlayer player)
+{
+    // Drop the player's melee weapon by removing it from their inventory
+    // This will cause the weapon to drop to the ground
+    MeleeWeaponItem currentMelee = player.CurrentMeleeWeapon;
+    if (currentMelee.WeaponItem != WeaponItem.NONE)
+    {
+        player.RemoveWeaponItemType(WeaponItemType.Melee);
+    }
+}
+
