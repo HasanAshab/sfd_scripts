@@ -23,6 +23,9 @@ private bool p2GuardEnabled = true;
 private int p1BlockCount = 0;
 private int p2BlockCount = 0;
 
+// Track player facing directions for P1 backstab detection
+private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
+
 // Random generator
 private Random rnd = new Random();
 
