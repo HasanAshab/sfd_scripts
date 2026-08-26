@@ -2,7 +2,7 @@
 // P1 (ThorsBonduk) - Speed and agility focused with slowmo power
 // P2 (ThorsHateli) - Strength and durability focused melee fighter
 
-private const int HIT_POINT = 14;
+private const int HIT_POINT = 28;
 private const int BLOCKS_REQUIRED = 2; // Number of blocks required while crouching to spawn troops
 
 private IPlayer p1 = null;
@@ -423,11 +423,11 @@ private void SpawnTroopsForLeader(IPlayer leader, List<IPlayer> troopList)
     // Define troop types with their energy requirements
     List<TroopSpawnData> troopTypes = new List<TroopSpawnData>()
     {
-        new TroopSpawnData("Stickman", 15),
-        new TroopSpawnData("Knifeman", 30),
-        new TroopSpawnData("Bowman", 30),
-        new TroopSpawnData("Knight", 50),
-        new TroopSpawnData("Axeman", 50),
+        new TroopSpawnData("Stickman", 30),
+        new TroopSpawnData("Knifeman", 60),
+        new TroopSpawnData("Bowman", 60),
+        new TroopSpawnData("Knight", 100),
+        new TroopSpawnData("Axeman", 100),
     };
     
     Vector2 spawnPos = leader.GetWorldPosition();
