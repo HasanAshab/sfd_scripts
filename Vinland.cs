@@ -772,6 +772,26 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
 
 public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
 {
+    // P1's damage negation ability (40% chance to negate melee/projectile damage)
+    if (p1 != null && player.UniqueID == p1.UniqueID)
+    {
+        // Only for melee and projectile damage
+        if (args.DamageType == PlayerDamageEventType.Melee || args.DamageType == PlayerDamageEventType.Projectile)
+        {
+            // 40% chance to negate damage
+            if (rnd.NextDouble() < 0.4)
+            {
+                // Heal back the damage
+                PlayerModifiers p1Mods = p1.GetModifiers();
+                p1Mods.CurrentHealth = Math.Min(p1Mods.MaxHealth, p1Mods.CurrentHealth + args.Damage);
+                p1.SetModifiers(p1Mods);
+                
+                // Play Block effect at P1's position
+                Game.PlayEffect(EffectName.Block, p1.GetWorldPosition());
+            }
+        }
+    }
+    
     // P1's backstab ability for projectiles
     if (p1 == null || args.SourceID == 0) return;
     
