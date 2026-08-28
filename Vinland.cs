@@ -207,13 +207,14 @@ private void SpawnBjorn()
 {
     if (p1 == null) return;
     
-    Vector2 spawnPos = p1.GetWorldPosition() + new Vector2(50, 0); // Spawn near P1
+    Vector2 spawnPos = p1.GetWorldPosition();
     bjorn = Game.CreatePlayer(spawnPos);
     
     if (bjorn == null) return;
     
     // Set team same as P1
     bjorn.SetTeam(p1.GetTeam());
+    bjorn.SetNameTag("Bjorn");
     
     // Remove all default weapons
     bjorn.RemoveWeaponItemType(WeaponItemType.Rifle);
@@ -236,11 +237,7 @@ private void SpawnBjorn()
     bjorn.SetModifiers(bjornMods);
     
     // Set bot behavior (good AI)
-    bjorn.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotB));
-    BotBehaviorSet bjornBehavior = bjorn.GetBotBehaviorSet();
-    bjornBehavior.SearchItems = 1; // Allow item searching
-    bjorn.SetBotBehaviorSet(bjornBehavior);
-    
+    bjorn.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
     // Set Bjorn profile
     bjorn.SetProfile(new IProfile()
     {
@@ -265,13 +262,14 @@ private void SpawnThorsFin()
 {
     if (p2 == null) return;
     
-    Vector2 spawnPos = p2.GetWorldPosition() + new Vector2(50, 0); // Spawn near P2
+    Vector2 spawnPos = p2.GetWorldPosition();
     thorsfin = Game.CreatePlayer(spawnPos);
     
     if (thorsfin == null) return;
     
     // Set team same as P2
     thorsfin.SetTeam(p2.GetTeam());
+    thorsfin.SetNameTag("Thors Fin");
     
     // Remove all default weapons
     thorsfin.RemoveWeaponItemType(WeaponItemType.Rifle);
@@ -298,10 +296,7 @@ private void SpawnThorsFin()
     thorsfin.SetModifiers(thorsfinMods);
     
     // Set bot behavior (good AI)
-    thorsfin.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotB));
-    BotBehaviorSet thorsfinBehavior = thorsfin.GetBotBehaviorSet();
-    thorsfinBehavior.SearchItems = 1; // Allow item searching
-    thorsfin.SetBotBehaviorSet(thorsfinBehavior);
+    thorsfin.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
     
     // Set ThorsFin profile
     thorsfin.SetProfile(new IProfile()
