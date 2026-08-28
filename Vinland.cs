@@ -9,6 +9,10 @@ private const int MAX_MIGHT_PER_SIDE = 200; // Maximum total might (energy cost)
 private IPlayer p1 = null;
 private IPlayer p2 = null;
 
+// Super troops (one-time spawn)
+private IPlayer bjorn = null;
+private IPlayer thorsfin = null;
+
 // Troop lists for each leader with might tracking
 private Dictionary<int, int> p1TroopMight = new Dictionary<int, int>(); // UniqueID -> Might
 private Dictionary<int, int> p2TroopMight = new Dictionary<int, int>(); // UniqueID -> Might
@@ -39,6 +43,10 @@ public void OnStartup()
     
     // Set up P2 (ThorsHateli) - Strength warrior
     SetupP2();
+    
+    // Spawn super troops (one-time only)
+    SpawnBjorn();
+    SpawnThorsFin();
     
     // Spawn initial troops for both leaders
     // SpawnInitialTroops();
@@ -193,6 +201,125 @@ private void SetupP2()
         Legs = new IProfileClothingItem("Skirt", "ClothingGray"),
         Feet = new IProfileClothingItem("RidingBoots", "ClothingGray"),
     });
+}
+
+private void SpawnBjorn()
+{
+    if (p1 == null) return;
+    
+    Vector2 spawnPos = p1.GetWorldPosition() + new Vector2(50, 0); // Spawn near P1
+    bjorn = Game.CreatePlayer(spawnPos);
+    
+    if (bjorn == null) return;
+    
+    // Set team same as P1
+    bjorn.SetTeam(p1.GetTeam());
+    
+    // Remove all default weapons
+    bjorn.RemoveWeaponItemType(WeaponItemType.Rifle);
+    bjorn.RemoveWeaponItemType(WeaponItemType.Handgun);
+    bjorn.RemoveWeaponItemType(WeaponItemType.Melee);
+    bjorn.RemoveWeaponItemType(WeaponItemType.Thrown);
+    bjorn.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
+    // Give weapons: katana and bow (same as leaders)
+    bjorn.GiveWeaponItem(WeaponItem.KATANA);
+    bjorn.GiveWeaponItem(WeaponItem.BOW);
+    
+    // Set Bjorn modifiers
+    PlayerModifiers bjornMods = bjorn.GetModifiers();
+    bjornMods.MaxHealth = (int)(bjornMods.MaxHealth * 1.5f);
+    bjornMods.CurrentHealth = (int)(bjornMods.CurrentHealth * 1.5f);
+    bjornMods.MeleeDamageDealtModifier *= 1.3f;
+    bjornMods.MeleeForceModifier *= 1.3f;
+    bjornMods.SizeModifier = 1.2f;
+    bjorn.SetModifiers(bjornMods);
+    
+    // Set bot behavior (good AI)
+    bjorn.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotB));
+    BotBehaviorSet bjornBehavior = bjorn.GetBotBehaviorSet();
+    bjornBehavior.SearchItems = 1; // Allow item searching
+    bjorn.SetBotBehaviorSet(bjornBehavior);
+    
+    // Set Bjorn profile
+    bjorn.SetProfile(new IProfile()
+    {
+        Name = "Bjorn",
+        Gender = Gender.Male,
+        Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingLightGreen"),
+        Head = new IProfileClothingItem("Headband", "ClothingGray"),
+        ChestOver = new IProfileClothingItem("Poncho2", "ClothingBrown", "ClothingLightGray"),
+        ChestUnder = new IProfileClothingItem("LeatherJacket", "ClothingDarkGray", "ClothingLightBrown"),
+        Waist = new IProfileClothingItem("CombatBelt", "ClothingBrown"),
+        Legs = new IProfileClothingItem("Skirt", "ClothingLightBrown"),
+        Feet = new IProfileClothingItem("RidingBoots", "ClothingDarkRed"),
+        Accesory = new IProfileClothingItem("Mask", "ClothingDarkOrange"),
+    });
+    
+    // Show nametag and status bars
+    bjorn.SetNametagVisible(true);
+    bjorn.SetStatusBarsVisible(true);
+}
+
+private void SpawnThorsFin()
+{
+    if (p2 == null) return;
+    
+    Vector2 spawnPos = p2.GetWorldPosition() + new Vector2(50, 0); // Spawn near P2
+    thorsfin = Game.CreatePlayer(spawnPos);
+    
+    if (thorsfin == null) return;
+    
+    // Set team same as P2
+    thorsfin.SetTeam(p2.GetTeam());
+    
+    // Remove all default weapons
+    thorsfin.RemoveWeaponItemType(WeaponItemType.Rifle);
+    thorsfin.RemoveWeaponItemType(WeaponItemType.Handgun);
+    thorsfin.RemoveWeaponItemType(WeaponItemType.Melee);
+    thorsfin.RemoveWeaponItemType(WeaponItemType.Thrown);
+    thorsfin.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
+    // Give weapons: katana and bow (same as leaders)
+    thorsfin.GiveWeaponItem(WeaponItem.KATANA);
+    thorsfin.GiveWeaponItem(WeaponItem.BOW);
+    
+    // Set ThorsFin modifiers
+    PlayerModifiers thorsfinMods = thorsfin.GetModifiers();
+    thorsfinMods.RunSpeedModifier *= 1.3f;
+    thorsfinMods.SprintSpeedModifier *= 1.3f;
+    thorsfinMods.MaxHealth = (int)(thorsfinMods.MaxHealth * 1.3f);
+    thorsfinMods.CurrentHealth = (int)(thorsfinMods.CurrentHealth * 1.3f);
+    thorsfinMods.MaxEnergy = (int)(thorsfinMods.MaxEnergy * 1.6f);
+    thorsfinMods.CurrentEnergy = (int)(thorsfinMods.CurrentEnergy * 1.6f);
+    thorsfinMods.MeleeDamageDealtModifier *= 1.3f;
+    thorsfinMods.ProjectileDamageDealtModifier *= 1.3f;
+    thorsfinMods.MeleeForceModifier *= 1.2f;
+    thorsfin.SetModifiers(thorsfinMods);
+    
+    // Set bot behavior (good AI)
+    thorsfin.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotB));
+    BotBehaviorSet thorsfinBehavior = thorsfin.GetBotBehaviorSet();
+    thorsfinBehavior.SearchItems = 1; // Allow item searching
+    thorsfin.SetBotBehaviorSet(thorsfinBehavior);
+    
+    // Set ThorsFin profile
+    thorsfin.SetProfile(new IProfile()
+    {
+        Name = "ThorsFin",
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGray"),
+        Head = new IProfileClothingItem("AviatorHat", "ClothingYellow", "ClothingLightYellow"),
+        ChestOver = new IProfileClothingItem("Poncho2_fem", "ClothingYellow", "ClothingGray"),
+        ChestUnder = new IProfileClothingItem("StuddedLeatherSuit_fem", "ClothingYellow"),
+        Waist = new IProfileClothingItem("Belt_fem", "ClothingYellow", "ClothingYellow"),
+        Legs = new IProfileClothingItem("CamoPants_fem", "ClothingYellow", "ClothingYellow"),
+        Feet = new IProfileClothingItem("RidingBoots", "ClothingDarkBrown"),
+    });
+    
+    // Show nametag and status bars
+    thorsfin.SetNametagVisible(true);
+    thorsfin.SetStatusBarsVisible(true);
 }
 
 public void GiveP1Slowmo(TriggerArgs args)
@@ -572,6 +699,17 @@ public void RefillAmmo(TriggerArgs args)
     if (p2 != null && !p2.IsDead)
     {
         RefillPlayerAmmo(p2, WeaponItem.KATANA, WeaponItem.BOW);
+    }
+    
+    // Refill ammo for super troops
+    if (bjorn != null && !bjorn.IsDead)
+    {
+        RefillPlayerAmmo(bjorn, WeaponItem.KATANA, WeaponItem.BOW);
+    }
+    
+    if (thorsfin != null && !thorsfin.IsDead)
+    {
+        RefillPlayerAmmo(thorsfin, WeaponItem.KATANA, WeaponItem.BOW);
     }
     
     // Refill ammo for all troops
