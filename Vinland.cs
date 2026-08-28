@@ -214,7 +214,7 @@ private void SpawnBjorn()
     
     // Set team same as P1
     bjorn.SetTeam(p1.GetTeam());
-    bjorn.SetNameTag("Bjorn");
+    bjorn.SetBotName("Bjorn");
     
     // Remove all default weapons
     bjorn.RemoveWeaponItemType(WeaponItemType.Rifle);
@@ -224,8 +224,7 @@ private void SpawnBjorn()
     bjorn.RemoveWeaponItemType(WeaponItemType.Powerup);
     
     // Give weapons: katana and bow (same as leaders)
-    bjorn.GiveWeaponItem(WeaponItem.KATANA);
-    bjorn.GiveWeaponItem(WeaponItem.BOW);
+    bjorn.GiveWeaponItem(WeaponItem.AXE);
     
     // Set Bjorn modifiers
     PlayerModifiers bjornMods = bjorn.GetModifiers();
@@ -269,7 +268,7 @@ private void SpawnThorsFin()
     
     // Set team same as P2
     thorsfin.SetTeam(p2.GetTeam());
-    thorsfin.SetNameTag("Thors Fin");
+    thorsfin.SetBotName("Thors Fin");
     
     // Remove all default weapons
     thorsfin.RemoveWeaponItemType(WeaponItemType.Rifle);
@@ -278,8 +277,7 @@ private void SpawnThorsFin()
     thorsfin.RemoveWeaponItemType(WeaponItemType.Thrown);
     thorsfin.RemoveWeaponItemType(WeaponItemType.Powerup);
     
-    // Give weapons: katana and bow (same as leaders)
-    thorsfin.GiveWeaponItem(WeaponItem.KATANA);
+    thorsfin.GiveWeaponItem(WeaponItem.KNIFE);
     thorsfin.GiveWeaponItem(WeaponItem.BOW);
     
     // Set ThorsFin modifiers
