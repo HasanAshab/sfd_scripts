@@ -235,7 +235,7 @@ private void SpawnBjorn()
     bjornMods.CurrentHealth = (int)(bjornMods.CurrentHealth * 1.5f);
     bjornMods.MeleeDamageDealtModifier *= 1.3f;
     bjornMods.MeleeForceModifier *= 1.3f;
-    bjornMods.SizeModifier = 1.2f;
+    bjornMods.SizeModifier = 1.13f;
     bjorn.SetModifiers(bjornMods);
     
     // Set bot behavior (good AI)
@@ -289,15 +289,16 @@ private void SpawnThorsFin()
     
     // Set ThorsFin modifiers
     PlayerModifiers thorsfinMods = thorsfin.GetModifiers();
-    thorsfinMods.RunSpeedModifier *= 1.3f;
-    thorsfinMods.SprintSpeedModifier *= 1.3f;
+    thorsfinMods.RunSpeedModifier *= 1.6f;
+    thorsfinMods.SprintSpeedModifier *= 1.6f;
     thorsfinMods.MaxHealth = (int)(thorsfinMods.MaxHealth * 1.3f);
     thorsfinMods.CurrentHealth = (int)(thorsfinMods.CurrentHealth * 1.3f);
-    thorsfinMods.MaxEnergy = (int)(thorsfinMods.MaxEnergy * 1.6f);
-    thorsfinMods.CurrentEnergy = (int)(thorsfinMods.CurrentEnergy * 1.6f);
-    thorsfinMods.MeleeDamageDealtModifier *= 1.3f;
-    thorsfinMods.ProjectileDamageDealtModifier *= 1.3f;
-    thorsfinMods.MeleeForceModifier *= 1.2f;
+    thorsfinMods.MaxEnergy = (int)(thorsfinMods.MaxEnergy * 2f);
+    thorsfinMods.CurrentEnergy = (int)(thorsfinMods.CurrentEnergy * 2f);
+    thorsfinMods.EnergyRechargeModifier *= 1.5f;
+    thorsfinMods.MeleeDamageDealtModifier *= 1.6f;
+    thorsfinMods.ProjectileDamageDealtModifier *= 1.6f;
+    thorsfinMods.MeleeForceModifier *= 1.15f;
     thorsfin.SetModifiers(thorsfinMods);
     
     // Set bot behavior (good AI)
@@ -707,20 +708,23 @@ public void RefillAmmo(TriggerArgs args)
     // Refill ammo for super troops
     if (bjorn != null && !bjorn.IsDead)
     {
-        RefillPlayerAmmo(bjorn, WeaponItem.KATANA, WeaponItem.BOW);
+        RefillPlayerAmmo(bjorn, WeaponItem.AXE);
     }
     
     if (thorsfin != null && !thorsfin.IsDead)
     {
-        RefillPlayerAmmo(thorsfin, WeaponItem.KATANA, WeaponItem.BOW);
+        RefillPlayerAmmo(thorsfin, WeaponItem.KNIFE);
     }
     
     // Refill ammo for all troops
-    RefillTroopAmmo(p1Troops);
-    RefillTroopAmmo(p2Troops);
+    // RefillTroopAmmo(p1Troops);
+    // RefillTroopAmmo(p2Troops);
 }
 
-private void RefillPlayerAmmo(IPlayer player, WeaponItem meleeWeapon, WeaponItem rangedWeapon)
+private void RefillPlayerAmmo(
+    IPlayer player,
+    WeaponItem meleeWeapon,
+    WeaponItem rangedWeapon = WeaponItem.NONE)
 {
     // Check melee slot
     MeleeWeaponItem currentMelee = player.CurrentMeleeWeapon;
@@ -728,10 +732,11 @@ private void RefillPlayerAmmo(IPlayer player, WeaponItem meleeWeapon, WeaponItem
     {
         player.GiveWeaponItem(meleeWeapon);
     }
-    
+
     // Check primary weapon slot (rifle)
     RifleWeaponItem currentPrimary = player.CurrentPrimaryWeapon;
-    if (currentPrimary.WeaponItem == WeaponItem.NONE)
+    if (currentPrimary.WeaponItem == WeaponItem.NONE &&
+        rangedWeapon != WeaponItem.NONE)
     {
         player.GiveWeaponItem(rangedWeapon);
     }
