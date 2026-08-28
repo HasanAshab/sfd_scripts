@@ -316,7 +316,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
                 Name = "Bowman",
                 Gender = Gender.Female,
                 Skin = new IProfileClothingItem("Normal_fem", randomSkin, "ClothingLightGreen"),
-                Head = new IProfileClothingItem("StylishHat_fem", "ClothingGray", "ClothingLightGray"),
+                Head = new IProfileClothingItem("StylishHat", "ClothingGray", "ClothingLightGray"),
                 ChestOver = new IProfileClothingItem("Apron_fem", teamColor),
                 ChestUnder = new IProfileClothingItem("ShirtWithBowtie_fem", "ClothingGray", "ClothingLightGray"),
                 Legs = new IProfileClothingItem("PantsBlack_fem", "ClothingGray"),
