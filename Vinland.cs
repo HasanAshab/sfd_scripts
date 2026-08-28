@@ -78,6 +78,9 @@ public void OnStartup()
     facingTrackingTimer.SetScriptMethod("UpdatePlayerFacingDirections");
     facingTrackingTimer.Trigger();
     
+    // Set up update callback for Bjorn's low HP strength boost
+    Events.UpdateCallback.Start(OnUpdate, 100); // Check every 100ms
+    
     // Set up melee hit callback for P1 backstab mechanics
     Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
     
@@ -237,6 +240,10 @@ private void SpawnBjorn()
     
     // Set bot behavior (good AI)
     bjorn.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
+    BotBehaviorSet bS = bjorn.GetBotBehaviorSet();
+    bS.SearchItems = 0;
+    bjorn.SetBotBehaviorSet(bS);
+
     // Set Bjorn profile
     bjorn.SetProfile(new IProfile()
     {
@@ -295,6 +302,9 @@ private void SpawnThorsFin()
     
     // Set bot behavior (good AI)
     thorsfin.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
+    BotBehaviorSet bS = thorsfin.GetBotBehaviorSet();
+    bS.SearchItems = 0;
+    thorsfin.SetBotBehaviorSet(bS);
     
     // Set ThorsFin profile
     thorsfin.SetProfile(new IProfile()
@@ -961,5 +971,26 @@ public void ReEnableP1Input(TriggerArgs args)
     if (p1 != null && !p1.IsDead)
     {
         p1.SetInputEnabled(true);
+    }
+}
+
+public void OnUpdate(float elapsed)
+{
+    // Handle Bjorn's low HP strength boost
+    HandleBjornLowHP();
+}
+
+private void HandleBjornLowHP()
+{
+    if (bjorn == null || bjorn.IsDead) return;
+    
+    PlayerModifiers bjornMods = bjorn.GetModifiers();
+    float hpPercentage = (float)bjornMods.CurrentHealth / bjornMods.MaxHealth;
+    
+    // If HP is 30% or below, give strength boost
+    if (hpPercentage <= 0.3f)
+    {
+        bjorn.SetStrengthBoostTime(10000); // 10 seconds
+        Game.PlayEffect(EffectName.Sparks, bjorn.GetWorldPosition());
     }
 }
