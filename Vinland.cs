@@ -239,7 +239,7 @@ private void SpawnBjorn()
     bjorn.SetModifiers(bjornMods);
     
     // Set bot behavior (good AI)
-    bjorn.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
+    bjorn.SetBotBehavior(new BotBehavior(true, PredefinedAIType.Hulk));
     BotBehaviorSet bS = bjorn.GetBotBehaviorSet();
     bS.SearchItems = 0;
     bjorn.SetBotBehaviorSet(bS);
@@ -285,12 +285,11 @@ private void SpawnThorsFin()
     thorsfin.RemoveWeaponItemType(WeaponItemType.Powerup);
     
     thorsfin.GiveWeaponItem(WeaponItem.KNIFE);
-    thorsfin.GiveWeaponItem(WeaponItem.BOW);
     
     // Set ThorsFin modifiers
     PlayerModifiers thorsfinMods = thorsfin.GetModifiers();
-    thorsfinMods.RunSpeedModifier *= 1.6f;
-    thorsfinMods.SprintSpeedModifier *= 1.6f;
+    thorsfinMods.RunSpeedModifier *= 2.0f;
+    thorsfinMods.SprintSpeedModifier *= 2.0f;
     thorsfinMods.MaxHealth = (int)(thorsfinMods.MaxHealth * 1.3f);
     thorsfinMods.CurrentHealth = (int)(thorsfinMods.CurrentHealth * 1.3f);
     thorsfinMods.MaxEnergy = (int)(thorsfinMods.MaxEnergy * 2f);
@@ -995,7 +994,6 @@ private void HandleBjornLowHP()
     // If HP is 30% or below, give strength boost
     if (hpPercentage <= 0.3f)
     {
-        bjorn.SetStrengthBoostTime(10000); // 10 seconds
-        Game.PlayEffect(EffectName.Sparks, bjorn.GetWorldPosition());
+        bjorn.SetStrengthBoostTime(6000); // 6 seconds
     }
 }
