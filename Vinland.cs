@@ -19,10 +19,6 @@ private List<IPlayer> p2Troops = new List<IPlayer>();
 private bool p1GuardEnabled = true;
 private bool p2GuardEnabled = true;
 
-// Track block count for troop spawning
-private int p1BlockCount = 0;
-private int p2BlockCount = 0;
-
 // Track player facing directions for P1 backstab detection
 private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
 
@@ -105,33 +101,15 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
         }
         
         // Check for BLOCK key while crouching to spawn troops
-        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.BLOCK)
+        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.RELOAD)
         {
-            // Check if P1 is crouching
-            if (p1 != null && player.UniqueID == p1.UniqueID && player.IsCrouching)
+            if (p1 != null && player.UniqueID == p1.UniqueID)
             {
-                p1BlockCount++;
-                // Game.ShowChatMessage("P1 Block Count: " + p1BlockCount + "/" + BLOCKS_REQUIRED, Color.Cyan);
-                
-                // Spawn troops after required blocks
-                if (p1BlockCount >= BLOCKS_REQUIRED)
-                {
-                    SpawnTroopsForLeader(p1, p1Troops);
-                    p1BlockCount = 0; // Reset counter
-                }
+                SpawnTroopsForLeader(p1, p1Troops);
             }
-            // Check if P2 is crouching
-            else if (p2 != null && player.UniqueID == p2.UniqueID && player.IsCrouching)
+            else if (p2 != null && player.UniqueID == p2.UniqueID)
             {
-                p2BlockCount++;
-                Game.ShowChatMessage("P2 Block Count: " + p2BlockCount + "/" + BLOCKS_REQUIRED, Color.Cyan);
-                
-                // Spawn troops after required blocks
-                if (p2BlockCount >= BLOCKS_REQUIRED)
-                {
-                    SpawnTroopsForLeader(p2, p2Troops);
-                    p2BlockCount = 0; // Reset counter
-                }
+                SpawnTroopsForLeader(p2, p2Troops);
             }
         }
     }
