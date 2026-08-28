@@ -786,7 +786,7 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
 
                 // Re-enable input after 400ms
                 IObjectTimerTrigger inputTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-                inputTimer.SetIntervalTime(400);
+                inputTimer.SetIntervalTime(200);
                 inputTimer.SetRepeatCount(1);
                 inputTimer.SetScriptMethod("ReEnableP1Input");
                 inputTimer.Trigger();
