@@ -323,6 +323,8 @@ private void SpawnThorsFin()
     // Show nametag and status bars
     thorsfin.SetNametagVisible(true);
     thorsfin.SetStatusBarsVisible(true);
+
+    thorsfin.SetSpeedBoostTime(999999);
 }
 
 public void GiveP1Slowmo(TriggerArgs args)
