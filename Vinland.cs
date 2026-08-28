@@ -45,7 +45,7 @@ public void OnStartup()
     SetupP2();
     
     // Spawn initial troops for both leaders
-    SpawnInitialTroops();
+    // SpawnInitialTroops();
     
     // Set up slowmo timer for P1 (every 12 seconds)
     IObjectTimerTrigger slowmoTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -787,7 +787,7 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
                 p1.SetModifiers(p1Mods);
                 
                 // Play Block effect at P1's position
-                Game.PlayEffect(EffectName.Block, p1.GetWorldPosition());
+                Game.PlayEffect(EffectName.Sparks, p1.GetWorldPosition());
             }
         }
     }
