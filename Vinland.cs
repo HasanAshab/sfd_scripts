@@ -781,6 +781,16 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
             // 40% chance to negate damage
             if (rnd.NextDouble() < 0.4)
             {
+                p1.SetInputEnabled(false);
+                p1.AddCommand(new PlayerCommand(PlayerCommandType.Block));
+
+                // Re-enable input after 400ms
+                IObjectTimerTrigger inputTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+                inputTimer.SetIntervalTime(400);
+                inputTimer.SetRepeatCount(1);
+                inputTimer.SetScriptMethod("ReEnableP1Input");
+                inputTimer.Trigger();
+
                 // Heal back the damage
                 PlayerModifiers p1Mods = p1.GetModifiers();
                 p1Mods.CurrentHealth = Math.Min(p1Mods.MaxHealth, p1Mods.CurrentHealth + args.Damage);
@@ -788,6 +798,7 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
                 
                 // Play Block effect at P1's position
                 Game.PlayEffect(EffectName.Sparks, p1.GetWorldPosition());
+                Game.PlaySound("MeleeBlockMetal", p1.GetWorldPosition());
             }
         }
     }
@@ -836,3 +847,10 @@ private void DisarmPlayer(IPlayer player)
     }
 }
 
+public void ReEnableP1Input(TriggerArgs args)
+{
+    if (p1 != null && !p1.IsDead)
+    {
+        p1.SetInputEnabled(true);
+    }
+}
