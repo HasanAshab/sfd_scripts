@@ -502,7 +502,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             
         case "FireBowman":
             troop.GiveWeaponItem(WeaponItem.BOW);
-            troop.GiveWeaponItem(WeaponItem.MOLOTOV);
+            troop.GiveWeaponItem(WeaponItem.FIREAMMO);
             mods.MaxHealth = (int)(1 * HIT_POINT);
             mods.CurrentHealth = (int)(1 * HIT_POINT);
             mods.RunSpeedModifier *= 1.3f;
