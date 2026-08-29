@@ -20,8 +20,8 @@ private List<IPlayer> p1Troops = new List<IPlayer>();
 private List<IPlayer> p2Troops = new List<IPlayer>();
 
 // Track guard mode for each leader
-private bool p1GuardEnabled = true;
-private bool p2GuardEnabled = true;
+private bool p1GuardEnabled = false;
+private bool p2GuardEnabled = false;
 
 // Track player facing directions for P1 backstab detection
 private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
