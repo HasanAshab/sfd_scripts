@@ -210,7 +210,22 @@ private void SpawnBjorn()
 {
     if (p1 == null) return;
     
+    // Get spawn position - use random path node if available, otherwise use P1's position
     Vector2 spawnPos = p1.GetWorldPosition();
+    
+    IObjectPathNode[] pathNodes = Game.GetObjects<IObjectPathNode>().Where(path => 
+        path.GetNodeEnabled() && 
+        !path.GetIsElevatorNode() &&
+        (path.GetPathNodeType() == PathNodeType.Ground || path.GetPathNodeType() == PathNodeType.Platform)
+    ).ToArray();
+    
+    if (pathNodes.Length > 0)
+    {
+        // Use random path node
+        int randomIndex = rnd.Next(0, pathNodes.Length);
+        spawnPos = pathNodes[randomIndex].GetWorldPosition();
+    }
+    
     bjorn = Game.CreatePlayer(spawnPos);
     
     if (bjorn == null) return;
@@ -268,7 +283,22 @@ private void SpawnThorsFin()
 {
     if (p2 == null) return;
     
+    // Get spawn position - use random path node if available, otherwise use P2's position
     Vector2 spawnPos = p2.GetWorldPosition();
+    
+    IObjectPathNode[] pathNodes = Game.GetObjects<IObjectPathNode>().Where(path => 
+        path.GetNodeEnabled() && 
+        !path.GetIsElevatorNode() &&
+        (path.GetPathNodeType() == PathNodeType.Ground || path.GetPathNodeType() == PathNodeType.Platform)
+    ).ToArray();
+    
+    if (pathNodes.Length > 0)
+    {
+        // Use random path node
+        int randomIndex = rnd.Next(0, pathNodes.Length);
+        spawnPos = pathNodes[randomIndex].GetWorldPosition();
+    }
+    
     thorsfin = Game.CreatePlayer(spawnPos);
     
     if (thorsfin == null) return;
