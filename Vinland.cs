@@ -499,6 +499,30 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             });
             SetBotBehavior(troop, PredefinedAIType.BotC);
             break;
+            
+        case "FireBowman":
+            troop.GiveWeaponItem(WeaponItem.BOW);
+            troop.GiveWeaponItem(WeaponItem.MOLOTOV);
+            mods.MaxHealth = (int)(1 * HIT_POINT);
+            mods.CurrentHealth = (int)(1 * HIT_POINT);
+            mods.RunSpeedModifier *= 1.3f;
+            mods.SprintSpeedModifier *= 1.3f;
+            troop.SetProfile(new IProfile()
+            {
+                Name = "FireBowman",
+                Gender = Gender.Male,
+                Skin = new IProfileClothingItem("Normal", "Skin3", "ClothingLightGreen"),
+                Head = new IProfileClothingItem("StylishHat", "ClothingGray", "ClothingLightGray"),
+                ChestOver = new IProfileClothingItem("Apron", teamColor),
+                ChestUnder = new IProfileClothingItem("BodyArmor", "ClothingGray"),
+                Hands = new IProfileClothingItem("Gloves", "ClothingGray"),
+                Legs = new IProfileClothingItem("CamoPants", "ClothingGray", "ClothingDarkGray"),
+                Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+            });
+            BotBehaviorSet bsFireBowman = SetBotBehavior(troop, PredefinedAIType.BotC);
+            bsFireBowman.MeleeUsage = false;
+            troop.SetBotBehaviorSet(bsFireBowman);
+            break;
     }
     
     troop.SetModifiers(mods);
@@ -581,6 +605,7 @@ private void SpawnTroopsForLeader(IPlayer leader, List<IPlayer> troopList)
         new TroopSpawnData("Bowman", 60),
         new TroopSpawnData("Knight", 100),
         new TroopSpawnData("Axeman", 100),
+        new TroopSpawnData("FireBowman", 100),
     };
     
     Vector2 spawnPos = leader.GetWorldPosition();
@@ -777,6 +802,10 @@ private void RefillTroopAmmo(List<IPlayer> troops)
             case "Axeman":
                 weapon = WeaponItem.AXE;
                 slot = WeaponItemType.Melee;
+                break;
+            case "FireBowman":
+                weapon = WeaponItem.BOW;
+                slot = WeaponItemType.Rifle;
                 break;
         }
         
