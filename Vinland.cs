@@ -312,12 +312,13 @@ private void SpawnThorsFin()
         Name = "ThorsFin",
         Gender = Gender.Female,
         Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGray"),
-        Head = new IProfileClothingItem("AviatorHat", "ClothingYellow", "ClothingLightYellow"),
+        Head = new IProfileClothingItem("Buzzcut", "ClothingDarkGray"),
         ChestOver = new IProfileClothingItem("Poncho2_fem", "ClothingYellow", "ClothingGray"),
         ChestUnder = new IProfileClothingItem("StuddedLeatherSuit_fem", "ClothingYellow"),
         Waist = new IProfileClothingItem("Belt_fem", "ClothingYellow", "ClothingYellow"),
-        Legs = new IProfileClothingItem("CamoPants_fem", "ClothingYellow", "ClothingYellow"),
+        Legs = new IProfileClothingItem("Skirt_fem", "ClothingYellow"),
         Feet = new IProfileClothingItem("RidingBoots", "ClothingDarkBrown"),
+        Accesory = new IProfileClothingItem("Scarf", "ClothingLightGray"),
     });
     
     // Show nametag and status bars
@@ -507,19 +508,21 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             mods.CurrentHealth = (int)(1 * HIT_POINT);
             mods.RunSpeedModifier *= 1.3f;
             mods.SprintSpeedModifier *= 1.3f;
+            mods.ItemDropMode = 1;
             troop.SetProfile(new IProfile()
             {
-                Name = "FireBowman",
+                Name = "firebowman",
                 Gender = Gender.Male,
                 Skin = new IProfileClothingItem("Normal", "Skin3", "ClothingLightGreen"),
-                Head = new IProfileClothingItem("StylishHat", "ClothingGray", "ClothingLightGray"),
-                ChestOver = new IProfileClothingItem("Apron", teamColor),
-                ChestUnder = new IProfileClothingItem("BodyArmor", "ClothingGray"),
-                Hands = new IProfileClothingItem("Gloves", "ClothingGray"),
+                Head = new IProfileClothingItem("StylishHat", "ClothingLightOrange", "ClothingLightRed"),
+                ChestOver = new IProfileClothingItem("Apron", "ClothingGray"),
+                ChestUnder = new IProfileClothingItem("BodyArmor", "ClothingLightOrange"),
+                Hands = new IProfileClothingItem("Gloves", "ClothingLightOrange"),
                 Legs = new IProfileClothingItem("CamoPants", "ClothingGray", "ClothingDarkGray"),
-                Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+                Feet = new IProfileClothingItem("RidingBoots", "ClothingLightOrange"),
+                Accesory = new IProfileClothingItem("GasMask", "ClothingDarkGray", "ClothingLightGray"),
             });
-            BotBehaviorSet bsFireBowman = SetBotBehavior(troop, PredefinedAIType.BotC);
+            BotBehaviorSet bsFireBowman = SetBotBehavior(troop, PredefinedAIType.BotA);
             bsFireBowman.MeleeUsage = false;
             troop.SetBotBehaviorSet(bsFireBowman);
             break;
@@ -802,10 +805,6 @@ private void RefillTroopAmmo(List<IPlayer> troops)
             case "Axeman":
                 weapon = WeaponItem.AXE;
                 slot = WeaponItemType.Melee;
-                break;
-            case "FireBowman":
-                weapon = WeaponItem.BOW;
-                slot = WeaponItemType.Rifle;
                 break;
         }
         
