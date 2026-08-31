@@ -496,6 +496,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             troop.GiveWeaponItem(WeaponItem.MACHETE);
             mods.MaxHealth = (int)(2 * HIT_POINT);
             mods.CurrentHealth = (int)(2 * HIT_POINT);
+            mods.SizeModifier = (int)(1.05f);
             troop.SetProfile(new IProfile()
             {
                 Name = "Knight",
