@@ -318,6 +318,8 @@ private void SpawnThorsFin()
     
     // Set ThorsFin modifiers
     PlayerModifiers thorsfinMods = thorsfin.GetModifiers();
+    thorsfinMods.SizeModifier = 1.045f;
+    thorsfinMods.RunSpeedModifier *= 2.0f;
     thorsfinMods.RunSpeedModifier *= 2.0f;
     thorsfinMods.SprintSpeedModifier *= 2.0f;
     thorsfinMods.MaxHealth = (int)(thorsfinMods.MaxHealth * 1.3f);
