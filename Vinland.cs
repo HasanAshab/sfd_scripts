@@ -541,6 +541,8 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             mods.RunSpeedModifier *= 1.3f;
             mods.SprintSpeedModifier *= 1.3f;
             mods.ItemDropMode = 1;
+            mods.CanBurn = 0;
+            mods.FireDamageTakenModifier = 0.001f;
             troop.SetProfile(new IProfile()
             {
                 Name = "firebowman",
