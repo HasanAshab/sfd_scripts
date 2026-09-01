@@ -929,13 +929,13 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
     // Keep Bjorn's cue stick pristine so it never degrades into a shaft
     if (bjorn != null && attacker.UniqueID == bjorn.UniqueID)
     {
-        MakeshiftWeaponItem currentMelee = attacker.CurrentMeleeMakeshiftWeapon;
+        MeleeWeaponItem currentMelee = attacker.CurrentMeleeMakeshiftWeapon;
         if (currentMelee.WeaponItem == WeaponItem.CUESTICK)
         {
             attacker.SetCurrentMeleeMakeshiftDurability(1f);
         }
     }
-    
+
     // Check P2's jump attack ability
     if (p2 != null && attacker.UniqueID == p2.UniqueID && attacker.IsJumpAttacking)
     {
