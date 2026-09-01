@@ -26,6 +26,16 @@ private bool p2GuardEnabled = false;
 // Track player facing directions for P1 backstab detection
 private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
 
+// Track players killed by P2's jump attack for respawning
+private class KilledPlayerData
+{
+    public IProfile Profile;
+    public PlayerTeam Team;
+    public Vector2 Position;
+    public float KillTime;
+}
+private List<KilledPlayerData> p2JumpKilledPlayers = new List<KilledPlayerData>();
+
 // Random generator
 private Random rnd = new Random();
 
@@ -894,7 +904,49 @@ public void UpdatePlayerFacingDirections(TriggerArgs args)
 
 public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
 {
-    // Check P1's block disarm ability first
+    // Check P2's jump attack ability
+    if (p2 != null && attacker.UniqueID == p2.UniqueID && attacker.IsJumpAttacking)
+    {
+        foreach (PlayerMeleeHitArg hitArg in args)
+        {
+            if (hitArg.IsPlayer)
+            {
+                IPlayer target = hitArg.HitObject as IPlayer;
+                if (target != null && !target.IsDead && target.GetTeam() != p2.GetTeam())
+                {
+                    // Check if target blocked the hit
+                    if (hitArg.HitDamage == 0)
+                    {
+                        // Blocked - make them fall
+                        target.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
+                    }
+                    else
+                    {
+                        // Not blocked - kill and prepare for respawn
+                        // Store player data before killing
+                        KilledPlayerData killedData = new KilledPlayerData();
+                        killedData.Profile = target.GetProfile();
+                        killedData.Team = target.GetTeam();
+                        killedData.Position = target.GetWorldPosition();
+                        killedData.KillTime = Game.TotalElapsedGameTime;
+                        p2JumpKilledPlayers.Add(killedData);
+                        
+                        // Kill the player
+                        target.Kill();
+                        
+                        // Schedule respawn after 3 seconds
+                        IObjectTimerTrigger respawnTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+                        respawnTimer.SetIntervalTime(3000); // 3 seconds
+                        respawnTimer.SetRepeatCount(1);
+                        respawnTimer.SetScriptMethod("RespawnP2JumpKilledPlayer");
+                        respawnTimer.Trigger();
+                    }
+                }
+            }
+        }
+    }
+    
+    // Check P1's block disarm ability
     if (p1 != null)
     {
         foreach (PlayerMeleeHitArg hitArg in args)
@@ -1060,5 +1112,56 @@ private void HandleBjornLowHP()
     if (hpPercentage <= 0.3f)
     {
         bjorn.SetStrengthBoostTime(6000); // 6 seconds
+    }
+}
+
+public void RespawnP2JumpKilledPlayer(TriggerArgs args)
+{
+    // Check if there are any killed players to respawn
+    if (p2JumpKilledPlayers.Count == 0) return;
+    
+    float currentTime = Game.TotalElapsedGameTime;
+    List<KilledPlayerData> playersToRespawn = new List<KilledPlayerData>();
+    
+    // Find all players that should be respawned (killed 3+ seconds ago)
+    foreach (KilledPlayerData data in p2JumpKilledPlayers)
+    {
+        if (currentTime - data.KillTime >= 3000)
+        {
+            playersToRespawn.Add(data);
+        }
+    }
+    
+    // Respawn each eligible player
+    foreach (KilledPlayerData data in playersToRespawn)
+    {
+        // Find and remove the dead body first
+        IPlayer[] allPlayers = Game.GetPlayers();
+        foreach (IPlayer player in allPlayers)
+        {
+            if (player.IsDead && player.GetTeam() == data.Team)
+            {
+                // Remove the dead body
+                player.Remove();
+                break;
+            }
+        }
+        
+        // Create new player at the stored position
+        IPlayer respawnedPlayer = Game.CreatePlayer(data.Position);
+        if (respawnedPlayer != null)
+        {
+            // Restore team
+            respawnedPlayer.SetTeam(data.Team);
+            
+            // Restore profile
+            respawnedPlayer.SetProfile(data.Profile);
+            
+            // Play respawn effect
+            Game.PlayEffect(EffectName.Electric, data.Position);
+        }
+        
+        // Remove from tracking list
+        p2JumpKilledPlayers.Remove(data);
     }
 }
