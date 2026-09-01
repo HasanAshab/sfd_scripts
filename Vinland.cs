@@ -273,8 +273,8 @@ private void SpawnBjorn()
     bjorn.RemoveWeaponItemType(WeaponItemType.Thrown);
     bjorn.RemoveWeaponItemType(WeaponItemType.Powerup);
     
-    // Give weapons: katana and bow (same as leaders)
-    bjorn.GiveWeaponItem(WeaponItem.AXE);
+    // Give weapons: cue stick (never breaks)
+    bjorn.GiveWeaponItem(WeaponItem.CUESTICK);
     
     // Set Bjorn modifiers
     PlayerModifiers bjornMods = bjorn.GetModifiers();
@@ -804,7 +804,7 @@ public void RefillAmmo(TriggerArgs args)
     // Refill ammo for super troops
     if (bjorn != null && !bjorn.IsDead)
     {
-        RefillPlayerAmmo(bjorn, WeaponItem.AXE);
+        RefillPlayerAmmo(bjorn, WeaponItem.CUESTICK);
     }
     
     if (thorsfin != null && !thorsfin.IsDead)
@@ -926,6 +926,16 @@ public void UpdatePlayerFacingDirections(TriggerArgs args)
 
 public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
 {
+    // Keep Bjorn's cue stick pristine so it never degrades into a shaft
+    if (bjorn != null && attacker.UniqueID == bjorn.UniqueID)
+    {
+        MakeshiftWeaponItem currentMelee = attacker.CurrentMeleeMakeshiftWeapon;
+        if (currentMelee.WeaponItem == WeaponItem.CUESTICK)
+        {
+            attacker.SetCurrentMeleeMakeshiftDurability(1f);
+        }
+    }
+    
     // Check P2's jump attack ability
     if (p2 != null && attacker.UniqueID == p2.UniqueID && attacker.IsJumpAttacking)
     {
