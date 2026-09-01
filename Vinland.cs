@@ -118,6 +118,8 @@ public void OnStartup()
     
     // Set up damage callback for P1 backstab projectile damage
     Events.PlayerDamageCallback.Start(OnPlayerDamage);
+
+    Events.UpdateCallback.Start(OnCueStickUpdate, 50);
 }
 
 public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
@@ -926,16 +928,6 @@ public void UpdatePlayerFacingDirections(TriggerArgs args)
 
 public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
 {
-    // Keep Bjorn's cue stick pristine so it never degrades into a shaft
-    if (bjorn != null && attacker.UniqueID == bjorn.UniqueID)
-    {
-        MeleeWeaponItem currentMelee = attacker.CurrentMeleeMakeshiftWeapon;
-        if (currentMelee.WeaponItem == WeaponItem.CUESTICK)
-        {
-            attacker.SetCurrentMeleeMakeshiftDurability(1f);
-        }
-    }
-
     // Check P2's jump attack ability
     if (p2 != null && attacker.UniqueID == p2.UniqueID && attacker.IsJumpAttacking)
     {
@@ -1370,4 +1362,21 @@ public void ReEnablePlayersInput(TriggerArgs args)
     
     // Clear the list
     playersToReEnableInput.Clear();
+}
+
+public void OnCueStickUpdate(float elapsed)
+{
+    if (bjorn == null) return;
+
+    MeleeWeaponItem currentMelee = bjorn.CurrentMeleeMakeshiftWeapon;
+
+    if (currentMelee.WeaponItem == WeaponItem.CUESTICK)
+    {
+        bjorn.SetCurrentMeleeMakeshiftDurability(1f);
+    }
+    else if (currentMelee.WeaponItem == WeaponItem.CUESTICK_SHAFT)
+    {
+        bjorn.RemoveWeaponItemType(WeaponItemType.Melee);
+        bjorn.GiveWeaponItem(WeaponItem.CUESTICK);
+    }
 }
