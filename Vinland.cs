@@ -63,6 +63,13 @@ public void OnStartup()
     
     if (p1 == null || p2 == null) return; // Need both players
     
+    // Initialize shared storage early to avoid potential freezing
+    IScriptStorage storage = Game.GetSharedStorage("SuperDSCoopSync");
+    storage.SetItem("P2_SPLITTING", false);
+    
+    // Initially enable auto victory - will be disabled during respawn delays
+    Game.AutoVictoryConditionEnabled = true;
+    
     // Set up P1 (ThorsBonduk) - Speed warrior with slowmo
     SetupP1();
     
@@ -995,10 +1002,13 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
                         
                         p2JumpKilledPlayers.Add(killedData);
                         
-                        // Bug #6 - Signal to CoopGameOver.cs
+                        // Bug #6 - Signal to CoopGameOver.cs and disable auto victory
                         IScriptStorage storage = Game.GetSharedStorage("SuperDSCoopSync");
                         storage.SetItem("P2_SPLITTING", true);
                         storage.SetItem("P2_SPLIT_TIME", Game.TotalElapsedGameTime + 3000); // 3s buffer
+                        
+                        // Disable auto victory to prevent game end during respawn delay
+                        Game.AutoVictoryConditionEnabled = false;
                         
                         // Kill the player
                         target.Kill();
@@ -1290,6 +1300,49 @@ public void RespawnP2JumpKilledPlayer(TriggerArgs args)
         
         // Remove from tracking list
         p2JumpKilledPlayers.Remove(data);
+    }
+    
+    // Re-enable auto victory after all respawns are complete
+    CheckAndEnableVictoryCondition();
+}
+
+private void CheckAndEnableVictoryCondition()
+{
+    // Check if there are still players waiting to respawn
+    if (p2JumpKilledPlayers.Count > 0)
+    {
+        // Still players pending respawn - keep auto victory disabled
+        Game.AutoVictoryConditionEnabled = false;
+        return;
+    }
+    
+    // No players waiting to respawn - check if game should end normally
+    // Count living players per team
+    Dictionary<PlayerTeam, int> teamCounts = new Dictionary<PlayerTeam, int>();
+    
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer player in allPlayers)
+    {
+        if (!player.IsDead && player.GetTeam() != PlayerTeam.Independent)
+        {
+            PlayerTeam team = player.GetTeam();
+            if (!teamCounts.ContainsKey(team))
+            {
+                teamCounts[team] = 0;
+            }
+            teamCounts[team]++;
+        }
+    }
+    
+    // If only one team remains (or no teams), enable auto victory
+    if (teamCounts.Count <= 1)
+    {
+        Game.AutoVictoryConditionEnabled = true;
+    }
+    else
+    {
+        // Multiple teams still alive - enable auto victory for normal gameplay
+        Game.AutoVictoryConditionEnabled = true;
     }
 }
 
