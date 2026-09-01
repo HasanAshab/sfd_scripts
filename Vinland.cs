@@ -36,7 +36,11 @@ private class KilledPlayerData
     public IUser User; // For human players
     public float KillTime;
     public string BotName; // Bug #1 - store name
-    public BotBehaviorSet BotBehaviorSet; // Bug #4 - store bot behavior
+    public BotBehavior BotBehavior; // Store bot behavior
+    public BotBehaviorSet BotBehaviorSet; // Bug #4 - store bot behavior set
+    public bool NametagVisible; // Store nametag visibility
+    public bool StatusBarsVisible; // Store status bars visibility
+    public CameraFocusMode CameraFocusMode; // Store camera focus mode
     public bool IsP1; // Bug #5 - track if this is P1
     public bool IsBjorn; // Bug #5 - track if this is Bjorn
     public bool IsP2; // Bug #5 - track if this is P2
@@ -960,8 +964,14 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
                         // Bug #1 - Store bot name
                         killedData.BotName = target.Name;
                         
-                        // Bug #4 - Store bot behavior set
+                        // Store bot behavior and bot behavior set
+                        killedData.BotBehavior = target.GetBotBehavior();
                         killedData.BotBehaviorSet = target.GetBotBehaviorSet();
+                        
+                        // Store visibility and camera settings
+                        killedData.NametagVisible = target.GetNametagVisible();
+                        killedData.StatusBarsVisible = target.GetStatusBarsVisible();
+                        killedData.CameraFocusMode = target.GetCameraSecondaryFocusMode();
                         
                         // Bug #5 - Track special players
                         if (p1 != null && target.UniqueID == p1.UniqueID)
@@ -1241,8 +1251,14 @@ public void RespawnP2JumpKilledPlayer(TriggerArgs args)
                     respawnedPlayer.SetUser(data.User);
                 }
                 
-                // Bug #4 - Restore bot behavior set
+                // Restore bot behavior and bot behavior set
+                respawnedPlayer.SetBotBehavior(data.BotBehavior);
                 respawnedPlayer.SetBotBehaviorSet(data.BotBehaviorSet);
+                
+                // Restore visibility and camera settings
+                respawnedPlayer.SetNametagVisible(data.NametagVisible);
+                respawnedPlayer.SetStatusBarsVisible(data.StatusBarsVisible);
+                respawnedPlayer.SetCameraSecondaryFocusMode(data.CameraFocusMode);
                 
                 // Bug #5 - Restore special player references and abilities
                 if (data.IsP1)
