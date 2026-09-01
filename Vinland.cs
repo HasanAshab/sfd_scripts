@@ -35,13 +35,17 @@ private class KilledPlayerData
     public PlayerModifiers Modifiers;
     public IUser User; // For human players
     public float KillTime;
-    public RifleWeaponItem PrimaryWeapon;
-    public HandgunWeaponItem SecondaryWeapon;
-    public MeleeWeaponItem MeleeWeapon;
-    public ThrownWeaponItem ThrownWeapon;
-    public PowerupWeaponItem PowerupWeapon;
+    public string BotName; // Bug #1 - store name
+    public BotBehaviorSet BotBehaviorSet; // Bug #4 - store bot behavior
+    public bool IsP1; // Bug #5 - track if this is P1
+    public bool IsBjorn; // Bug #5 - track if this is Bjorn
+    public bool IsP2; // Bug #5 - track if this is P2
+    public bool IsThorsFin; // Bug #5 - track if this is ThorsFin
 }
 private List<KilledPlayerData> p2JumpKilledPlayers = new List<KilledPlayerData>();
+
+// Track players that need input re-enabled after fall (bug #6)
+private List<int> playersToReEnableInput = new List<int>();
 
 // Random generator
 private Random rnd = new Random();
@@ -924,11 +928,22 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
                     // Don't affect dead bodies (bug #7)
                     if (target.IsDead) continue;
                     
-                    // Check if target blocked the hit (bug #8 - check for successful block)
-                    if (hitArg.HitDamage == 0 && !target.IsDead)
+                    // Check if target blocked the hit (bug #6 - fix block scenario)
+                    if (hitArg.HitDamage == 0)
                     {
-                        // Blocked - make them fall
+                        // Blocked - disable input, make them fall, then re-enable
+                        target.SetInputEnabled(false);
                         target.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
+                        
+                        // Store player ID for re-enabling input
+                        playersToReEnableInput.Add(target.UniqueID);
+                        
+                        // Re-enable input after 200ms
+                        IObjectTimerTrigger inputTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+                        inputTimer.SetIntervalTime(200);
+                        inputTimer.SetRepeatCount(1);
+                        inputTimer.SetScriptMethod("ReEnablePlayersInput");
+                        inputTimer.Trigger();
                     }
                     else
                     {
@@ -938,16 +953,35 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
                         killedData.DeadPlayerID = target.UniqueID;
                         killedData.Profile = target.GetProfile();
                         killedData.Team = target.GetTeam();
-                        killedData.Modifiers = target.GetModifiers(); // Bug #1 - copy stats
-                        killedData.User = target.GetUser(); // Bug #3 - copy controller
+                        killedData.Modifiers = target.GetModifiers();
+                        killedData.User = target.GetUser();
                         killedData.KillTime = Game.TotalElapsedGameTime;
                         
-                        // Copy weapons (bug #2)
-                        killedData.PrimaryWeapon = target.CurrentPrimaryWeapon;
-                        killedData.SecondaryWeapon = target.CurrentSecondaryWeapon;
-                        killedData.MeleeWeapon = target.CurrentMeleeWeapon;
-                        killedData.ThrownWeapon = target.CurrentThrownItem;
-                        killedData.PowerupWeapon = target.CurrentPowerupItem;
+                        // Bug #1 - Store bot name
+                        killedData.BotName = target.Name;
+                        
+                        // Bug #4 - Store bot behavior set
+                        killedData.BotBehaviorSet = target.GetBotBehaviorSet();
+                        
+                        // Bug #5 - Track special players
+                        if (p1 != null && target.UniqueID == p1.UniqueID)
+                        {
+                            killedData.IsP1 = true;
+                        }
+                        else if (bjorn != null && target.UniqueID == bjorn.UniqueID)
+                        {
+                            killedData.IsBjorn = true;
+                        }
+                        else if (p2 != null && target.UniqueID == p2.UniqueID)
+                        {
+                            killedData.IsP2 = true;
+                        }
+                        else if (thorsfin != null && target.UniqueID == thorsfin.UniqueID)
+                        {
+                            killedData.IsThorsFin = true;
+                        }
+                        
+                        // Bug #3 - Don't copy weapons (removed weapon storage)
                         
                         p2JumpKilledPlayers.Add(killedData);
                         
@@ -1193,8 +1227,13 @@ public void RespawnP2JumpKilledPlayer(TriggerArgs args)
                 // Restore profile
                 respawnedPlayer.SetProfile(data.Profile);
                 
-                // Bug #1 - Restore modifiers (HP, size, etc.)
-                respawnedPlayer.SetModifiers(data.Modifiers);
+                // Bug #1 - Restore name
+                respawnedPlayer.SetBotName(data.BotName);
+                
+                // Bug #2 - Fix max health before restoring modifiers
+                PlayerModifiers mods = data.Modifiers;
+                // The MaxHealth in stored modifiers is correct, just apply it
+                respawnedPlayer.SetModifiers(mods);
                 
                 // Bug #3 - Restore controller for human players
                 if (data.User != null)
@@ -1202,29 +1241,30 @@ public void RespawnP2JumpKilledPlayer(TriggerArgs args)
                     respawnedPlayer.SetUser(data.User);
                 }
                 
-                // Bug #2 - Restore weapons
-                if (data.PrimaryWeapon.WeaponItem != WeaponItem.NONE)
+                // Bug #4 - Restore bot behavior set
+                respawnedPlayer.SetBotBehaviorSet(data.BotBehaviorSet);
+                
+                // Bug #5 - Restore special player references and abilities
+                if (data.IsP1)
                 {
-                    respawnedPlayer.GiveWeaponItem(data.PrimaryWeapon.WeaponItem);
+                    p1 = respawnedPlayer;
                 }
-                if (data.SecondaryWeapon.WeaponItem != WeaponItem.NONE)
+                else if (data.IsBjorn)
                 {
-                    respawnedPlayer.GiveWeaponItem(data.SecondaryWeapon.WeaponItem);
+                    bjorn = respawnedPlayer;
                 }
-                if (data.MeleeWeapon.WeaponItem != WeaponItem.NONE)
+                else if (data.IsP2)
                 {
-                    respawnedPlayer.GiveWeaponItem(data.MeleeWeapon.WeaponItem);
+                    p2 = respawnedPlayer;
                 }
-                if (data.ThrownWeapon.WeaponItem != WeaponItem.NONE)
+                else if (data.IsThorsFin)
                 {
-                    respawnedPlayer.GiveWeaponItem(data.ThrownWeapon.WeaponItem);
-                }
-                if (data.PowerupWeapon.WeaponItem != WeaponItem.NONE)
-                {
-                    respawnedPlayer.GiveWeaponItem(data.PowerupWeapon.WeaponItem);
+                    thorsfin = respawnedPlayer;
+                    // Restore ThorsFin's permanent speed boost
+                    thorsfin.SetSpeedBoostTime(999999);
                 }
                 
-                // Bug #4 - No shock effect (removed Game.PlayEffect)
+                // Bug #3 - Don't restore weapons (as requested)
             }
         }
         
@@ -1235,4 +1275,20 @@ public void RespawnP2JumpKilledPlayer(TriggerArgs args)
         // Remove from tracking list
         p2JumpKilledPlayers.Remove(data);
     }
+}
+
+public void ReEnablePlayersInput(TriggerArgs args)
+{
+    // Re-enable input for all players that were knocked down by P2's blocked jump attack
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer player in allPlayers)
+    {
+        if (playersToReEnableInput.Contains(player.UniqueID))
+        {
+            player.SetInputEnabled(true);
+        }
+    }
+    
+    // Clear the list
+    playersToReEnableInput.Clear();
 }
