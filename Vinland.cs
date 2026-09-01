@@ -29,10 +29,17 @@ private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>()
 // Track players killed by P2's jump attack for respawning
 private class KilledPlayerData
 {
+    public int DeadPlayerID;
     public IProfile Profile;
     public PlayerTeam Team;
-    public Vector2 Position;
+    public PlayerModifiers Modifiers;
+    public IUser User; // For human players
     public float KillTime;
+    public RifleWeaponItem PrimaryWeapon;
+    public HandgunWeaponItem SecondaryWeapon;
+    public MeleeWeaponItem MeleeWeapon;
+    public ThrownWeaponItem ThrownWeapon;
+    public PowerupWeaponItem PowerupWeapon;
 }
 private List<KilledPlayerData> p2JumpKilledPlayers = new List<KilledPlayerData>();
 
@@ -912,10 +919,13 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
             if (hitArg.IsPlayer)
             {
                 IPlayer target = hitArg.HitObject as IPlayer;
-                if (target != null && !target.IsDead && target.GetTeam() != p2.GetTeam())
+                if (target != null && target.GetTeam() != p2.GetTeam())
                 {
-                    // Check if target blocked the hit
-                    if (hitArg.HitDamage == 0)
+                    // Don't affect dead bodies (bug #7)
+                    if (target.IsDead) continue;
+                    
+                    // Check if target blocked the hit (bug #8 - check for successful block)
+                    if (hitArg.HitDamage == 0 && !target.IsDead)
                     {
                         // Blocked - make them fall
                         target.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
@@ -925,11 +935,26 @@ public void OnPlayerMeleeAction(IPlayer attacker, PlayerMeleeHitArg[] args)
                         // Not blocked - kill and prepare for respawn
                         // Store player data before killing
                         KilledPlayerData killedData = new KilledPlayerData();
+                        killedData.DeadPlayerID = target.UniqueID;
                         killedData.Profile = target.GetProfile();
                         killedData.Team = target.GetTeam();
-                        killedData.Position = target.GetWorldPosition();
+                        killedData.Modifiers = target.GetModifiers(); // Bug #1 - copy stats
+                        killedData.User = target.GetUser(); // Bug #3 - copy controller
                         killedData.KillTime = Game.TotalElapsedGameTime;
+                        
+                        // Copy weapons (bug #2)
+                        killedData.PrimaryWeapon = target.CurrentPrimaryWeapon;
+                        killedData.SecondaryWeapon = target.CurrentSecondaryWeapon;
+                        killedData.MeleeWeapon = target.CurrentMeleeWeapon;
+                        killedData.ThrownWeapon = target.CurrentThrownItem;
+                        killedData.PowerupWeapon = target.CurrentPowerupItem;
+                        
                         p2JumpKilledPlayers.Add(killedData);
+                        
+                        // Bug #6 - Signal to CoopGameOver.cs
+                        IScriptStorage storage = Game.GetSharedStorage("SuperDSCoopSync");
+                        storage.SetItem("P2_SPLITTING", true);
+                        storage.SetItem("P2_SPLIT_TIME", Game.TotalElapsedGameTime + 3000); // 3s buffer
                         
                         // Kill the player
                         target.Kill();
@@ -1135,31 +1160,77 @@ public void RespawnP2JumpKilledPlayer(TriggerArgs args)
     // Respawn each eligible player
     foreach (KilledPlayerData data in playersToRespawn)
     {
-        // Find and remove the dead body first
+        // Find the dead body by ID (bug #5 - get current body position, not stored position)
+        IPlayer deadBody = null;
+        Vector2 respawnPosition = Vector2.Zero;
+        bool bodyGibbed = true;
+        
         IPlayer[] allPlayers = Game.GetPlayers();
         foreach (IPlayer player in allPlayers)
         {
-            if (player.IsDead && player.GetTeam() == data.Team)
+            if (player.UniqueID == data.DeadPlayerID && player.IsDead)
             {
-                // Remove the dead body
-                player.Remove();
+                deadBody = player;
+                respawnPosition = player.GetWorldPosition(); // Bug #5 - use current body position
+                bodyGibbed = false;
                 break;
             }
         }
         
-        // Create new player at the stored position
-        IPlayer respawnedPlayer = Game.CreatePlayer(data.Position);
-        if (respawnedPlayer != null)
+        // Bug #5 - only respawn if body is not gibbed
+        if (!bodyGibbed && deadBody != null)
         {
-            // Restore team
-            respawnedPlayer.SetTeam(data.Team);
+            // Remove the dead body
+            deadBody.Remove();
             
-            // Restore profile
-            respawnedPlayer.SetProfile(data.Profile);
-            
-            // Play respawn effect
-            Game.PlayEffect(EffectName.Electric, data.Position);
+            // Create new player at the body's current position
+            IPlayer respawnedPlayer = Game.CreatePlayer(respawnPosition);
+            if (respawnedPlayer != null)
+            {
+                // Restore team
+                respawnedPlayer.SetTeam(data.Team);
+                
+                // Restore profile
+                respawnedPlayer.SetProfile(data.Profile);
+                
+                // Bug #1 - Restore modifiers (HP, size, etc.)
+                respawnedPlayer.SetModifiers(data.Modifiers);
+                
+                // Bug #3 - Restore controller for human players
+                if (data.User != null)
+                {
+                    respawnedPlayer.SetUser(data.User);
+                }
+                
+                // Bug #2 - Restore weapons
+                if (data.PrimaryWeapon.WeaponItem != WeaponItem.NONE)
+                {
+                    respawnedPlayer.GiveWeaponItem(data.PrimaryWeapon.WeaponItem);
+                }
+                if (data.SecondaryWeapon.WeaponItem != WeaponItem.NONE)
+                {
+                    respawnedPlayer.GiveWeaponItem(data.SecondaryWeapon.WeaponItem);
+                }
+                if (data.MeleeWeapon.WeaponItem != WeaponItem.NONE)
+                {
+                    respawnedPlayer.GiveWeaponItem(data.MeleeWeapon.WeaponItem);
+                }
+                if (data.ThrownWeapon.WeaponItem != WeaponItem.NONE)
+                {
+                    respawnedPlayer.GiveWeaponItem(data.ThrownWeapon.WeaponItem);
+                }
+                if (data.PowerupWeapon.WeaponItem != WeaponItem.NONE)
+                {
+                    respawnedPlayer.GiveWeaponItem(data.PowerupWeapon.WeaponItem);
+                }
+                
+                // Bug #4 - No shock effect (removed Game.PlayEffect)
+            }
         }
+        
+        // Bug #6 - Clear the splitting flag
+        IScriptStorage storage = Game.GetSharedStorage("SuperDSCoopSync");
+        storage.SetItem("P2_SPLITTING", false);
         
         // Remove from tracking list
         p2JumpKilledPlayers.Remove(data);
