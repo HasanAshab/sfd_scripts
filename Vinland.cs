@@ -97,6 +97,13 @@ public void OnStartup()
     ammoTimer.SetScriptMethod("RefillAmmo");
     ammoTimer.Trigger();
     
+    // Set up bowman ammo refresh timer (every 7 seconds)
+    IObjectTimerTrigger bowmanTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    bowmanTimer.SetIntervalTime(7000); // 7 seconds
+    bowmanTimer.SetRepeatCount(0); // Infinite repeats
+    bowmanTimer.SetScriptMethod("RefreshBowmanAmmo");
+    bowmanTimer.Trigger();
+    
     // Set up player key input callback for guard toggle and troop spawning
     Events.PlayerKeyInputCallback.Start(OnPlayerKeyInput);
     
@@ -508,7 +515,6 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             mods.MaxHealth = (int)(1 * HIT_POINT);
             mods.CurrentHealth = (int)(1 * HIT_POINT);
             // mods.SizeModifier = 0.8f;
-            mods.ItemDropMode = 1;
             mods.RunSpeedModifier *= 1.3f;
             mods.SprintSpeedModifier *= 1.3f;
             troop.SetProfile(new IProfile()
@@ -818,6 +824,38 @@ public void RefillAmmo(TriggerArgs args)
     // Refill ammo for all troops
     // RefillTroopAmmo(p1Troops);
     // RefillTroopAmmo(p2Troops);
+}
+
+public void RefreshBowmanAmmo(TriggerArgs args)
+{
+    // Refresh ammo for all Bowman and FireBowman troops every 7 seconds
+    RefreshBowmanTroopAmmo(p1Troops);
+    RefreshBowmanTroopAmmo(p2Troops);
+}
+
+private void RefreshBowmanTroopAmmo(List<IPlayer> troops)
+{
+    foreach (IPlayer troop in troops)
+    {
+        if (troop == null || troop.IsDead) continue;
+        
+        IProfile profile = troop.GetProfile();
+        string troopName = profile.Name;
+        
+        if (troopName == "Bowman")
+        {
+            // Remove and re-give bow to refresh ammo
+            troop.RemoveWeaponItemType(WeaponItemType.Rifle);
+            troop.GiveWeaponItem(WeaponItem.BOW);
+        }
+        else if (troopName == "firebowman")
+        {
+            // Remove and re-give bow and fire ammo to refresh
+            troop.RemoveWeaponItemType(WeaponItemType.Rifle);
+            troop.GiveWeaponItem(WeaponItem.BOW);
+            troop.GiveWeaponItem(WeaponItem.FIREAMMO);
+        }
+    }
 }
 
 private void RefillPlayerAmmo(
