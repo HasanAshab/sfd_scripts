@@ -530,6 +530,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             });
             BotBehaviorSet bsBowman = SetBotBehavior(troop, PredefinedAIType.BotC);
             bsBowman.MeleeUsage = false;
+            bsBowman.SeekCoverWhileShooting = 0.7f;
             troop.SetBotBehaviorSet(bsBowman);
             break;
             
@@ -600,6 +601,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             });
             BotBehaviorSet bsFireBowman = SetBotBehavior(troop, PredefinedAIType.BotA);
             bsFireBowman.MeleeUsage = false;
+            bsFireBowman.SeekCoverWhileShooting = 0.7f;
             troop.SetBotBehaviorSet(bsFireBowman);
             break;
     }
