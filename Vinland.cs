@@ -97,9 +97,9 @@ public void OnStartup()
     ammoTimer.SetScriptMethod("RefillAmmo");
     ammoTimer.Trigger();
     
-    // Set up bowman ammo refresh timer (every 7 seconds)
+    // Set up bowman ammo refresh timer
     IObjectTimerTrigger bowmanTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    bowmanTimer.SetIntervalTime(7000); // 7 seconds
+    bowmanTimer.SetIntervalTime(1000); // 1 seconds
     bowmanTimer.SetRepeatCount(0); // Infinite repeats
     bowmanTimer.SetScriptMethod("RefreshBowmanAmmo");
     bowmanTimer.Trigger();
@@ -530,7 +530,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             });
             BotBehaviorSet bsBowman = SetBotBehavior(troop, PredefinedAIType.BotC);
             bsBowman.MeleeUsage = false;
-            bsBowman.SeekCoverWhileShooting = 0.7f;
+            bsBowman.SeekCoverWhileShooting = 1.0f;
             troop.SetBotBehaviorSet(bsBowman);
             break;
             
@@ -601,7 +601,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             });
             BotBehaviorSet bsFireBowman = SetBotBehavior(troop, PredefinedAIType.BotA);
             bsFireBowman.MeleeUsage = false;
-            bsFireBowman.SeekCoverWhileShooting = 0.7f;
+            bsFireBowman.SeekCoverWhileShooting = 1.0f;
             troop.SetBotBehaviorSet(bsFireBowman);
             break;
     }
@@ -840,22 +840,37 @@ private void RefreshBowmanTroopAmmo(List<IPlayer> troops)
     foreach (IPlayer troop in troops)
     {
         if (troop == null || troop.IsDead) continue;
-        
+
         IProfile profile = troop.GetProfile();
         string troopName = profile.Name;
-        
-        if (troopName == "Bowman")
+
+        bool isBowman = string.Equals(troopName, "Bowman", StringComparison.OrdinalIgnoreCase);
+        bool isFireBowman = string.Equals(troopName, "FireBowman", StringComparison.OrdinalIgnoreCase);
+
+        if (!isBowman && !isFireBowman) continue;
+
+        RifleWeaponItem primary = troop.CurrentPrimaryWeapon;
+
+        if (primary.WeaponItem == WeaponItem.BOW)
         {
-            // Remove and re-give bow to refresh ammo
-            troop.RemoveWeaponItemType(WeaponItemType.Rifle);
-            troop.GiveWeaponItem(WeaponItem.BOW);
+            // Still has it (just not dropped) — cheap ammo top-up, no disruption
+            if (primary.TotalAmmo < primary.MaxTotalAmmo)
+                troop.SetCurrentPrimaryWeaponAmmo(primary.MagSize, primary.MaxCarriedSpareMags);
         }
-        else if (troopName == "firebowman")
+        else
         {
-            // Remove and re-give bow and fire ammo to refresh
-            troop.RemoveWeaponItemType(WeaponItemType.Rifle);
-            troop.GiveWeaponItem(WeaponItem.BOW);
-            troop.GiveWeaponItem(WeaponItem.FIREAMMO);
+            // Dropped / lost it — give a fresh one and force them to actually draw it
+            troop.RemoveWeaponItemType(WeaponItemType.Rifle); // clean slate, in case they picked up something else
+            bool given = troop.GiveWeaponItem(WeaponItem.BOW);
+
+            if (given)
+            {
+                troop.ClearCommandQueue();
+                troop.AddCommand(new PlayerCommand(PlayerCommandType.DrawRifle));
+            }
+
+            if (isFireBowman)
+                troop.GiveWeaponItem(WeaponItem.FIREAMMO);
         }
     }
 }
