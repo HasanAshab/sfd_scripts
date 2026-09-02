@@ -508,6 +508,7 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             mods.MaxHealth = (int)(1 * HIT_POINT);
             mods.CurrentHealth = (int)(1 * HIT_POINT);
             // mods.SizeModifier = 0.8f;
+            mods.ItemDropMode = 1;
             mods.RunSpeedModifier *= 1.3f;
             mods.SprintSpeedModifier *= 1.3f;
             troop.SetProfile(new IProfile()
