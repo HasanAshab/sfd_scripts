@@ -14,37 +14,36 @@ public class RopeController
 	public IObject hook = null;
 
 	public bool isOnRope = false;
-	private bool wasWalking = false;
-	
+	private bool wasWalkKeyPressed = false; // tracks the raw WALK virtual key, not IsWalking
+
 	public RopeController(IPlayer ply)
 	{
 		this.ply = ply;
 	}
 	public void Update()
 	{
-		if(!this.wasWalking)
+		bool walkKeyDown = ply.KeyPressed(VirtualKey.WALKING);
+		bool walkKeyJustPressed = walkKeyDown && !this.wasWalkKeyPressed;
+
+		if (walkKeyJustPressed)
 		{
-			if(ply.IsWalking)
-			{
-				if(this.distanceJoint!=null) this.distanceJoint.Destroy();
-				if(this.targetObjectJoint!=null) this.targetObjectJoint.Destroy();
-				if(this.regulatorDistanceJoint!=null) this.regulatorDistanceJoint.Destroy();
-				if(this.regulatorTargetObjectJoint!=null) this.regulatorTargetObjectJoint.Destroy();
-				if(this.anchor!=null) this.anchor.Destroy();
-				if(this.playerSwingRegulator!=null) this.playerSwingRegulator.Destroy();
-				
-				this.distanceJoint = null;
-				this.targetObjectJoint = null;
-				this.anchor = null;
-				this.playerSwingRegulator = null;
-			}
-		}
-		if(ply.IsWalking && ply.IsBlocking && !this.wasWalking)
-		{
+			// clear out any previous rope before firing a new one
+			if(this.distanceJoint!=null) this.distanceJoint.Destroy();
+			if(this.targetObjectJoint!=null) this.targetObjectJoint.Destroy();
+			if(this.regulatorDistanceJoint!=null) this.regulatorDistanceJoint.Destroy();
+			if(this.regulatorTargetObjectJoint!=null) this.regulatorTargetObjectJoint.Destroy();
+			if(this.anchor!=null) this.anchor.Destroy();
+			if(this.playerSwingRegulator!=null) this.playerSwingRegulator.Destroy();
+
+			this.distanceJoint = null;
+			this.targetObjectJoint = null;
+			this.anchor = null;
+			this.playerSwingRegulator = null;
+
 			//CreateRope(ply.GetWorldPosition() + new Vector2(100*ply.FacingDirection, 100));
 			hook = Game.CreateObject("Bottle00Broken", ply.GetWorldPosition() + new Vector2(ply.FacingDirection*10, 10), 0f, new Vector2(ply.FacingDirection*20, 20), 0f);
-			this.wasWalking = true;
 		}
+
 		if(hook!=null && hook.DestructionInitiated)
 		{
 			CreateRope(hook.GetWorldPosition());
@@ -54,10 +53,8 @@ public class RopeController
 			ply.SetLinearVelocity(playerSwingRegulator.GetLinearVelocity());
 			ply.SetWorldPosition(playerSwingRegulator.GetWorldPosition());
 		}
-		if(!ply.IsWalking)
-		{
-			this.wasWalking = false;
-		}
+
+		this.wasWalkKeyPressed = walkKeyDown;
 	}
 	public void CreateRope(Vector2 anchorPos)
 	{
