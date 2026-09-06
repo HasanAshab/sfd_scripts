@@ -31,6 +31,9 @@ private Dictionary<int, bool> bowmanRetreating = new Dictionary<int, bool>();
 private const float MIN_ENGAGE_DISTANCE = 250f; // Distance to start retreating
 private const float RETREAT_STEP = 120f; // How far to step back
 
+// Track grappling hook state for bottle throw mechanic
+private Dictionary<int, bool> playerHasRope = new Dictionary<int, bool>();
+
 // Track players killed by P2's jump attack for respawning
 private class KilledPlayerData
 {
@@ -143,6 +146,35 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
     
     foreach (VirtualKeyInfo keyInfo in keyInfos)
     {
+        // Check for WALK key to throw bottle or cancel rope
+        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.WALK)
+        {
+            int playerId = player.UniqueID;
+            
+            // Initialize rope tracking if not present
+            if (!playerHasRope.ContainsKey(playerId))
+            {
+                playerHasRope[playerId] = false;
+            }
+            
+            // Check if player currently has a rope
+            ThrownWeaponItem thrownItem = player.CurrentThrownItem;
+            if (thrownItem.WeaponItem == WeaponItem.BOTTLE)
+            {
+                // Has bottle - throw it
+                player.AddCommand(new PlayerCommand(PlayerCommandType.StartThrowingMode));
+                
+                // Track that player now has a rope (bottle becomes rope after throw)
+                playerHasRope[playerId] = true;
+            }
+            else if (playerHasRope[playerId])
+            {
+                // Player has rope - cancel it by removing
+                player.RemoveWeaponItemType(WeaponItemType.Thrown);
+                playerHasRope[playerId] = false;
+            }
+        }
+        
         // Check for SHEATHE key to toggle guard mode
         if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.SHEATHE)
         {
