@@ -1,7 +1,5 @@
 //GrapplingHook Script!
 //Made by ClockworkDice
-//GrapplingHook Script!
-//Made by ClockworkDice
 
 public class RopeController
 {
@@ -23,8 +21,11 @@ public class RopeController
 	private bool pendingGrab = false;
 	private float grabTime = 0f;
 	private Vector2 pendingAnchorPos;
-	private Vector2 pendingPlyPos;   // NEW: snapshot of player pos AT IMPACT
-	private Vector2 pendingPlyVel;   // NEW: snapshot of player velocity AT IMPACT
+
+	// --- pull-in state using physics force ---
+	private bool pulling = false;
+	private const float PULL_FORCE = 30f;        // force applied toward anchor
+	private const float MIN_PULL_DIST = 30f;     // stop pulling when this close
 	// ---------------------------
 
 	public RopeController(IPlayer ply)
@@ -50,6 +51,7 @@ public class RopeController
 				this.playerSwingRegulator = null;
 
 				this.pendingGrab = false;
+				this.pulling = false;
 			}
 		}
 		if(ply.IsWalking && ply.IsBlocking && !this.wasWalking)
@@ -59,19 +61,37 @@ public class RopeController
 		}
 		if(hook!=null && hook.DestructionInitiated)
 		{
-			// snapshot everything AT THE MOMENT OF IMPACT
 			pendingAnchorPos = hook.GetWorldPosition();
-			pendingPlyPos = ply.GetWorldPosition();
-			pendingPlyVel = ply.GetLinearVelocity();
 			grabTime = Game.TotalElapsedGameTime + GRAB_DELAY_MS;
 			pendingGrab = true;
 			hook = null;
 		}
 		if(pendingGrab && Game.TotalElapsedGameTime >= grabTime)
 		{
-			CreateRope(pendingAnchorPos, pendingPlyPos, pendingPlyVel);
+			CreateRope(pendingAnchorPos);
 			pendingGrab = false;
+			pulling = true; // start pulling the player toward the anchor
 		}
+
+		// Apply pulling force to the swing regulator which pulls the player
+		if(pulling && anchor != null && playerSwingRegulator != null)
+		{
+			float dist = Vector2.Distance(playerSwingRegulator.GetWorldPosition(), anchor.GetWorldPosition());
+			if(dist > MIN_PULL_DIST)
+			{
+				Vector2 dir = anchor.GetWorldPosition() - playerSwingRegulator.GetWorldPosition();
+				dir.Normalize();
+				Vector2 currentVel = playerSwingRegulator.GetLinearVelocity();
+				Vector2 newVel = currentVel + (dir * PULL_FORCE);
+				playerSwingRegulator.SetLinearVelocity(newVel);
+			}
+			else
+			{
+				pulling = false; // arrived - stop pulling
+			}
+		}
+		
+		// Sync player with swing regulator
 		if(playerSwingRegulator!=null)
 		{
 			ply.SetLinearVelocity(playerSwingRegulator.GetLinearVelocity());
@@ -82,7 +102,7 @@ public class RopeController
 			this.wasWalking = false;
 		}
 	}
-	public void CreateRope(Vector2 anchorPos, Vector2 snapshotPlyPos, Vector2 snapshotPlyVel)
+	public void CreateRope(Vector2 anchorPos)
 	{
 		if(this.distanceJoint!=null) this.distanceJoint.Destroy();
 		if(this.targetObjectJoint!=null) this.targetObjectJoint.Destroy();
@@ -92,9 +112,8 @@ public class RopeController
 		if(this.playerSwingRegulator!=null) this.playerSwingRegulator.Destroy();
 
 		anchor = Game.CreateObject("BgValve00E", anchorPos, 0f);
-		// spawn the regulator at the SNAPSHOT position, not ply's live (400ms-later) position
-		playerSwingRegulator = Game.CreateObject("StoneDebris00A", snapshotPlyPos, 0f);
-		playerSwingRegulator.SetLinearVelocity(snapshotPlyVel);
+		playerSwingRegulator = Game.CreateObject("StoneDebris00A", ply.GetWorldPosition(), 0f);
+		playerSwingRegulator.SetLinearVelocity(ply.GetLinearVelocity());
 		
 		IObjectDistanceJoint distanceJoint = (IObjectDistanceJoint)Game.CreateObject("DistanceJoint");
 		distanceJoint.SetWorldPosition(anchor.GetWorldPosition());
@@ -103,9 +122,8 @@ public class RopeController
 		regulatorDistanceJoint.SetWorldPosition(anchor.GetWorldPosition());
 		regulatorDistanceJoint.SetTargetObject(anchor);
 	
-		// use the SNAPSHOT position to build the rest length, but still target the live ply
 		IObjectTargetObjectJoint targetObjectJoint = (IObjectTargetObjectJoint)Game.CreateObject("TargetObjectJoint");
-		targetObjectJoint.SetWorldPosition(snapshotPlyPos + new Vector2(0f, 8f));
+		targetObjectJoint.SetWorldPosition(ply.GetWorldPosition() + new Vector2(0f, 8f));
 		targetObjectJoint.SetTargetObject(ply);
 		IObjectTargetObjectJoint regulatorTargetObjectJoint = (IObjectTargetObjectJoint)Game.CreateObject("TargetObjectJoint");
 		regulatorTargetObjectJoint.SetWorldPosition(playerSwingRegulator.GetWorldPosition() + new Vector2(0f, 8f));
@@ -116,6 +134,12 @@ public class RopeController
 		
 		distanceJoint.SetLineVisual(LineVisual.DJWire);
 		distanceJoint.SetLengthType(DistanceJointLengthType.Elastic);
+		
+		// Store joints for later use
+		this.distanceJoint = distanceJoint;
+		this.targetObjectJoint = targetObjectJoint;
+		this.regulatorDistanceJoint = regulatorDistanceJoint;
+		this.regulatorTargetObjectJoint = regulatorTargetObjectJoint;
 	}
 }
 
