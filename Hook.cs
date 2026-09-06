@@ -115,29 +115,25 @@ public class RopeController
 		playerSwingRegulator = Game.CreateObject("StoneDebris00A", ply.GetWorldPosition(), 0f);
 		playerSwingRegulator.SetLinearVelocity(ply.GetLinearVelocity());
 		
-		IObjectDistanceJoint distanceJoint = (IObjectDistanceJoint)Game.CreateObject("DistanceJoint");
-		distanceJoint.SetWorldPosition(anchor.GetWorldPosition());
-		distanceJoint.SetTargetObject(anchor);
+		// Only create the distance joint for the regulator, NOT for the player directly
+		// This allows the regulator to be pulled in while the player follows via position sync
 		IObjectDistanceJoint regulatorDistanceJoint = (IObjectDistanceJoint)Game.CreateObject("DistanceJoint");
 		regulatorDistanceJoint.SetWorldPosition(anchor.GetWorldPosition());
 		regulatorDistanceJoint.SetTargetObject(anchor);
 	
-		IObjectTargetObjectJoint targetObjectJoint = (IObjectTargetObjectJoint)Game.CreateObject("TargetObjectJoint");
-		targetObjectJoint.SetWorldPosition(ply.GetWorldPosition() + new Vector2(0f, 8f));
-		targetObjectJoint.SetTargetObject(ply);
 		IObjectTargetObjectJoint regulatorTargetObjectJoint = (IObjectTargetObjectJoint)Game.CreateObject("TargetObjectJoint");
 		regulatorTargetObjectJoint.SetWorldPosition(playerSwingRegulator.GetWorldPosition() + new Vector2(0f, 8f));
 		regulatorTargetObjectJoint.SetTargetObject(playerSwingRegulator);
 	
-		distanceJoint.SetTargetObjectJoint(targetObjectJoint);
 		regulatorDistanceJoint.SetTargetObjectJoint(regulatorTargetObjectJoint);
 		
-		distanceJoint.SetLineVisual(LineVisual.DJWire);
-		distanceJoint.SetLengthType(DistanceJointLengthType.Elastic);
+		// Set visual rope from anchor to player (visual only, no physics constraint on player)
+		regulatorDistanceJoint.SetLineVisual(LineVisual.DJWire);
+		regulatorDistanceJoint.SetLengthType(DistanceJointLengthType.Elastic);
 		
 		// Store joints for later use
-		this.distanceJoint = distanceJoint;
-		this.targetObjectJoint = targetObjectJoint;
+		this.distanceJoint = null; // not using direct player joint
+		this.targetObjectJoint = null;
 		this.regulatorDistanceJoint = regulatorDistanceJoint;
 		this.regulatorTargetObjectJoint = regulatorTargetObjectJoint;
 	}
