@@ -14,7 +14,7 @@ public class RopeController
 	public IObject hook = null;
 
 	public bool isOnRope = false;
-	private bool wasWalking = false;
+	private bool wasWalkingPressed = false;
 
 	// --- delayed-grab state ---
 	private const float GRAB_DELAY_MS = 400f;
@@ -24,41 +24,55 @@ public class RopeController
 
 	// --- pull-in state using physics force ---
 	private bool pulling = false;
-	private const float PULL_FORCE = 0.55f;        // force applied toward anchor
-	private const float MIN_PULL_DIST = 15f;     // stop pulling when this close
+	private const float PULL_FORCE = 30f;        // force applied toward anchor
+	private const float MIN_PULL_DIST = 30f;     // stop pulling when this close
 	// ---------------------------
 
 	public RopeController(IPlayer ply)
 	{
 		this.ply = ply;
 	}
+	
+	private void CancelRope()
+	{
+		if(this.distanceJoint!=null) this.distanceJoint.Destroy();
+		if(this.targetObjectJoint!=null) this.targetObjectJoint.Destroy();
+		if(this.regulatorDistanceJoint!=null) this.regulatorDistanceJoint.Destroy();
+		if(this.regulatorTargetObjectJoint!=null) this.regulatorTargetObjectJoint.Destroy();
+		if(this.anchor!=null) this.anchor.Destroy();
+		if(this.playerSwingRegulator!=null) this.playerSwingRegulator.Destroy();
+		if(this.hook!=null) this.hook.Destroy();
+		
+		this.distanceJoint = null;
+		this.targetObjectJoint = null;
+		this.anchor = null;
+		this.playerSwingRegulator = null;
+		this.hook = null;
+		
+		this.pendingGrab = false;
+		this.pulling = false;
+		this.isOnRope = false;
+	}
+	
 	public void Update()
 	{
-		if(!this.wasWalking)
+		// Detect walk key press (rising edge)
+		if(ply.IsWalking && !this.wasWalkingPressed)
 		{
-			if(ply.IsWalking)
+			// Walk key just pressed
+			if(hook != null || pendingGrab || isOnRope)
 			{
-				if(this.distanceJoint!=null) this.distanceJoint.Destroy();
-				if(this.targetObjectJoint!=null) this.targetObjectJoint.Destroy();
-				if(this.regulatorDistanceJoint!=null) this.regulatorDistanceJoint.Destroy();
-				if(this.regulatorTargetObjectJoint!=null) this.regulatorTargetObjectJoint.Destroy();
-				if(this.anchor!=null) this.anchor.Destroy();
-				if(this.playerSwingRegulator!=null) this.playerSwingRegulator.Destroy();
-				
-				this.distanceJoint = null;
-				this.targetObjectJoint = null;
-				this.anchor = null;
-				this.playerSwingRegulator = null;
-
-				this.pendingGrab = false;
-				this.pulling = false;
+				// Cancel rope if hook is active, pending, or rope is attached
+				CancelRope();
+			}
+			else
+			{
+				// Throw hook
+				hook = Game.CreateObject("Bottle00Broken", ply.GetWorldPosition() + new Vector2(ply.FacingDirection*10, 10), 0f, new Vector2(ply.FacingDirection*20, 20), 0f);
 			}
 		}
-		if(ply.IsWalking && ply.IsBlocking && !this.wasWalking)
-		{
-			hook = Game.CreateObject("Bottle00Broken", ply.GetWorldPosition() + new Vector2(ply.FacingDirection*10, 10), 0f, new Vector2(ply.FacingDirection*20, 20), 0f);
-			this.wasWalking = true;
-		}
+		
+		// Check if hook hit something
 		if(hook!=null && hook.DestructionInitiated)
 		{
 			pendingAnchorPos = hook.GetWorldPosition();
@@ -66,11 +80,14 @@ public class RopeController
 			pendingGrab = true;
 			hook = null;
 		}
+		
+		// Create rope after delay
 		if(pendingGrab && Game.TotalElapsedGameTime >= grabTime)
 		{
 			CreateRope(pendingAnchorPos);
 			pendingGrab = false;
 			pulling = true; // start pulling the player toward the anchor
+			isOnRope = true;
 		}
 
 		// Apply pulling force to the swing regulator which pulls the player
@@ -97,10 +114,9 @@ public class RopeController
 			ply.SetLinearVelocity(playerSwingRegulator.GetLinearVelocity());
 			ply.SetWorldPosition(playerSwingRegulator.GetWorldPosition());
 		}
-		if(!ply.IsWalking)
-		{
-			this.wasWalking = false;
-		}
+		
+		// Update walk key state for next frame
+		this.wasWalkingPressed = ply.IsWalking;
 	}
 	public void CreateRope(Vector2 anchorPos)
 	{
