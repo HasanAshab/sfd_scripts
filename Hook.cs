@@ -1,107 +1,123 @@
 //GrapplingHook Script!
 //Made by ClockworkDice
+//GrapplingHook Script!
+//Made by ClockworkDice
+
 public class RopeController
 {
-	private enum RopeState { Idle, Attached, Traveling }
-
+	public IObjectDistanceJoint distanceJoint = null;
+	public IObjectTargetObjectJoint targetObjectJoint = null;
+	public IObjectDistanceJoint regulatorDistanceJoint = null;
+	public IObjectTargetObjectJoint regulatorTargetObjectJoint = null;
 	public IPlayer ply;
-	private IObject anchorMarker = null; // just a visual marker at the hook point
+	public IObject playerSwingRegulator = null;
+	public IObject anchor = null;
 
-	private RopeState state = RopeState.Idle;
-	private Vector2 targetPosition;
-	private float attachTime = 0f;
+	public IObject hook = null;
 
-	private bool wasWalkKeyPressed = false;
+	public bool isOnRope = false;
+	private bool wasWalking = false;
 
-	private const float TRAVEL_DELAY_MS = 700f;   // 1 second pause before you get pulled
-	private const float PULL_SPEED = 10f;          // tune to taste
-	private const float ARRIVAL_DISTANCE = 15f;     // how close counts as "reached it"
-	private const float MAX_ROPE_DISTANCE = 800f;   // max raycast range
+	// --- delayed-grab state ---
+	private const float GRAB_DELAY_MS = 400f;
+	private bool pendingGrab = false;
+	private float grabTime = 0f;
+	private Vector2 pendingAnchorPos;
+	private Vector2 pendingPlyPos;   // NEW: snapshot of player pos AT IMPACT
+	private Vector2 pendingPlyVel;   // NEW: snapshot of player velocity AT IMPACT
+	// ---------------------------
 
 	public RopeController(IPlayer ply)
 	{
 		this.ply = ply;
 	}
-
 	public void Update()
 	{
-		bool walkKeyDown = ply.KeyPressed(VirtualKey.WALKING);
-		bool walkKeyJustPressed = walkKeyDown && !this.wasWalkKeyPressed;
-		this.wasWalkKeyPressed = walkKeyDown;
-
-		// Requirement 3: firing again at any point cancels whatever was happening before
-		if (walkKeyJustPressed)
+		if(!this.wasWalking)
 		{
-			FireHook();
+			if(ply.IsWalking)
+			{
+				if(this.distanceJoint!=null) this.distanceJoint.Destroy();
+				if(this.targetObjectJoint!=null) this.targetObjectJoint.Destroy();
+				if(this.regulatorDistanceJoint!=null) this.regulatorDistanceJoint.Destroy();
+				if(this.regulatorTargetObjectJoint!=null) this.regulatorTargetObjectJoint.Destroy();
+				if(this.anchor!=null) this.anchor.Destroy();
+				if(this.playerSwingRegulator!=null) this.playerSwingRegulator.Destroy();
+				
+				this.distanceJoint = null;
+				this.targetObjectJoint = null;
+				this.anchor = null;
+				this.playerSwingRegulator = null;
+
+				this.pendingGrab = false;
+			}
 		}
-
-		switch (state)
+		if(ply.IsWalking && ply.IsBlocking && !this.wasWalking)
 		{
-			case RopeState.Attached:
-				if (Game.TotalElapsedGameTime - attachTime >= TRAVEL_DELAY_MS)
-				{
-					state = RopeState.Traveling;
-				}
-				break;
-
-			case RopeState.Traveling:
-				// Requirement 2: blocking cancels the travel mid-way
-				if (ply.IsBlocking)
-				{
-					CancelRope();
-					break;
-				}
-
-				Vector2 toTarget = targetPosition - ply.GetWorldPosition();
-				float dist = toTarget.Length();
-
-				// Requirement 1: reaching the destination cancels the rope
-				if (dist <= ARRIVAL_DISTANCE)
-				{
-					CancelRope();
-				}
-				else
-				{
-					Vector2 dir = Vector2.Normalize(toTarget);
-					ply.SetLinearVelocity(dir * PULL_SPEED);
-				}
-				break;
+			hook = Game.CreateObject("Bottle00Broken", ply.GetWorldPosition() + new Vector2(ply.FacingDirection*10, 10), 0f, new Vector2(ply.FacingDirection*20, 20), 0f);
+			this.wasWalking = true;
 		}
-	}
-
-	private void FireHook()
-	{
-		CancelRope(); // clean up any previous hook/travel first
-
-		Vector2 start = ply.GetWorldPosition();
-		Vector2 aim = ply.AimVector;
-		Vector2 direction = aim.LengthSquared() > 0.0001f
-			? Vector2.Normalize(aim)
-			: new Vector2(ply.FacingDirection, 0f);
-
-		Vector2 end = start + direction * MAX_ROPE_DISTANCE;
-
-		RayCastInput input = new RayCastInput(true); // closest hit only
-		RayCastResult[] results = Game.RayCast(start, end, input);
-
-		if (results.Length > 0 && results[0].Hit)
+		if(hook!=null && hook.DestructionInitiated)
 		{
-			targetPosition = results[0].Position;
-			anchorMarker = Game.CreateObject("BgValve00E", targetPosition, 0f);
-
-			state = RopeState.Attached;
-			attachTime = Game.TotalElapsedGameTime;
+			// snapshot everything AT THE MOMENT OF IMPACT
+			pendingAnchorPos = hook.GetWorldPosition();
+			pendingPlyPos = ply.GetWorldPosition();
+			pendingPlyVel = ply.GetLinearVelocity();
+			grabTime = Game.TotalElapsedGameTime + GRAB_DELAY_MS;
+			pendingGrab = true;
+			hook = null;
+		}
+		if(pendingGrab && Game.TotalElapsedGameTime >= grabTime)
+		{
+			CreateRope(pendingAnchorPos, pendingPlyPos, pendingPlyVel);
+			pendingGrab = false;
+		}
+		if(playerSwingRegulator!=null)
+		{
+			ply.SetLinearVelocity(playerSwingRegulator.GetLinearVelocity());
+			ply.SetWorldPosition(playerSwingRegulator.GetWorldPosition());
+		}
+		if(!ply.IsWalking)
+		{
+			this.wasWalking = false;
 		}
 	}
-
-	private void CancelRope()
+	public void CreateRope(Vector2 anchorPos, Vector2 snapshotPlyPos, Vector2 snapshotPlyVel)
 	{
-		if (this.anchorMarker != null) this.anchorMarker.Destroy();
-		this.anchorMarker = null;
-		this.state = RopeState.Idle;
+		if(this.distanceJoint!=null) this.distanceJoint.Destroy();
+		if(this.targetObjectJoint!=null) this.targetObjectJoint.Destroy();
+		if(this.regulatorDistanceJoint!=null) this.regulatorDistanceJoint.Destroy();
+		if(this.regulatorTargetObjectJoint!=null) this.regulatorTargetObjectJoint.Destroy();
+		if(this.anchor!=null) this.anchor.Destroy();
+		if(this.playerSwingRegulator!=null) this.playerSwingRegulator.Destroy();
+
+		anchor = Game.CreateObject("BgValve00E", anchorPos, 0f);
+		// spawn the regulator at the SNAPSHOT position, not ply's live (400ms-later) position
+		playerSwingRegulator = Game.CreateObject("StoneDebris00A", snapshotPlyPos, 0f);
+		playerSwingRegulator.SetLinearVelocity(snapshotPlyVel);
+		
+		IObjectDistanceJoint distanceJoint = (IObjectDistanceJoint)Game.CreateObject("DistanceJoint");
+		distanceJoint.SetWorldPosition(anchor.GetWorldPosition());
+		distanceJoint.SetTargetObject(anchor);
+		IObjectDistanceJoint regulatorDistanceJoint = (IObjectDistanceJoint)Game.CreateObject("DistanceJoint");
+		regulatorDistanceJoint.SetWorldPosition(anchor.GetWorldPosition());
+		regulatorDistanceJoint.SetTargetObject(anchor);
+	
+		// use the SNAPSHOT position to build the rest length, but still target the live ply
+		IObjectTargetObjectJoint targetObjectJoint = (IObjectTargetObjectJoint)Game.CreateObject("TargetObjectJoint");
+		targetObjectJoint.SetWorldPosition(snapshotPlyPos + new Vector2(0f, 8f));
+		targetObjectJoint.SetTargetObject(ply);
+		IObjectTargetObjectJoint regulatorTargetObjectJoint = (IObjectTargetObjectJoint)Game.CreateObject("TargetObjectJoint");
+		regulatorTargetObjectJoint.SetWorldPosition(playerSwingRegulator.GetWorldPosition() + new Vector2(0f, 8f));
+		regulatorTargetObjectJoint.SetTargetObject(playerSwingRegulator);
+	
+		distanceJoint.SetTargetObjectJoint(targetObjectJoint);
+		regulatorDistanceJoint.SetTargetObjectJoint(regulatorTargetObjectJoint);
+		
+		distanceJoint.SetLineVisual(LineVisual.DJWire);
+		distanceJoint.SetLengthType(DistanceJointLengthType.Elastic);
 	}
 }
-
 
 List<RopeController> ropeControllers = new List<RopeController>();
 public void OnStartup()
