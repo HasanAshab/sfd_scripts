@@ -13,10 +13,10 @@ public class RopeController
 
 	private bool wasWalkKeyPressed = false;
 
-	private const float TRAVEL_DELAY_MS = 1000f;   // 1 second pause before you get pulled
-	private const float PULL_SPEED = 60f;          // tune to taste
+	private const float TRAVEL_DELAY_MS = 700f;   // 1 second pause before you get pulled
+	private const float PULL_SPEED = 10f;          // tune to taste
 	private const float ARRIVAL_DISTANCE = 15f;     // how close counts as "reached it"
-	private const float MAX_ROPE_DISTANCE = 500f;   // max raycast range
+	private const float MAX_ROPE_DISTANCE = 800f;   // max raycast range
 
 	public RopeController(IPlayer ply)
 	{

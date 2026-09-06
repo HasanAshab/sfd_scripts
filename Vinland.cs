@@ -26,6 +26,11 @@ private bool p2GuardEnabled = false;
 // Track player facing directions for P1 backstab detection
 private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
 
+// Track bowman kiting state
+private Dictionary<int, bool> bowmanRetreating = new Dictionary<int, bool>();
+private const float MIN_ENGAGE_DISTANCE = 250f; // Distance to start retreating
+private const float RETREAT_STEP = 120f; // How far to step back
+
 // Track players killed by P2's jump attack for respawning
 private class KilledPlayerData
 {
@@ -119,6 +124,9 @@ public void OnStartup()
     
     // Set up update callback for Bjorn's low HP strength boost
     Events.UpdateCallback.Start(OnUpdate, 100); // Check every 100ms
+    
+    // Set up bowman kiting behavior check (every 250ms)
+    Events.UpdateCallback.Start(OnBowmanKiteCheck, 250);
     
     // Set up melee hit callback for P1 backstab mechanics
     Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
@@ -530,7 +538,8 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             });
             BotBehaviorSet bsBowman = SetBotBehavior(troop, PredefinedAIType.BotC);
             bsBowman.MeleeUsage = false;
-            bsBowman.SeekCoverWhileShooting = 1.0f;
+            bsBowman.RangedWeaponUsage = true;
+            bsBowman.RangedWeaponAccuracy = 0.8f;
             troop.SetBotBehaviorSet(bsBowman);
             break;
             
@@ -601,7 +610,8 @@ private void ConfigureTroop(IPlayer troop, string troopType, IPlayer leader)
             });
             BotBehaviorSet bsFireBowman = SetBotBehavior(troop, PredefinedAIType.BotA);
             bsFireBowman.MeleeUsage = false;
-            bsFireBowman.SeekCoverWhileShooting = 1.0f;
+            bsFireBowman.RangedWeaponUsage = true;
+            bsFireBowman.RangedWeaponAccuracy = 0.8f;
             troop.SetBotBehaviorSet(bsFireBowman);
             break;
     }
