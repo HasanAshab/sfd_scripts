@@ -24,8 +24,8 @@ public class RopeController
 
 	// --- pull-in state using physics force ---
 	private bool pulling = false;
-	private const float PULL_FORCE = 30f;        // force applied toward anchor
-	private const float MIN_PULL_DIST = 30f;     // stop pulling when this close
+	private const float PULL_FORCE = 0.55f;        // force applied toward anchor
+	private const float MIN_PULL_DIST = 15f;     // stop pulling when this close
 	// ---------------------------
 
 	public RopeController(IPlayer ply)
