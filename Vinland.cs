@@ -1248,6 +1248,71 @@ public void OnUpdate(float elapsed)
     HandleBjornLowHP();
 }
 
+public void OnBowmanKiteCheck(float elapsed)
+{
+    // Check all troops for kiting behavior (Bowman and FireBowman)
+    CheckBowmanKiting(p1Troops);
+    CheckBowmanKiting(p2Troops);
+}
+
+private void CheckBowmanKiting(List<IPlayer> troops)
+{
+    foreach (IPlayer troop in troops)
+    {
+        if (troop == null || troop.IsDead) continue;
+        
+        IProfile profile = troop.GetProfile();
+        string troopName = profile.Name;
+        
+        // Only apply to Bowman and FireBowman
+        if (troopName != "Bowman" && troopName != "firebowman") continue;
+        
+        int troopId = troop.UniqueID;
+        
+        // Initialize retreat state if not tracked
+        if (!bowmanRetreating.ContainsKey(troopId))
+        {
+            bowmanRetreating[troopId] = false;
+        }
+        
+        IObject target = troop.GetBotTarget();
+        if (target == null) continue;
+        
+        Vector2 myPos = troop.GetWorldPosition();
+        Vector2 targetPos = target.GetWorldPosition();
+        float dx = myPos.X - targetPos.X;
+        float dy = myPos.Y - targetPos.Y;
+        float distance = (float)Math.Sqrt(dx * dx + dy * dy);
+        
+        if (!bowmanRetreating[troopId])
+        {
+            if (distance < MIN_ENGAGE_DISTANCE)
+            {
+                // Enemy is too close - take manual control and step back
+                bowmanRetreating[troopId] = true;
+                troop.SetBotBehaviorActive(false);
+                troop.ClearCommandQueue();
+                
+                float dirX = dx >= 0 ? 1f : -1f; // step away on the X axis
+                Vector2 retreatPos = new Vector2(myPos.X + dirX * RETREAT_STEP, myPos.Y);
+                
+                troop.AddCommand(new PlayerCommand(PlayerCommandType.Run));
+                troop.AddCommand(new PlayerCommand(PlayerCommandType.StartMoveToPosition, retreatPos));
+                troop.AddCommand(new PlayerCommand(PlayerCommandType.WaitDestinationReached));
+            }
+        }
+        else
+        {
+            // Wait until the retreat command queue finishes, then give control back to the AI
+            if (troop.PerformedCommandCount >= troop.TotalCommandCount)
+            {
+                troop.SetBotBehaviorActive(true);
+                bowmanRetreating[troopId] = false;
+            }
+        }
+    }
+}
+
 private void HandleBjornLowHP()
 {
     if (bjorn == null || bjorn.IsDead) return;
