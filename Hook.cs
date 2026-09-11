@@ -154,11 +154,11 @@ public class RopeController
 			// Rotate aim continuously using the left/right virtual keys.
 			// These are the same keys that normally move the player left/right,
 			// so we cancel out any horizontal velocity they cause below.
-			if(ply.KeyPressed(VirtualKey.AIM_RUN_LEFT))
+			if(ply.KeyPressed(ply.FacingDirection == 1 ? VirtualKey.AIM_RUN_RIGHT : VirtualKey.CROUCH_ROLL_DIVE))
 			{
 				this.aimAngle -= AIM_ROTATE_SPEED;
 			}
-			if(ply.KeyPressed(VirtualKey.AIM_RUN_RIGHT))
+			if(ply.KeyPressed(ply.FacingDirection == 1 ? VirtualKey.CROUCH_ROLL_DIVE : VirtualKey.AIM_RUN_LEFT))
 			{
 				this.aimAngle += AIM_ROTATE_SPEED;
 			}
