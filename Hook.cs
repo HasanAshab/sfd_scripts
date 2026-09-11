@@ -22,6 +22,9 @@ public class RopeController
 	private float ropeReleaseTime = 0f; // Time when rope was released
 	private const float IMPACT_PROTECTION_DURATION = 2000f; // 2 seconds in milliseconds
 	private float originalImpactDamageMod = -1f; // Store original modifier
+	
+	private float lastMeleeActionTime = 0f; // Track last melee action
+	private const float MELEE_COOLDOWN = 100f; // Cooldown between area damage applications
 
 	// --- aiming system ---
 	private bool isAiming = false;
@@ -355,18 +358,18 @@ public class RopeController
 			ropeReleaseTime = 0f;
 		}
 		
-		// Handle melee attack area damage when on rope
-		if(isOnRope && (ply.IsKicking || ply.IsPunching))
-		{
-			ApplyMeleeAreaDamage();
-		}
-		
 		// Update walk key state for next frame
 		this.wasWalkingPressed = ply.IsWalking;
 	}
 	
-	private void ApplyMeleeAreaDamage()
+	public void OnMeleeAction()
 	{
+		// Only apply area damage if on rope and cooldown has passed
+		if(!isOnRope) return;
+		if(Game.TotalElapsedGameTime - lastMeleeActionTime < MELEE_COOLDOWN) return;
+		
+		lastMeleeActionTime = Game.TotalElapsedGameTime;
+		
 		Vector2 playerPos = ply.GetWorldPosition();
 		const float MELEE_AREA_RADIUS = 30f;
 		
@@ -388,7 +391,7 @@ public class RopeController
 		else if(currentMelee == WeaponItem.PIPE) weaponDamage = 14f;
 		else if(currentMelee == WeaponItem.BATON) weaponDamage = 10f;
 		else if(currentMelee == WeaponItem.HAMMER) weaponDamage = 18f;
-		else if(currentMelee == WeaponItem.LEADPIPE) weaponDamage = 16f;
+		else if(currentMelee == WeaponItem.LEAD_PIPE) weaponDamage = 16f;
 		else if(currentMelee == WeaponItem.BOTTLE) weaponDamage = 8f;
 		else if(currentMelee == WeaponItem.CHAIN) weaponDamage = 11f;
 		
@@ -467,6 +470,7 @@ public class RopeController
 }
 
 List<RopeController> ropeControllers = new List<RopeController>();
+Events.PlayerMeleeActionCallback meleeCallback = null;
 
 public void OnStartup()
 {
@@ -481,6 +485,9 @@ public void OnStartup()
 	{
 		ropeControllers.Add(new RopeController(ply));
 	}
+	
+	// Register melee action callback for area damage
+	meleeCallback = Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
 }
 
 public void GrapplingHook(TriggerArgs args)
@@ -488,5 +495,18 @@ public void GrapplingHook(TriggerArgs args)
 	foreach(RopeController r in ropeControllers)
 	{
 		r.Update();
+	}
+}
+
+public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
+{
+	// Find the controller for this player and trigger area damage if on rope
+	foreach(RopeController controller in ropeControllers)
+	{
+		if(controller.ply.UniqueID == player.UniqueID)
+		{
+			controller.OnMeleeAction();
+			break;
+		}
 	}
 }
