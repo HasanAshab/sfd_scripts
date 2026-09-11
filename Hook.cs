@@ -29,6 +29,7 @@ public class RopeController
 	private IObject aimIndicator = null;
 	private float walkKeyHoldTime = 0f;
 	private const float QUICK_TAP_THRESHOLD = 200f;
+	private Vector2 aimStartPosition; // player position when aiming began; X is locked while aiming
 	// ---------------------------
 
 	// --- delayed-grab state ---
@@ -140,6 +141,7 @@ public class RopeController
 				// Enter aiming mode
 				this.isAiming = true;
 				this.aimAngle = GetDefaultAimAngle();
+				this.aimStartPosition = ply.GetWorldPosition();
 				
 				// Create aim indicator
 				this.aimIndicator = Game.CreateObject("IsMIcon", ply.GetWorldPosition());
@@ -162,10 +164,14 @@ public class RopeController
 			}
 			
 			// Prevent the player from actually walking left/right while aiming.
-			// Movement from AIM_RUN_LEFT/RIGHT has already been applied as
-			// velocity by the engine this tick, so we zero out the horizontal
-			// component here. Vertical velocity (gravity/falling/jump) is left
-			// alone so the player still falls normally while aiming.
+			// Zeroing velocity alone can still let one tick of drift through if
+			// the engine moves the player via a direct position step before this
+			// script runs - so we also pin X back to where aiming started.
+			// Y is left alone so gravity/falling still behaves normally.
+			Vector2 pos = ply.GetWorldPosition();
+			pos.X = this.aimStartPosition.X;
+			ply.SetWorldPosition(pos);
+			
 			Vector2 vel = ply.GetLinearVelocity();
 			vel.X = 0f;
 			ply.SetLinearVelocity(vel);
