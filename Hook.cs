@@ -72,7 +72,61 @@ public class RopeController
 			}
 		}
 		
-		// Check if hook hit something
+		// Check if hook hit something (collided with non-background objects)
+		if(hook != null && !hook.DestructionInitiated)
+		{
+			Vector2 hookPos = hook.GetWorldPosition();
+			
+			// Check for collision with objects in a small area around the hook
+			Area checkArea = new Area(hookPos.Y + 5, hookPos.X - 5, hookPos.Y - 5, hookPos.X + 5);
+			IObject[] nearbyObjects = Game.GetObjectsByArea(checkArea);
+			
+			bool hitSomething = false;
+			foreach(IObject obj in nearbyObjects)
+			{
+				// Skip the hook itself and background objects
+				if(obj.UniqueID != hook.UniqueID && !obj.Name.StartsWith("Bg") && !obj.Name.StartsWith("BG"))
+				{
+					hitSomething = true;
+					break;
+				}
+			}
+			
+			// Also check for players near the hook
+			if(!hitSomething)
+			{
+				foreach(IPlayer p in Game.GetPlayers())
+				{
+					if(Vector2.Distance(hookPos, p.GetWorldPosition()) < 10f)
+					{
+						hitSomething = true;
+						break;
+					}
+				}
+			}
+			
+			// Check for tiles/ground using raycast
+			if(!hitSomething)
+			{
+				RayCastResult groundCheck = Game.RayCast(hookPos, hookPos + new Vector2(0, -8), new RayCastInput()
+				{
+					IncludeOverlap = true
+				});
+				
+				if(groundCheck.Hit && groundCheck.HitObject == null) // Hit a tile, not an object
+				{
+					hitSomething = true;
+				}
+			}
+			
+			if(hitSomething)
+			{
+				// Destroy the hook to trigger rope attachment
+				hook.Destroy();
+			}
+		}
+		
+		// Check if hook was destroyed (naturally broke or we destroyed it)
 		if(hook!=null && hook.DestructionInitiated)
 		{
 			pendingAnchorPos = hook.GetWorldPosition();
