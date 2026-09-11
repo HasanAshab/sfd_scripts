@@ -15,6 +15,9 @@ public class RopeController
 
 	public bool isOnRope = false;
 	private bool wasWalkingPressed = false;
+	// True for the remainder of a walk press that was used to cancel a rope/hook,
+	// so that press's eventual release isn't misread as a fresh quick-tap throw.
+	private bool walkPressConsumedByCancel = false;
 
 	// --- aiming system ---
 	private bool isAiming = false;
@@ -109,6 +112,7 @@ public class RopeController
 		{
 			CancelAiming();
 			CancelRope();
+			this.walkPressConsumedByCancel = true;
 			this.wasWalkingPressed = ply.IsWalking;
 			return;
 		}
@@ -120,7 +124,7 @@ public class RopeController
 		}
 		
 		// Check if should enter aiming mode (holding walk)
-		if(ply.IsWalking && !isOnRope && hook == null && !pendingGrab && !isAiming)
+		if(ply.IsWalking && !walkPressConsumedByCancel && !isOnRope && hook == null && !pendingGrab && !isAiming)
 		{
 			float holdDuration = Game.TotalElapsedGameTime - this.walkKeyHoldTime;
 			if(holdDuration >= QUICK_TAP_THRESHOLD)
@@ -175,7 +179,7 @@ public class RopeController
 				CancelAiming();
 			}
 		}
-		else if(walkJustReleased && hook == null && !pendingGrab && !isOnRope)
+		else if(walkJustReleased && !walkPressConsumedByCancel && hook == null && !pendingGrab && !isOnRope)
 		{
 			// Quick tap - throw horizontally
 			float holdDuration = Game.TotalElapsedGameTime - this.walkKeyHoldTime;
@@ -184,6 +188,13 @@ public class RopeController
 				float angle = (ply.FacingDirection > 0) ? 0f : 3.14159f;
 				ThrowHook(angle);
 			}
+		}
+		
+		// The consumed press cycle ends once the key is released - clear the
+		// flag so the next fresh press behaves normally again.
+		if(walkJustReleased)
+		{
+			this.walkPressConsumedByCancel = false;
 		}
 		
 		// Check if hook hit something (collided with non-background objects)
