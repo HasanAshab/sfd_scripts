@@ -111,7 +111,7 @@ public class RopeController
 		hook = Game.CreateObject("Bottle00Broken", 
 			ply.GetWorldPosition() + new Vector2(direction.X * 10, 10), 
 			0f, 
-			direction * 20, 
+			direction * 40, 
 			0f);
 		hookThrowPos = ply.GetWorldPosition();
 	}
