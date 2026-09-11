@@ -101,6 +101,14 @@ public class RopeController
 		hookThrowPos = ply.GetWorldPosition();
 	}
 	
+	// Default throw/aim direction: diagonally forward (facing) and downward,
+	// equivalent to a raw vector of (FacingDirection*20, 20). Using an angle
+	// keeps this compatible with ThrowHook() and the manual-aim system.
+	private float GetDefaultAimAngle()
+	{
+		return (float)Math.Atan2(20f, ply.FacingDirection * 20f);
+	}
+	
 	public void Update()
 	{
 		// Detect walk key press (rising edge)
@@ -131,7 +139,7 @@ public class RopeController
 			{
 				// Enter aiming mode
 				this.isAiming = true;
-				this.aimAngle = (ply.FacingDirection > 0) ? 0f : 3.14159f;
+				this.aimAngle = GetDefaultAimAngle();
 				
 				// Create aim indicator
 				this.aimIndicator = Game.CreateObject("IsMIcon", ply.GetWorldPosition());
@@ -185,7 +193,7 @@ public class RopeController
 			float holdDuration = Game.TotalElapsedGameTime - this.walkKeyHoldTime;
 			if(holdDuration < QUICK_TAP_THRESHOLD)
 			{
-				float angle = (ply.FacingDirection > 0) ? 0f : 3.14159f;
+				float angle = GetDefaultAimAngle();
 				ThrowHook(angle);
 			}
 		}
