@@ -16,19 +16,6 @@ public class RopeController
 	public bool isOnRope = false;
 	private bool wasWalkingPressed = false;
 
-	// --- aiming system ---
-	private bool isAiming = false;
-	private float aimAngle = 0f; // angle in radians
-	private const float AIM_DISTANCE = 25f; // distance from player to aim indicator
-	private const float AIM_ROTATE_SPEED = 0.15f; // radians per key press
-	private IObject aimIndicator = null;
-	private float walkKeyHoldTime = 0f;
-	private const float QUICK_TAP_THRESHOLD = 150f; // milliseconds - if released before this, it's a quick tap
-	
-	// Key press tracking
-	private Dictionary<VirtualKey, bool> keyStates = new Dictionary<VirtualKey, bool>();
-	// ---------------------------
-
 	// --- delayed-grab state ---
 	private const float GRAB_DELAY_MS = 100f;
 	private bool pendingGrab = false;
@@ -46,32 +33,6 @@ public class RopeController
 	public RopeController(IPlayer ply)
 	{
 		this.ply = ply;
-		
-		// Initialize key states
-		keyStates[VirtualKey.AIM_RUN_LEFT] = false;
-		keyStates[VirtualKey.AIM_RUN_RIGHT] = false;
-	}
-	
-	public void OnKeyEvent(VirtualKeyInfo[] keyEvents)
-	{
-		// Only process keys if aiming
-		if(!isAiming) return;
-		
-		// Update key states for left/right
-		foreach(VirtualKeyInfo keyInfo in keyEvents)
-		{
-			if(keyInfo.Event == VirtualKeyEvent.Pressed)
-			{
-				if(keyInfo.Key == VirtualKey.AIM_RUN_LEFT)
-				{
-					this.aimAngle += AIM_ROTATE_SPEED;
-				}
-				else if(keyInfo.Key == VirtualKey.AIM_RUN_RIGHT)
-				{
-					this.aimAngle -= AIM_ROTATE_SPEED;
-				}
-			}
-		}
 	}
 	
 	private void CancelRope()
@@ -95,121 +56,28 @@ public class RopeController
 		this.isOnRope = false;
 	}
 	
-	private void CancelAiming()
-	{
-		if(this.aimIndicator != null)
-		{
-			this.aimIndicator.Remove();
-			this.aimIndicator = null;
-		}
-		this.isAiming = false;
-		this.walkKeyHoldTime = 0f;
-		
-		// Re-enable player input if it was disabled
-		ply.SetInputEnabled(true);
-	}
-	
-	private void ThrowHook(Vector2 direction)
-	{
-		// Normalize direction and use it for both position and velocity
-		direction.Normalize();
-		hook = Game.CreateObject("Bottle00Broken", 
-			ply.GetWorldPosition() + new Vector2(direction.X * 10, 10), // Always spawn slightly above
-			0f, 
-			direction * 20, 
-			0f);
-		hookThrowPos = ply.GetWorldPosition();
-	}
-	
 	public void Update()
 	{
-		// Cancel rope/aiming with walk key press (only if rope/hook/aiming exists)
-		if(ply.IsWalking && !this.wasWalkingPressed)
+		// Detect walk key press (rising edge)
+		bool walkJustPressed = ply.IsWalking && !this.wasWalkingPressed;
+		
+		if(walkJustPressed)
 		{
+			// Walk key just pressed
 			if(hook != null || pendingGrab || isOnRope)
 			{
+				// Cancel rope if hook is active, pending, or rope is attached
 				CancelRope();
-				this.wasWalkingPressed = ply.IsWalking; // Update immediately to prevent throw
-				return; // Exit early
-			}
-			else if(isAiming)
-			{
-				// Cancel aiming if walk pressed during aim
-				CancelAiming();
-				this.wasWalkingPressed = ply.IsWalking;
-				return; // Exit early
-			}
-		}
-		
-		// Handle aiming mode
-		if(ply.IsWalking && !isOnRope && hook == null && !pendingGrab)
-		{
-			if(!this.wasWalkingPressed)
-			{
-				// Walk key just pressed - start timing
-				this.walkKeyHoldTime = Game.TotalElapsedGameTime;
-				this.isAiming = false;
 			}
 			else
 			{
-				// Walk key is being held
-				float holdDuration = Game.TotalElapsedGameTime - this.walkKeyHoldTime;
-				
-				if(holdDuration >= QUICK_TAP_THRESHOLD && !this.isAiming)
-				{
-					// Start aiming mode
-					this.isAiming = true;
-					// Default angle is horizontal in facing direction (0 for right, PI for left)
-					this.aimAngle = (ply.FacingDirection > 0) ? 0f : 3.14159f;
-					
-					// Create aim indicator
-					if(this.aimIndicator == null)
-					{
-						this.aimIndicator = Game.CreateObject("IsMIcon", ply.GetWorldPosition());
-					}
-					
-					// Disable player movement during aiming
-					ply.SetInputEnabled(false);
-				}
-				
-				if(this.isAiming)
-				{
-					// Update aim indicator position
-					if(this.aimIndicator != null)
-					{
-						Vector2 aimPos = ply.GetWorldPosition() + new Vector2(
-							(float)Math.Cos(aimAngle) * AIM_DISTANCE,
-							(float)Math.Sin(aimAngle) * AIM_DISTANCE
-						);
-						this.aimIndicator.SetWorldPosition(aimPos);
-					}
-				}
-			}
-		}
-		else if(!ply.IsWalking && this.wasWalkingPressed)
-		{
-			// Walk key just released
-			if(this.isAiming)
-			{
-				// Throw hook in aimed direction
-				Vector2 throwDirection = new Vector2(
-					(float)Math.Cos(aimAngle),
-					(float)Math.Sin(aimAngle)
-				);
-				ThrowHook(throwDirection);
-				CancelAiming();
-			}
-			else if(hook == null && !pendingGrab && !isOnRope)
-			{
-				// Quick tap - check if it was quick enough
-				float holdDuration = Game.TotalElapsedGameTime - this.walkKeyHoldTime;
-				
-				if(holdDuration < QUICK_TAP_THRESHOLD)
-				{
-					// Quick tap - throw horizontally in facing direction
-					Vector2 throwDirection = new Vector2(ply.FacingDirection, 0);
-					ThrowHook(throwDirection);
-				}
+				// Throw hook in facing direction
+				hook = Game.CreateObject("Bottle00Broken", 
+					ply.GetWorldPosition() + new Vector2(ply.FacingDirection*10, 10), 
+					0f, 
+					new Vector2(ply.FacingDirection*20, 0), 
+					0f);
+				hookThrowPos = ply.GetWorldPosition();
 			}
 		}
 		
@@ -230,11 +98,9 @@ public class RopeController
 				bool hitSomething = false;
 				foreach(IObject obj in nearbyObjects)
 				{
-					Game.ShowChatMessage("(" + obj.Name + " respawns left)");
 					// Skip the hook itself and background objects
 					if(obj.UniqueID != hook.UniqueID && obj.UniqueID != ply.UniqueID && !obj.Name.StartsWith("Bg") && !obj.Name.StartsWith("BG") && !obj.Name.StartsWith("SoundArea") && !obj.Name.Contains("Spawn") && !obj.Name.Contains("Trigger") && !obj.Name.Contains("Ladder") && !obj.Name.Contains("Marker"))
 					{
-						Game.ShowChatMessage("COLONEL RESPAWNED! (" + obj.Name + " respawns left)");
 						hitSomething = true;
 						break;
 					}
@@ -245,7 +111,7 @@ public class RopeController
 				{
 					foreach(IPlayer p in Game.GetPlayers())
 					{
-						if(Vector2.Distance(hookPos, p.GetWorldPosition()) < 10f)
+						if(p.UniqueID != ply.UniqueID && Vector2.Distance(hookPos, p.GetWorldPosition()) < 10f)
 						{
 							hitSomething = true;
 							break;
@@ -359,7 +225,6 @@ public class RopeController
 }
 
 List<RopeController> ropeControllers = new List<RopeController>();
-Events.PlayerKeyInputCallback keyInputCallback = null;
 
 public void OnStartup()
 {
@@ -373,22 +238,6 @@ public void OnStartup()
 	foreach(IPlayer ply in Game.GetPlayers())
 	{
 		ropeControllers.Add(new RopeController(ply));
-	}
-	
-	// Register key input callback
-	keyInputCallback = Events.PlayerKeyInputCallback.Start(OnPlayerKeyInput);
-}
-
-public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyEvents)
-{
-	// Find the rope controller for this player
-	foreach(RopeController r in ropeControllers)
-	{
-		if(r.ply.UniqueID == player.UniqueID)
-		{
-			r.OnKeyEvent(keyEvents);
-			break;
-		}
 	}
 }
 
