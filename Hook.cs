@@ -108,12 +108,12 @@ public class RopeController
 			// Check for tiles/ground using raycast
 			if(!hitSomething)
 			{
-				RayCastResult groundCheck = Game.RayCast(hookPos, hookPos + new Vector2(0, -8), new RayCastInput()
+				RayCastResult[] groundCheck = Game.RayCast(hookPos, hookPos + new Vector2(0, -8), new RayCastInput()
 				{
 					IncludeOverlap = true
 				});
 				
-				if(groundCheck.Hit && groundCheck.HitObject == null) // Hit a tile, not an object
+				if(groundCheck.Length > 0 && groundCheck[0].Hit && groundCheck[0].HitObject == null) // Hit a tile, not an object
 				{
 					hitSomething = true;
 				}
