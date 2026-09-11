@@ -86,7 +86,7 @@ public class RopeController
 			{
                 Game.ShowChatMessage("(" + obj.Name + " respawns left)");
 				// Skip the hook itself and background objects
-				if(obj.UniqueID != hook.UniqueID && obj.UniqueID != ply.UniqueID && !obj.Name.StartsWith("Bg") && !obj.Name.StartsWith("BG") && !obj.Name.StartsWith("SoundArea") && !obj.Name.StartsWith("Spawn") && !obj.Name.StartsWith("TimerTrigger"))
+				if(obj.UniqueID != hook.UniqueID && obj.UniqueID != ply.UniqueID && !obj.Name.StartsWith("Bg") && !obj.Name.StartsWith("BG") && !obj.Name.StartsWith("SoundArea") && !obj.Name.Contains("Spawn") && !obj.Name.Contains("Trigger") && !obj.Name.Contains("Ladder"))
 				{
 					Game.ShowChatMessage("COLONEL RESPAWNED! (" + obj.Name + " respawns left)");
 					hitSomething = true;
