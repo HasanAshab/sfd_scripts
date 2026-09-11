@@ -65,6 +65,9 @@ public class RopeController
 		this.pendingGrab = false;
 		this.pulling = false;
 		this.isOnRope = false;
+		
+		// Reset hold time to prevent triggering aim after cancel
+		this.walkKeyHoldTime = 999999f;
 	}
 	
 	private void CancelAiming()
@@ -99,12 +102,13 @@ public class RopeController
 		if(walkJustPressed && (hook != null || pendingGrab || isOnRope))
 		{
 			CancelRope();
+			CancelAiming(); // Also cancel aim if active
 			this.wasWalkingPressed = ply.IsWalking;
 			return;
 		}
 		
-		// Start tracking hold time when walk pressed
-		if(walkJustPressed && !isOnRope && hook == null && !pendingGrab)
+		// Start tracking hold time when walk pressed (only if nothing is active)
+		if(walkJustPressed && !isOnRope && hook == null && !pendingGrab && !isAiming)
 		{
 			this.walkKeyHoldTime = Game.TotalElapsedGameTime;
 		}
