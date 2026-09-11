@@ -15,13 +15,14 @@ public class RopeController
 
 	public bool isOnRope = false;
 	private bool wasWalkingPressed = false;
-	private bool wasBlockingPressed = false;
 
 	// --- aiming system ---
 	private bool isAiming = false;
 	private float aimAngle = 0f;
 	private const float AIM_DISTANCE = 25f;
-	private const float AIM_ROTATE_SPEED = 0.1f;
+	// Tuned for continuous per-tick rotation (Update runs every 10ms).
+	// 0.03 rad/tick ~= 1.7 rad/sec ~= 100 deg/sec. Adjust to taste.
+	private const float AIM_ROTATE_SPEED = 0.03f;
 	private IObject aimIndicator = null;
 	private float walkKeyHoldTime = 0f;
 	private const float QUICK_TAP_THRESHOLD = 200f;
@@ -66,8 +67,10 @@ public class RopeController
 		this.pulling = false;
 		this.isOnRope = false;
 		
-		// Reset hold time to prevent triggering aim after cancel
-		this.walkKeyHoldTime = 999999f;
+		// Reset hold time relative to *now* so a still-held walk key doesn't
+		// instantly read as a long hold and re-trigger aiming.
+		// (Do NOT let anything after this overwrite it back to 0 - see CancelAiming.)
+		this.walkKeyHoldTime = Game.TotalElapsedGameTime;
 	}
 	
 	private void CancelAiming()
@@ -78,7 +81,10 @@ public class RopeController
 			this.aimIndicator = null;
 		}
 		this.isAiming = false;
-		this.walkKeyHoldTime = 0f;
+		// NOTE: intentionally NOT touching walkKeyHoldTime here anymore.
+		// It used to be reset to 0f, which - when this is called right after
+		// CancelRope() in the same tick - wiped out CancelRope's guard and
+		// caused aiming to instantly restart while the walk key was still held.
 	}
 	
 	private void ThrowHook(float angleRadians)
@@ -101,8 +107,8 @@ public class RopeController
 		// Cancel rope/hook if walk pressed while rope active
 		if(walkJustPressed && (hook != null || pendingGrab || isOnRope))
 		{
+			CancelAiming();
 			CancelRope();
-			CancelAiming(); // Also cancel aim if active
 			this.wasWalkingPressed = ply.IsWalking;
 			return;
 		}
@@ -131,13 +137,26 @@ public class RopeController
 		// Update aiming
 		if(isAiming)
 		{
-			// Use block key to rotate (left = counter-clockwise, right = clockwise based on facing)
-			bool blockJustPressed = ply.IsBlocking && !this.wasBlockingPressed;
-			if(blockJustPressed)
+			// Rotate aim continuously using the left/right virtual keys.
+			// These are the same keys that normally move the player left/right,
+			// so we cancel out any horizontal velocity they cause below.
+			if(ply.KeyPressed(VirtualKey.AIM_RUN_LEFT))
 			{
-				// Rotate aim
-				this.aimAngle += AIM_ROTATE_SPEED * ply.FacingDirection;
+				this.aimAngle -= AIM_ROTATE_SPEED;
 			}
+			if(ply.KeyPressed(VirtualKey.AIM_RUN_RIGHT))
+			{
+				this.aimAngle += AIM_ROTATE_SPEED;
+			}
+			
+			// Prevent the player from actually walking left/right while aiming.
+			// Movement from AIM_RUN_LEFT/RIGHT has already been applied as
+			// velocity by the engine this tick, so we zero out the horizontal
+			// component here. Vertical velocity (gravity/falling/jump) is left
+			// alone so the player still falls normally while aiming.
+			Vector2 vel = ply.GetLinearVelocity();
+			vel.X = 0f;
+			ply.SetLinearVelocity(vel);
 			
 			// Update aim indicator position
 			if(this.aimIndicator != null)
@@ -270,9 +289,8 @@ public class RopeController
 			ply.SetWorldPosition(playerSwingRegulator.GetWorldPosition());
 		}
 		
-		// Update walk and block key states for next frame
+		// Update walk key state for next frame
 		this.wasWalkingPressed = ply.IsWalking;
-		this.wasBlockingPressed = ply.IsBlocking;
 	}
 	public void CreateRope(Vector2 anchorPos)
 	{
