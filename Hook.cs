@@ -136,15 +136,6 @@ public class RopeController
 				}
 			}
 		}
-				}
-			}
-			
-			if(hitSomething)
-			{
-				// Destroy the hook to trigger rope attachment
-				hook.Destroy();
-			}
-		}
 		
 		// Check if hook was destroyed (naturally broke or we destroyed it)
 		if(hook!=null && hook.DestructionInitiated)
