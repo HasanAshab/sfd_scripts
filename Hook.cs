@@ -17,15 +17,15 @@ public class RopeController
 	private bool wasWalkingPressed = false;
 
 	// --- delayed-grab state ---
-	private const float GRAB_DELAY_MS = 400f;
+	private const float GRAB_DELAY_MS = 100f;
 	private bool pendingGrab = false;
 	private float grabTime = 0f;
 	private Vector2 pendingAnchorPos;
 
 	// --- pull-in state using physics force ---
 	private bool pulling = false;
-	private const float PULL_FORCE = 30f;        // force applied toward anchor
-	private const float MIN_PULL_DIST = 30f;     // stop pulling when this close
+	private const float PULL_FORCE = 0.55f;        // force applied toward anchor
+	private const float MIN_PULL_DIST = 20f;     // stop pulling when this close
 	// ---------------------------
 
 	public RopeController(IPlayer ply)
