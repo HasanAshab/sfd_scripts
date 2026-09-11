@@ -21,11 +21,13 @@ public class RopeController
 	private bool pendingGrab = false;
 	private float grabTime = 0f;
 	private Vector2 pendingAnchorPos;
+	private Vector2 hookThrowPos; // position where hook was thrown from
 
 	// --- pull-in state using physics force ---
 	private bool pulling = false;
 	private const float PULL_FORCE = 0.55f;        // force applied toward anchor
 	private const float MIN_PULL_DIST = 20f;     // stop pulling when this close
+	private const float MIN_HOOK_BREAK_DIST = 30f; // minimum distance before hook can break on collision
 	// ---------------------------
 
 	public RopeController(IPlayer ply)
@@ -69,6 +71,7 @@ public class RopeController
 			{
 				// Throw hook
 				hook = Game.CreateObject("Bottle00Broken", ply.GetWorldPosition() + new Vector2(ply.FacingDirection*10, 10), 0f, new Vector2(ply.FacingDirection*20, 20), 0f);
+				hookThrowPos = ply.GetWorldPosition(); // store position where hook was thrown from
 			}
 		}
 		
@@ -77,47 +80,62 @@ public class RopeController
 		{
 			Vector2 hookPos = hook.GetWorldPosition();
 			
-			// Check for collision with objects in a small area around the hook
-			Area checkArea = new Area(hookPos.Y + 5, hookPos.X - 5, hookPos.Y - 5, hookPos.X + 5);
-			IObject[] nearbyObjects = Game.GetObjectsByArea(checkArea);
+			// Check if hook has traveled minimum distance
+			float distanceFromThrow = Vector2.Distance(hookPos, hookThrowPos);
 			
-			bool hitSomething = false;
-			foreach(IObject obj in nearbyObjects)
+			if(distanceFromThrow >= MIN_HOOK_BREAK_DIST)
 			{
-                Game.ShowChatMessage("(" + obj.Name + " respawns left)");
-				// Skip the hook itself and background objects
-				if(obj.UniqueID != hook.UniqueID && obj.UniqueID != ply.UniqueID && !obj.Name.StartsWith("Bg") && !obj.Name.StartsWith("BG") && !obj.Name.StartsWith("SoundArea") && !obj.Name.Contains("Spawn") && !obj.Name.Contains("Trigger") && !obj.Name.Contains("Ladder") && !obj.Name.Contains("Marker"))
+				// Check for collision with objects in a small area around the hook
+				Area checkArea = new Area(hookPos.Y + 5, hookPos.X - 5, hookPos.Y - 5, hookPos.X + 5);
+				IObject[] nearbyObjects = Game.GetObjectsByArea(checkArea);
+				
+				bool hitSomething = false;
+				foreach(IObject obj in nearbyObjects)
 				{
-					Game.ShowChatMessage("COLONEL RESPAWNED! (" + obj.Name + " respawns left)");
-					hitSomething = true;
-					break;
-				}
-			}
-			
-			// Also check for players near the hook
-			if(!hitSomething)
-			{
-				foreach(IPlayer p in Game.GetPlayers())
-				{
-					if(Vector2.Distance(hookPos, p.GetWorldPosition()) < 10f)
+					Game.ShowChatMessage("(" + obj.Name + " respawns left)");
+					// Skip the hook itself and background objects
+					if(obj.UniqueID != hook.UniqueID && obj.UniqueID != ply.UniqueID && !obj.Name.StartsWith("Bg") && !obj.Name.StartsWith("BG") && !obj.Name.StartsWith("SoundArea") && !obj.Name.Contains("Spawn") && !obj.Name.Contains("Trigger") && !obj.Name.Contains("Ladder") && !obj.Name.Contains("Marker"))
 					{
+						Game.ShowChatMessage("COLONEL RESPAWNED! (" + obj.Name + " respawns left)");
 						hitSomething = true;
 						break;
 					}
 				}
-			}
-			
-			// Check for tiles/ground using raycast
-			if(!hitSomething)
-			{
-				RayCastResult[] groundCheck = Game.RayCast(hookPos, hookPos + new Vector2(0, -8), new RayCastInput()
-				{
-					IncludeOverlap = true
-				});
 				
-				if(groundCheck.Length > 0 && groundCheck[0].Hit && groundCheck[0].HitObject == null) // Hit a tile, not an object
+				// Also check for players near the hook
+				if(!hitSomething)
 				{
-					hitSomething = true;
+					foreach(IPlayer p in Game.GetPlayers())
+					{
+						if(Vector2.Distance(hookPos, p.GetWorldPosition()) < 10f)
+						{
+							hitSomething = true;
+							break;
+						}
+					}
+				}
+				
+				// Check for tiles/ground using raycast
+				if(!hitSomething)
+				{
+					RayCastResult[] groundCheck = Game.RayCast(hookPos, hookPos + new Vector2(0, -8), new RayCastInput()
+					{
+						IncludeOverlap = true
+					});
+					
+					if(groundCheck.Length > 0 && groundCheck[0].Hit && groundCheck[0].HitObject == null) // Hit a tile, not an object
+					{
+						hitSomething = true;
+					}
+				}
+				
+				if(hitSomething)
+				{
+					// Destroy the hook to trigger rope attachment
+					hook.Destroy();
+				}
+			}
+		}
 				}
 			}
 			
