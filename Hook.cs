@@ -15,6 +15,17 @@ public class RopeController
 
 	public bool isOnRope = false;
 	private bool wasWalkingPressed = false;
+	private bool wasBlockingPressed = false;
+
+	// --- aiming system ---
+	private bool isAiming = false;
+	private float aimAngle = 0f;
+	private const float AIM_DISTANCE = 25f;
+	private const float AIM_ROTATE_SPEED = 0.1f;
+	private IObject aimIndicator = null;
+	private float walkKeyHoldTime = 0f;
+	private const float QUICK_TAP_THRESHOLD = 200f;
+	// ---------------------------
 
 	// --- delayed-grab state ---
 	private const float GRAB_DELAY_MS = 100f;
@@ -56,28 +67,99 @@ public class RopeController
 		this.isOnRope = false;
 	}
 	
+	private void CancelAiming()
+	{
+		if(this.aimIndicator != null)
+		{
+			this.aimIndicator.Remove();
+			this.aimIndicator = null;
+		}
+		this.isAiming = false;
+		this.walkKeyHoldTime = 0f;
+	}
+	
+	private void ThrowHook(float angleRadians)
+	{
+		Vector2 direction = new Vector2((float)Math.Cos(angleRadians), (float)Math.Sin(angleRadians));
+		hook = Game.CreateObject("Bottle00Broken", 
+			ply.GetWorldPosition() + new Vector2(direction.X * 10, 10), 
+			0f, 
+			direction * 20, 
+			0f);
+		hookThrowPos = ply.GetWorldPosition();
+	}
+	
 	public void Update()
 	{
 		// Detect walk key press (rising edge)
 		bool walkJustPressed = ply.IsWalking && !this.wasWalkingPressed;
+		bool walkJustReleased = !ply.IsWalking && this.wasWalkingPressed;
 		
-		if(walkJustPressed)
+		// Cancel rope/hook if walk pressed while rope active
+		if(walkJustPressed && (hook != null || pendingGrab || isOnRope))
 		{
-			// Walk key just pressed
-			if(hook != null || pendingGrab || isOnRope)
+			CancelRope();
+			this.wasWalkingPressed = ply.IsWalking;
+			return;
+		}
+		
+		// Start tracking hold time when walk pressed
+		if(walkJustPressed && !isOnRope && hook == null && !pendingGrab)
+		{
+			this.walkKeyHoldTime = Game.TotalElapsedGameTime;
+		}
+		
+		// Check if should enter aiming mode (holding walk)
+		if(ply.IsWalking && !isOnRope && hook == null && !pendingGrab && !isAiming)
+		{
+			float holdDuration = Game.TotalElapsedGameTime - this.walkKeyHoldTime;
+			if(holdDuration >= QUICK_TAP_THRESHOLD)
 			{
-				// Cancel rope if hook is active, pending, or rope is attached
-				CancelRope();
+				// Enter aiming mode
+				this.isAiming = true;
+				this.aimAngle = (ply.FacingDirection > 0) ? 0f : 3.14159f;
+				
+				// Create aim indicator
+				this.aimIndicator = Game.CreateObject("IsMIcon", ply.GetWorldPosition());
 			}
-			else
+		}
+		
+		// Update aiming
+		if(isAiming)
+		{
+			// Use block key to rotate (left = counter-clockwise, right = clockwise based on facing)
+			bool blockJustPressed = ply.IsBlocking && !this.wasBlockingPressed;
+			if(blockJustPressed)
 			{
-				// Throw hook in facing direction
-				hook = Game.CreateObject("Bottle00Broken", 
-					ply.GetWorldPosition() + new Vector2(ply.FacingDirection*10, 10), 
-					0f, 
-					new Vector2(ply.FacingDirection*20, 0), 
-					0f);
-				hookThrowPos = ply.GetWorldPosition();
+				// Rotate aim
+				this.aimAngle += AIM_ROTATE_SPEED * ply.FacingDirection;
+			}
+			
+			// Update aim indicator position
+			if(this.aimIndicator != null)
+			{
+				Vector2 aimPos = ply.GetWorldPosition() + new Vector2(
+					(float)Math.Cos(aimAngle) * AIM_DISTANCE,
+					(float)Math.Sin(aimAngle) * AIM_DISTANCE
+				);
+				this.aimIndicator.SetWorldPosition(aimPos);
+			}
+			
+			// Throw when walk released
+			if(walkJustReleased)
+			{
+				ThrowHook(this.aimAngle);
+				CancelAiming();
+			}
+		}
+		else if(walkJustReleased && hook == null && !pendingGrab && !isOnRope)
+		{
+			// Quick tap - throw horizontally
+			float holdDuration = Game.TotalElapsedGameTime - this.walkKeyHoldTime;
+			if(holdDuration < QUICK_TAP_THRESHOLD)
+			{
+				float angle = (ply.FacingDirection > 0) ? 0f : 3.14159f;
+				ThrowHook(angle);
 			}
 		}
 		
@@ -184,8 +266,9 @@ public class RopeController
 			ply.SetWorldPosition(playerSwingRegulator.GetWorldPosition());
 		}
 		
-		// Update walk key state for next frame
+		// Update walk and block key states for next frame
 		this.wasWalkingPressed = ply.IsWalking;
+		this.wasBlockingPressed = ply.IsBlocking;
 	}
 	public void CreateRope(Vector2 anchorPos)
 	{
