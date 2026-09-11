@@ -24,6 +24,10 @@ public class RopeController
 	private IObject aimIndicator = null;
 	private float walkKeyHoldTime = 0f;
 	private const float QUICK_TAP_THRESHOLD = 150f; // milliseconds - if released before this, it's a quick tap
+	
+	// Track previous key states for left/right
+	private bool wasPressingLeft = false;
+	private bool wasPressingRight = false;
 	// ---------------------------
 
 	// --- delayed-grab state ---
@@ -119,15 +123,22 @@ public class RopeController
 				if(this.isAiming)
 				{
 					// Update aim direction based on left/right input
-					PlayerCommandState cmd = ply.GetPlayerCommandState();
-					if(cmd.KeyLeft)
+					// Check if player is moving left or right
+					Vector2 playerVel = ply.GetLinearVelocity();
+					bool pressingLeft = (playerVel.X < -1f); // moving left
+					bool pressingRight = (playerVel.X > 1f); // moving right
+					
+					if(pressingLeft && !wasPressingLeft)
 					{
-						this.aimAngle += AIM_ROTATE_SPEED;
+						this.aimAngle += AIM_ROTATE_SPEED * 5; // increment on key press
 					}
-					if(cmd.KeyRight)
+					if(pressingRight && !wasPressingRight)
 					{
-						this.aimAngle -= AIM_ROTATE_SPEED;
+						this.aimAngle -= AIM_ROTATE_SPEED * 5; // decrement on key press
 					}
+					
+					wasPressingLeft = pressingLeft;
+					wasPressingRight = pressingRight;
 					
 					// Update aim indicator position
 					if(this.aimIndicator != null)
