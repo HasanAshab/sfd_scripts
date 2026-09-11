@@ -18,6 +18,10 @@ public class RopeController
 	// True for the remainder of a walk press that was used to cancel a rope/hook,
 	// so that press's eventual release isn't misread as a fresh quick-tap throw.
 	private bool walkPressConsumedByCancel = false;
+	
+	private float ropeReleaseTime = 0f; // Time when rope was released
+	private const float IMPACT_PROTECTION_DURATION = 2000f; // 2 seconds in milliseconds
+	private float originalImpactDamageMod = -1f; // Store original modifier
 
 	// --- aiming system ---
 	private bool isAiming = false;
@@ -44,6 +48,7 @@ public class RopeController
 	private const float PULL_FORCE = 0.55f;        // force applied toward anchor
 	private const float MIN_PULL_DIST = 20f;     // stop pulling when this close
 	private const float MIN_HOOK_BREAK_DIST = 60f; // minimum distance before hook can break on collision
+	private const float MAX_HOOK_RANGE = 300f;   // maximum range before hook breaks automatically
 	// ---------------------------
 
 	public RopeController(IPlayer ply)
@@ -69,6 +74,12 @@ public class RopeController
 		
 		this.pendingGrab = false;
 		this.pulling = false;
+		
+		// If was on rope, set release time for impact protection
+		if(this.isOnRope)
+		{
+			this.ropeReleaseTime = Game.TotalElapsedGameTime;
+		}
 		this.isOnRope = false;
 		
 		// Reset hold time relative to *now* so a still-held walk key doesn't
@@ -219,7 +230,12 @@ public class RopeController
 			// Check if hook has traveled minimum distance
 			float distanceFromThrow = Vector2.Distance(hookPos, hookThrowPos);
 			
-			if(distanceFromThrow >= MIN_HOOK_BREAK_DIST)
+			// Check if hook exceeded max range - destroy automatically
+			if(distanceFromThrow >= MAX_HOOK_RANGE)
+			{
+				hook.Destroy();
+			}
+			else if(distanceFromThrow >= MIN_HOOK_BREAK_DIST)
 			{
 				// Check for collision with objects in a small area around the hook
 				Area checkArea = new Area(hookPos.Y + 5, hookPos.X - 5, hookPos.Y - 5, hookPos.X + 5);
@@ -314,8 +330,104 @@ public class RopeController
 			ply.SetWorldPosition(playerSwingRegulator.GetWorldPosition());
 		}
 		
+		// Handle impact damage protection when on rope or recently released
+		bool shouldHaveProtection = isOnRope || (ropeReleaseTime > 0f && (Game.TotalElapsedGameTime - ropeReleaseTime) < IMPACT_PROTECTION_DURATION);
+		
+		PlayerModifiers mods = ply.GetModifiers();
+		if(shouldHaveProtection)
+		{
+			// Store original modifier if not already stored
+			if(originalImpactDamageMod < 0f && mods.ImpactDamageTakenModifier >= 0f)
+			{
+				originalImpactDamageMod = mods.ImpactDamageTakenModifier;
+			}
+			
+			// Apply reduced impact damage
+			mods.ImpactDamageTakenModifier = 0.5f;
+			ply.SetModifiers(mods);
+		}
+		else if(originalImpactDamageMod >= 0f)
+		{
+			// Restore original modifier after protection expires
+			mods.ImpactDamageTakenModifier = originalImpactDamageMod;
+			ply.SetModifiers(mods);
+			originalImpactDamageMod = -1f;
+			ropeReleaseTime = 0f;
+		}
+		
+		// Handle melee attack area damage when on rope
+		if(isOnRope && (ply.IsKicking || ply.IsPunching))
+		{
+			ApplyMeleeAreaDamage();
+		}
+		
 		// Update walk key state for next frame
 		this.wasWalkingPressed = ply.IsWalking;
+	}
+	
+	private void ApplyMeleeAreaDamage()
+	{
+		Vector2 playerPos = ply.GetWorldPosition();
+		const float MELEE_AREA_RADIUS = 30f;
+		
+		// Get player's melee damage modifier
+		PlayerModifiers attackerMods = ply.GetModifiers();
+		float meleeDamageDealt = attackerMods.MeleeDamageDealtModifier;
+		if(meleeDamageDealt < 0f) meleeDamageDealt = 1f; // Default if not set
+		
+		// Determine weapon damage
+		float weaponDamage = 7f; // Default unarmed damage
+		WeaponItem currentMelee = ply.CurrentMeleeWeapon.WeaponItem;
+		
+		// Weapon base damages (approximate values from game)
+		if(currentMelee == WeaponItem.KNIFE) weaponDamage = 15f;
+		else if(currentMelee == WeaponItem.MACHETE) weaponDamage = 20f;
+		else if(currentMelee == WeaponItem.KATANA) weaponDamage = 25f;
+		else if(currentMelee == WeaponItem.CHAINSAW) weaponDamage = 30f;
+		else if(currentMelee == WeaponItem.BAT) weaponDamage = 12f;
+		else if(currentMelee == WeaponItem.PIPE) weaponDamage = 14f;
+		else if(currentMelee == WeaponItem.BATON) weaponDamage = 10f;
+		else if(currentMelee == WeaponItem.HAMMER) weaponDamage = 18f;
+		else if(currentMelee == WeaponItem.LEADPIPE) weaponDamage = 16f;
+		else if(currentMelee == WeaponItem.BOTTLE) weaponDamage = 8f;
+		else if(currentMelee == WeaponItem.CHAIN) weaponDamage = 11f;
+		
+		// Calculate total damage (3x multiplier)
+		float totalDamage = weaponDamage * meleeDamageDealt * 3f;
+		
+		// Get attacker's team
+		PlayerTeam attackerTeam = ply.GetTeam();
+		
+		// Find all players in radius
+		foreach(IPlayer target in Game.GetPlayers())
+		{
+			if(target.UniqueID == ply.UniqueID) continue; // Skip self
+			if(target.IsDead) continue; // Skip dead players
+			
+			Vector2 targetPos = target.GetWorldPosition();
+			float distance = Vector2.Distance(playerPos, targetPos);
+			
+			if(distance <= MELEE_AREA_RADIUS)
+			{
+				PlayerTeam targetTeam = target.GetTeam();
+				
+				// Check team conditions: damage if different team OR if both are team "None"
+				bool shouldDamage = false;
+				if(attackerTeam == PlayerTeam.Independent && targetTeam == PlayerTeam.Independent)
+				{
+					shouldDamage = true; // Both are "no team"
+				}
+				else if(attackerTeam != targetTeam && targetTeam != PlayerTeam.Independent)
+				{
+					shouldDamage = true; // Different teams (and target is not independent)
+				}
+				
+				if(shouldDamage)
+				{
+					target.DealDamage(totalDamage);
+				}
+			}
+		}
 	}
 	public void CreateRope(Vector2 anchorPos)
 	{
