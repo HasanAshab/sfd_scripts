@@ -16,6 +16,16 @@ public class RopeController
 	public bool isOnRope = false;
 	private bool wasWalkingPressed = false;
 
+	// --- aiming system ---
+	private bool isAiming = false;
+	private float aimAngle = 0f; // angle in radians
+	private const float AIM_DISTANCE = 25f; // distance from player to aim indicator
+	private const float AIM_ROTATE_SPEED = 0.08f; // radians per frame
+	private IObject aimIndicator = null;
+	private float walkKeyHoldTime = 0f;
+	private const float QUICK_TAP_THRESHOLD = 150f; // milliseconds - if released before this, it's a quick tap
+	// ---------------------------
+
 	// --- delayed-grab state ---
 	private const float GRAB_DELAY_MS = 100f;
 	private bool pendingGrab = false;
@@ -56,22 +66,115 @@ public class RopeController
 		this.isOnRope = false;
 	}
 	
+	private void CancelAiming()
+	{
+		if(this.aimIndicator != null)
+		{
+			this.aimIndicator.Remove();
+			this.aimIndicator = null;
+		}
+		this.isAiming = false;
+		this.walkKeyHoldTime = 0f;
+	}
+	
+	private void ThrowHook(Vector2 direction)
+	{
+		hook = Game.CreateObject("Bottle00Broken", 
+			ply.GetWorldPosition() + new Vector2(direction.X * 10, 10), 
+			0f, 
+			direction * 20, 
+			0f);
+		hookThrowPos = ply.GetWorldPosition();
+	}
+	
 	public void Update()
 	{
-		// Detect walk key press (rising edge)
-		if(ply.IsWalking && !this.wasWalkingPressed)
+		// Handle aiming mode
+		if(ply.IsWalking && !isOnRope && hook == null && !pendingGrab)
 		{
-			// Walk key just pressed
-			if(hook != null || pendingGrab || isOnRope)
+			if(!this.wasWalkingPressed)
 			{
-				// Cancel rope if hook is active, pending, or rope is attached
-				CancelRope();
+				// Walk key just pressed - start timing
+				this.walkKeyHoldTime = Game.TotalElapsedGameTime;
+				this.isAiming = false;
 			}
 			else
 			{
-				// Throw hook
-				hook = Game.CreateObject("Bottle00Broken", ply.GetWorldPosition() + new Vector2(ply.FacingDirection*10, 10), 0f, new Vector2(ply.FacingDirection*20, 20), 0f);
-				hookThrowPos = ply.GetWorldPosition(); // store position where hook was thrown from
+				// Walk key is being held
+				float holdDuration = Game.TotalElapsedGameTime - this.walkKeyHoldTime;
+				
+				if(holdDuration >= QUICK_TAP_THRESHOLD && !this.isAiming)
+				{
+					// Start aiming mode
+					this.isAiming = true;
+					this.aimAngle = (ply.FacingDirection > 0) ? 0f : 3.14159f; // 0 or PI radians
+					
+					// Create aim indicator
+					if(this.aimIndicator == null)
+					{
+						this.aimIndicator = Game.CreateObject("IsMIcon", ply.GetWorldPosition());
+					}
+				}
+				
+				if(this.isAiming)
+				{
+					// Update aim direction based on left/right input
+					PlayerCommandState cmd = ply.GetPlayerCommandState();
+					if(cmd.KeyLeft)
+					{
+						this.aimAngle += AIM_ROTATE_SPEED;
+					}
+					if(cmd.KeyRight)
+					{
+						this.aimAngle -= AIM_ROTATE_SPEED;
+					}
+					
+					// Update aim indicator position
+					if(this.aimIndicator != null)
+					{
+						Vector2 aimPos = ply.GetWorldPosition() + new Vector2(
+							(float)Math.Cos(aimAngle) * AIM_DISTANCE,
+							(float)Math.Sin(aimAngle) * AIM_DISTANCE
+						);
+						this.aimIndicator.SetWorldPosition(aimPos);
+					}
+				}
+			}
+		}
+		else if(!ply.IsWalking && this.wasWalkingPressed)
+		{
+			// Walk key just released
+			if(this.isAiming)
+			{
+				// Throw hook in aimed direction
+				Vector2 throwDirection = new Vector2(
+					(float)Math.Cos(aimAngle),
+					(float)Math.Sin(aimAngle)
+				);
+				ThrowHook(throwDirection);
+				CancelAiming();
+			}
+			else if(hook == null && !pendingGrab && !isOnRope)
+			{
+				// Quick tap - check if it was quick enough
+				float holdDuration = Game.TotalElapsedGameTime - this.walkKeyHoldTime;
+				
+				if(holdDuration < QUICK_TAP_THRESHOLD)
+				{
+					// Quick tap - throw in facing direction
+					Vector2 throwDirection = new Vector2(ply.FacingDirection, 0);
+					ThrowHook(throwDirection);
+				}
+			}
+		}
+		
+		// Cancel rope with walk key
+		if(ply.IsWalking && !this.wasWalkingPressed)
+		{
+			if(hook != null || pendingGrab || isOnRope)
+			{
+				CancelRope();
+				CancelAiming();
 			}
 		}
 		
