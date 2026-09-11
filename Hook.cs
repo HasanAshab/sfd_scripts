@@ -29,7 +29,7 @@ public class RopeController
 	private IObject aimIndicator = null;
 	private float walkKeyHoldTime = 0f;
 	private const float QUICK_TAP_THRESHOLD = 200f;
-	private Vector2 aimStartPosition; // player position when aiming began; fully locked while aiming
+	private Vector2 aimStartPosition; // player position when aiming began; X is locked while aiming
 	// ---------------------------
 
 	// --- delayed-grab state ---
@@ -151,25 +151,30 @@ public class RopeController
 		// Update aiming
 		if(isAiming)
 		{
-			// Rotate aim continuously using the up/down virtual keys.
-			// UP tilts the aim upward, DOWN tilts it downward.
-			if(ply.KeyPressed(VirtualKey.AIM_CLIMB_UP))
+			// Rotate aim continuously using the left/right virtual keys.
+			// These are the same keys that normally move the player left/right,
+			// so we cancel out any horizontal velocity they cause below.
+			if(ply.KeyPressed(ply.FacingDirection == 1 ? VirtualKey.AIM_RUN_RIGHT : VirtualKey.CROUCH_ROLL_DIVE))
 			{
 				this.aimAngle -= AIM_ROTATE_SPEED;
 			}
-			if(ply.KeyPressed(VirtualKey.AIM_CLIMB_DOWN))
+			if(ply.KeyPressed(ply.FacingDirection == 1 ? VirtualKey.CROUCH_ROLL_DIVE : VirtualKey.AIM_RUN_LEFT))
 			{
 				this.aimAngle += AIM_ROTATE_SPEED;
 			}
 			
-			// Fully freeze the player while aiming: lock position back to where
-			// aiming started and zero out velocity entirely. This stops any
-			// horizontal/vertical drift AND cancels a jump impulse from the UP
-			// key in the same tick it would occur, since UP now doubles as the
-			// aim key. (Trade-off: the player won't keep falling if aiming was
-			// started mid-air - let me know if you'd rather keep gravity active.)
-			ply.SetWorldPosition(this.aimStartPosition);
-			ply.SetLinearVelocity(Vector2.Zero);
+			// Prevent the player from actually walking left/right while aiming.
+			// Zeroing velocity alone can still let one tick of drift through if
+			// the engine moves the player via a direct position step before this
+			// script runs - so we also pin X back to where aiming started.
+			// Y is left alone so gravity/falling still behaves normally.
+			Vector2 pos = ply.GetWorldPosition();
+			pos.X = this.aimStartPosition.X;
+			ply.SetWorldPosition(pos);
+			
+			Vector2 vel = ply.GetLinearVelocity();
+			vel.X = 0f;
+			ply.SetLinearVelocity(vel);
 			
 			// Update aim indicator position
 			if(this.aimIndicator != null)
