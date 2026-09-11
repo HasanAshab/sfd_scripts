@@ -54,29 +54,19 @@ public class RopeController
 	
 	public void OnKeyEvent(VirtualKeyInfo[] keyEvents)
 	{
+		// Only process keys if aiming
+		if(!isAiming) return;
+		
 		// Update key states for left/right
 		foreach(VirtualKeyInfo keyInfo in keyEvents)
 		{
-			if(keyInfo.Key == VirtualKey.AIM_RUN_LEFT)
+			if(keyInfo.Event == VirtualKeyEvent.Pressed)
 			{
-				bool wasPressed = keyStates[VirtualKey.AIM_RUN_LEFT];
-				bool isPressed = (keyInfo.Event == VirtualKeyEvent.Pressed);
-				keyStates[VirtualKey.AIM_RUN_LEFT] = isPressed;
-				
-				// Rotate aim on key press (rising edge) during aiming
-				if(isAiming && isPressed && !wasPressed)
+				if(keyInfo.Key == VirtualKey.AIM_RUN_LEFT)
 				{
 					this.aimAngle += AIM_ROTATE_SPEED;
 				}
-			}
-			else if(keyInfo.Key == VirtualKey.AIM_RUN_RIGHT)
-			{
-				bool wasPressed = keyStates[VirtualKey.AIM_RUN_RIGHT];
-				bool isPressed = (keyInfo.Event == VirtualKeyEvent.Pressed);
-				keyStates[VirtualKey.AIM_RUN_RIGHT] = isPressed;
-				
-				// Rotate aim on key press (rising edge) during aiming
-				if(isAiming && isPressed && !wasPressed)
+				else if(keyInfo.Key == VirtualKey.AIM_RUN_RIGHT)
 				{
 					this.aimAngle -= AIM_ROTATE_SPEED;
 				}
@@ -114,12 +104,17 @@ public class RopeController
 		}
 		this.isAiming = false;
 		this.walkKeyHoldTime = 0f;
+		
+		// Re-enable player input if it was disabled
+		ply.SetInputEnabled(true);
 	}
 	
 	private void ThrowHook(Vector2 direction)
 	{
+		// Normalize direction and use it for both position and velocity
+		direction.Normalize();
 		hook = Game.CreateObject("Bottle00Broken", 
-			ply.GetWorldPosition() + new Vector2(direction.X * 10, direction.Y * 10), 
+			ply.GetWorldPosition() + new Vector2(direction.X * 10, 10), // Always spawn slightly above
 			0f, 
 			direction * 20, 
 			0f);
@@ -128,6 +123,24 @@ public class RopeController
 	
 	public void Update()
 	{
+		// Cancel rope/aiming with walk key press (only if rope/hook/aiming exists)
+		if(ply.IsWalking && !this.wasWalkingPressed)
+		{
+			if(hook != null || pendingGrab || isOnRope)
+			{
+				CancelRope();
+				this.wasWalkingPressed = ply.IsWalking; // Update immediately to prevent throw
+				return; // Exit early
+			}
+			else if(isAiming)
+			{
+				// Cancel aiming if walk pressed during aim
+				CancelAiming();
+				this.wasWalkingPressed = ply.IsWalking;
+				return; // Exit early
+			}
+		}
+		
 		// Handle aiming mode
 		if(ply.IsWalking && !isOnRope && hook == null && !pendingGrab)
 		{
@@ -154,13 +167,13 @@ public class RopeController
 					{
 						this.aimIndicator = Game.CreateObject("IsMIcon", ply.GetWorldPosition());
 					}
+					
+					// Disable player movement during aiming
+					ply.SetInputEnabled(false);
 				}
 				
 				if(this.isAiming)
 				{
-					// Disable player movement during aiming
-					ply.SetInputEnabled(false);
-					
 					// Update aim indicator position
 					if(this.aimIndicator != null)
 					{
@@ -178,9 +191,6 @@ public class RopeController
 			// Walk key just released
 			if(this.isAiming)
 			{
-				// Re-enable player movement
-				ply.SetInputEnabled(true);
-				
 				// Throw hook in aimed direction
 				Vector2 throwDirection = new Vector2(
 					(float)Math.Cos(aimAngle),
@@ -201,13 +211,6 @@ public class RopeController
 					ThrowHook(throwDirection);
 				}
 			}
-		}
-		
-		// Cancel rope with walk key (only if rope/hook exists)
-		if(ply.IsWalking && !this.wasWalkingPressed && (hook != null || pendingGrab || isOnRope))
-		{
-			CancelRope();
-			CancelAiming();
 		}
 		
 		// Check if hook hit something (collided with non-background objects)
