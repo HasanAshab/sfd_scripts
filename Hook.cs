@@ -460,6 +460,7 @@ public class RopeController
 					target.DealDamage(totalDamage);
 					// Play blood effect at the damaged player's position
 					Game.PlayEffect(EffectName.Blood, targetPos);
+                	Game.PlaySound("KatanaDraw", targetPos);
 				}
 			}
 		}
@@ -515,6 +516,7 @@ public void OnStartup()
 	
 	foreach(IPlayer ply in Game.GetPlayers())
 	{
+		if (ply.IsBot()) continue;
 		ropeControllers.Add(new RopeController(ply));
 	}
 	
