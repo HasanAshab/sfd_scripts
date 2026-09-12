@@ -212,54 +212,54 @@ private IProfile GenerateRandomTitanProfile()
     profile.Name = "Titan";
     profile.Gender = gender;
 
-    profile.Skin = RandomClothingItem(Game.GetClothingItemNamesSkin(gender));
-    profile.Head = RandomClothingItem(Game.GetClothingItemNamesHead(gender));
-    profile.Hands = RandomClothingItem(Game.GetClothingItemNamesHands(gender));
-    profile.Feet = RandomClothingItem(Game.GetClothingItemNamesFeet(gender));
-    profile.Legs = RandomClothingItem(Game.GetClothingItemNamesLegs(gender));
-    profile.Waist = RandomClothingItem(Game.GetClothingItemNamesWaist(gender));
-    profile.ChestOver = RandomClothingItem(Game.GetClothingItemNamesChestOver(gender));
-    profile.ChestUnder = RandomClothingItem(Game.GetClothingItemNamesChestUnder(gender));
-    profile.Accessory = RandomClothingItem(Game.GetClothingItemNamesAccessory(gender));
+    // Get random skin color from available skin colors
+    string[] skinColors = new string[]
+    {
+        "Skin1", "Skin2", "Skin3", "Skin4", "Skin5", "Skin6", "Skin7", "Skin8", "Skin9"
+    };
+    string randomSkinColor = skinColors[titanRnd.Next(skinColors.Length)];
+
+    // Set skin with random color
+    profile.Skin = new IProfileClothingItem("Normal", randomSkinColor, "ClothingBrown");
+
+    // Everything else is naked (empty)
+    profile.Hands = new IProfileClothingItem();
+    profile.Feet = new IProfileClothingItem();
+    profile.Legs = new IProfileClothingItem();
+    profile.Waist = new IProfileClothingItem();
+    profile.ChestOver = new IProfileClothingItem();
+    profile.ChestUnder = new IProfileClothingItem();
+
+    // Randomly pick ONE item from the list (or nothing)
+    // 0 = SantaMask, 1 = AviatorHat2, 2 = Buzzcut, 3 = Afro, 4 = Nothing
+    int itemChoice = titanRnd.Next(5);
+
+    switch (itemChoice)
+    {
+        case 0:
+            profile.Accessory = new IProfileClothingItem("SantaMask", "");
+            profile.Head = new IProfileClothingItem();
+            break;
+        case 1:
+            profile.Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGray");
+            profile.Accessory = new IProfileClothingItem();
+            break;
+        case 2:
+            profile.Head = new IProfileClothingItem("Buzzcut", "ClothingDarkGray");
+            profile.Accessory = new IProfileClothingItem();
+            break;
+        case 3:
+            profile.Head = new IProfileClothingItem("Afro", "ClothingLightGray");
+            profile.Accessory = new IProfileClothingItem();
+            break;
+        case 4:
+            // Nothing - completely naked
+            profile.Head = new IProfileClothingItem();
+            profile.Accessory = new IProfileClothingItem();
+            break;
+    }
 
     return profile;
-}
-
-private IProfileClothingItem RandomClothingItem(string[] names)
-{
-    if (names == null || names.Length == 0)
-    {
-        return new IProfileClothingItem();
-    }
-
-    string name = names[titanRnd.Next(names.Length)];
-
-    string paletteName = Game.GetClothingItemColorPaletteName(name);
-    if (string.IsNullOrEmpty(paletteName))
-    {
-        return new IProfileClothingItem(name, "", "", "");
-    }
-
-    ColorPalette palette = Game.GetColorPalette(paletteName);
-    if (palette == null)
-    {
-        return new IProfileClothingItem(name, "", "", "");
-    }
-
-    string c1 = RandomColor(palette.PrimaryColorPackages);
-    string c2 = RandomColor(palette.SecondaryColorPackages);
-    string c3 = RandomColor(palette.TertiaryColorPackages);
-
-    return new IProfileClothingItem(name, c1, c2, c3);
-}
-
-private string RandomColor(string[] options)
-{
-    if (options == null || options.Length == 0)
-    {
-        return "";
-    }
-    return options[titanRnd.Next(options.Length)];
 }
 
 // ----------------------------------------------------------------------
