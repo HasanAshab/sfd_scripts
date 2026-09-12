@@ -458,6 +458,8 @@ public class RopeController
 				if(shouldDamage)
 				{
 					target.DealDamage(totalDamage);
+					// Play blood effect at the damaged player's position
+					Game.PlayEffect(EffectName.Blood, targetPos);
 				}
 			}
 		}
