@@ -54,6 +54,18 @@ public class RopeController
 	private const float MAX_HOOK_RANGE = 300f;   // maximum range before hook breaks automatically
 	// ---------------------------
 
+	// --- rope shrink-lock (ratchet) state ---
+	// The DistanceJoint API has no "set length" call - its rest length is
+	// baked in from the connected objects' positions at the moment the joint
+	// is created. That means an Elastic joint always springs back toward the
+	// distance it had when CreateRope() ran, no matter how far PULL_FORCE
+	// has since dragged the player in. To make a shrink stick, we destroy and
+	// rebuild the joint at the *current* (shorter) distance every so often
+	// while reeling in, which resets its rest length each time - a ratchet.
+	private float lastRopeShrinkTime = 0f;
+	private const float ROPE_SHRINK_INTERVAL_MS = 100f;
+	// ---------------------------
+
 	public RopeController(IPlayer ply)
 	{
 		this.ply = ply;
@@ -101,6 +113,8 @@ public class RopeController
 		
 		this.distanceJoint = null;
 		this.targetObjectJoint = null;
+		this.regulatorDistanceJoint = null;
+		this.regulatorTargetObjectJoint = null;
 		this.anchor = null;
 		this.playerSwingRegulator = null;
 		this.hook = null;
@@ -152,6 +166,36 @@ public class RopeController
 	private float GetDefaultAimAngle()
 	{
 		return (float)Math.Atan2(20f, ply.FacingDirection * 20f);
+	}
+	
+	// (Re)builds the regulator joint pair - the DistanceJoint that pulls the
+	// swing regulator toward the anchor, and the TargetObjectJoint that
+	// attaches that DistanceJoint to the regulator. Anchor and
+	// playerSwingRegulator themselves are left alone; only the joint that
+	// links them is torn down and recreated. Its rest length is implicitly
+	// whatever the live distance between anchor and regulator is at the
+	// instant this runs, so calling it again after the regulator has been
+	// pulled closer locks in the new, shorter length instead of letting the
+	// elastic joint spring back to the original grab distance.
+	private void BuildRegulatorJoints()
+	{
+		if(this.regulatorDistanceJoint != null) this.regulatorDistanceJoint.Destroy();
+		if(this.regulatorTargetObjectJoint != null) this.regulatorTargetObjectJoint.Destroy();
+		
+		IObjectDistanceJoint newDistanceJoint = (IObjectDistanceJoint)Game.CreateObject("DistanceJoint");
+		newDistanceJoint.SetWorldPosition(anchor.GetWorldPosition());
+		newDistanceJoint.SetTargetObject(anchor);
+	
+		IObjectTargetObjectJoint newTargetObjectJoint = (IObjectTargetObjectJoint)Game.CreateObject("TargetObjectJoint");
+		newTargetObjectJoint.SetWorldPosition(playerSwingRegulator.GetWorldPosition() + new Vector2(0f, 8f));
+		newTargetObjectJoint.SetTargetObject(playerSwingRegulator);
+	
+		newDistanceJoint.SetTargetObjectJoint(newTargetObjectJoint);
+		newDistanceJoint.SetLineVisual(LineVisual.DJWire);
+		newDistanceJoint.SetLengthType(DistanceJointLengthType.Elastic);
+		
+		this.regulatorDistanceJoint = newDistanceJoint;
+		this.regulatorTargetObjectJoint = newTargetObjectJoint;
 	}
 	
 	public void Update()
@@ -349,10 +393,24 @@ public class RopeController
 				Vector2 currentVel = playerSwingRegulator.GetLinearVelocity();
 				Vector2 newVel = currentVel + (dir * PULL_FORCE);
 				playerSwingRegulator.SetLinearVelocity(newVel);
+				
+				// Periodically rebuild the joint at the current (shorter)
+				// distance. The Elastic joint's rest length is fixed at
+				// creation time and there's no API to change it directly, so
+				// this "ratchets" it inward every ROPE_SHRINK_INTERVAL_MS
+				// instead of letting it spring back to the original grab
+				// distance whenever PULL_FORCE isn't actively overpowering it.
+				if(Game.TotalElapsedGameTime - lastRopeShrinkTime >= ROPE_SHRINK_INTERVAL_MS)
+				{
+					BuildRegulatorJoints();
+					lastRopeShrinkTime = Game.TotalElapsedGameTime;
+				}
 			}
 			else
 			{
 				pulling = false; // arrived - stop pulling
+				// Lock in the final, fully-reeled-in length.
+				BuildRegulatorJoints();
 			}
 		}
 		
@@ -473,6 +531,11 @@ public class RopeController
 		if(this.regulatorTargetObjectJoint!=null) this.regulatorTargetObjectJoint.Destroy();
 		if(this.anchor!=null) this.anchor.Destroy();
 		if(this.playerSwingRegulator!=null) this.playerSwingRegulator.Destroy();
+		
+		this.distanceJoint = null;
+		this.targetObjectJoint = null;
+		this.regulatorDistanceJoint = null;
+		this.regulatorTargetObjectJoint = null;
 
 		anchor = Game.CreateObject("BgValve00E", anchorPos, 0f);
 		playerSwingRegulator = Game.CreateObject("StoneDebris00A", ply.GetWorldPosition(), 0f);
@@ -480,25 +543,9 @@ public class RopeController
 		
 		// Only create the distance joint for the regulator, NOT for the player directly
 		// This allows the regulator to be pulled in while the player follows via position sync
-		IObjectDistanceJoint regulatorDistanceJoint = (IObjectDistanceJoint)Game.CreateObject("DistanceJoint");
-		regulatorDistanceJoint.SetWorldPosition(anchor.GetWorldPosition());
-		regulatorDistanceJoint.SetTargetObject(anchor);
-	
-		IObjectTargetObjectJoint regulatorTargetObjectJoint = (IObjectTargetObjectJoint)Game.CreateObject("TargetObjectJoint");
-		regulatorTargetObjectJoint.SetWorldPosition(playerSwingRegulator.GetWorldPosition() + new Vector2(0f, 8f));
-		regulatorTargetObjectJoint.SetTargetObject(playerSwingRegulator);
-	
-		regulatorDistanceJoint.SetTargetObjectJoint(regulatorTargetObjectJoint);
+		BuildRegulatorJoints();
 		
-		// Set visual rope from anchor to player (visual only, no physics constraint on player)
-		regulatorDistanceJoint.SetLineVisual(LineVisual.DJWire);
-		regulatorDistanceJoint.SetLengthType(DistanceJointLengthType.Elastic);
-		
-		// Store joints for later use
-		this.distanceJoint = null; // not using direct player joint
-		this.targetObjectJoint = null;
-		this.regulatorDistanceJoint = regulatorDistanceJoint;
-		this.regulatorTargetObjectJoint = regulatorTargetObjectJoint;
+		this.lastRopeShrinkTime = Game.TotalElapsedGameTime;
 	}
 }
 
