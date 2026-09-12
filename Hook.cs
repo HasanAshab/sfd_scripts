@@ -425,8 +425,8 @@ public class RopeController
 		else if(currentMelee == WeaponItem.BOTTLE) weaponDamage = 8f;
 		else if(currentMelee == WeaponItem.CHAIN) weaponDamage = 11f;
 		
-		// Calculate total damage (3x multiplier)
-		float totalDamage = weaponDamage * meleeDamageDealt * 3f;
+		// Calculate total damage (2x multiplier)
+		float totalDamage = weaponDamage * meleeDamageDealt * 2f;
 		
 		// Get attacker's team
 		PlayerTeam attackerTeam = ply.GetTeam();
