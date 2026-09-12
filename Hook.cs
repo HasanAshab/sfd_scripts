@@ -48,7 +48,7 @@ public class RopeController
 
 	// --- pull-in state using physics force ---
 	private bool pulling = false;
-	private const float PULL_FORCE = 0.55f;        // force applied toward anchor
+	private const float PULL_FORCE = 0.7f;        // force applied toward anchor
 	private const float MIN_PULL_DIST = 20f;     // stop pulling when this close
 	private const float MIN_HOOK_BREAK_DIST = 60f; // minimum distance before hook can break on collision
 	private const float MAX_HOOK_RANGE = 300f;   // maximum range before hook breaks automatically
@@ -563,7 +563,7 @@ public void OnStartup()
 	
 	foreach(IPlayer ply in Game.GetPlayers())
 	{
-		if (ply.IsBot()) continue;
+		if (ply.IsBot) continue;
 		ropeControllers.Add(new RopeController(ply));
 	}
 	
