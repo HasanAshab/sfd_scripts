@@ -57,6 +57,36 @@ public class RopeController
 	public RopeController(IPlayer ply)
 	{
 		this.ply = ply;
+		
+		// Apply custom clothing to the player's profile
+		IProfile profile = ply.GetProfile();
+		Gender playerGender = profile.Gender;
+		
+		// Set ChestOver based on gender
+		if(playerGender == Gender.Female)
+		{
+			profile.ChestOver = new IProfileClothingItem("Jacket_fem", "ClothingOrange", "ClothingOrange");
+		}
+		else
+		{
+			profile.ChestOver = new IProfileClothingItem("Jacket", "ClothingOrange", "ClothingOrange");
+		}
+		
+		// Set Feet (same for both genders)
+		profile.Feet = new IProfileClothingItem("RidingBoots", "ClothingDarkBrown");
+		
+		// Set Accessory based on gender
+		if(playerGender == Gender.Female)
+		{
+			profile.Accessory = new IProfileClothingItem("Armband_fem", "ClothingGray");
+		}
+		else
+		{
+			profile.Accessory = new IProfileClothingItem("Armband", "ClothingGray");
+		}
+		
+		// Apply the modified profile back to the player
+		ply.SetProfile(profile);
 	}
 	
 	private void CancelRope()
