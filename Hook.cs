@@ -34,6 +34,81 @@ public class RopeController
 	private const float ROLL_POWERUP_DURATION = 2000f; // 2 seconds window after roll
 	// ---------------------------
 
+	// --- roll-hit knockdown system (native Fall command) ---
+	// When a 4x (roll power-up) melee hit connects, the victim is forced
+	// through the game's own "Fall" reaction via PlayerCommand. PlayerCommands
+	// only work while the player has no user/AI control - SetInputEnabled(false)
+	// is what lifts that control - so we disable the victim's input, queue the
+	// Fall command, and schedule their input to be switched back on a few
+	// seconds later.
+	private const float ROLL_HIT_FALL_INPUT_DISABLE_DURATION = 2000f; // ms the victim's input stays disabled after being forced to fall
+	private static List<PendingFallRelease> pendingFallReleases = new List<PendingFallRelease>();
+
+	// Tracks a victim who's had input disabled to force a Fall command, and
+	// when their input should be switched back on.
+	private class PendingFallRelease
+	{
+		public IPlayer Player;
+		public float ReleaseTime;
+		public PendingFallRelease(IPlayer player, float releaseTime)
+		{
+			this.Player = player;
+			this.ReleaseTime = releaseTime;
+		}
+	}
+
+	// Re-enables input for any victims whose forced-fall window has expired.
+	// Called once per tick from the global GrapplingHook loop (not per
+	// RopeController instance, since the victim may belong to a different
+	// controller - or to none at all, if they're a bot).
+	public static void ProcessPendingFallReleases()
+	{
+		for(int i = pendingFallReleases.Count - 1; i >= 0; i--)
+		{
+			PendingFallRelease pending = pendingFallReleases[i];
+			if(Game.TotalElapsedGameTime >= pending.ReleaseTime)
+			{
+				if(pending.Player != null && !pending.Player.IsRemoved)
+				{
+					pending.Player.SetInputEnabled(true);
+				}
+				pendingFallReleases.RemoveAt(i);
+			}
+		}
+	}
+
+	// Disables the target's input just long enough to force the native Fall
+	// command through, then queues their input to come back on afterward.
+	// If they're already in a pending-fall window (e.g. hit again quickly),
+	// this just extends that window instead of stacking a second release.
+	private void ForceFall(IPlayer target)
+	{
+		target.SetInputEnabled(false);
+		target.ClearCommandQueue();
+		target.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
+		
+		float releaseTime = Game.TotalElapsedGameTime + ROLL_HIT_FALL_INPUT_DISABLE_DURATION;
+		PendingFallRelease existing = null;
+		foreach(PendingFallRelease p in pendingFallReleases)
+		{
+			if(p.Player != null && p.Player.UniqueID == target.UniqueID)
+			{
+				existing = p;
+				break;
+			}
+		}
+		
+		if(existing != null)
+		{
+			existing.ReleaseTime = releaseTime;
+		}
+		else
+		{
+			pendingFallReleases.Add(new PendingFallRelease(target, releaseTime));
+		}
+	}
+	// ---------------------------
+
 	// --- aiming system ---
 	private bool isAiming = false;
 	private float aimAngle = 0f;
@@ -572,6 +647,11 @@ public class RopeController
 						Game.PlayEffect(EffectName.Blood, targetPos);
 						Game.PlayEffect(EffectName.Blood, targetPos);
 						Game.PlaySound("KatanaDraw", targetPos);
+						
+						// 4x roll-powered hit: force the victim through the
+						// native Fall reaction (see ForceFall for why input
+						// has to be disabled for this to take effect).
+						ForceFall(target);
 					}
 					else
 					{
@@ -642,6 +722,10 @@ public void GrapplingHook(TriggerArgs args)
 	{
 		r.Update();
 	}
+	
+	// Re-enable input for anyone whose forced-fall window (from a 4x
+	// roll-powered melee hit) has expired.
+	RopeController.ProcessPendingFallReleases();
 }
 
 public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
