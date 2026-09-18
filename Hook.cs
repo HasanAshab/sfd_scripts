@@ -400,7 +400,7 @@ public class RopeController
 					// Reduce force by 5% per 10% of downward angle
 					// So at 100% downward (dir.Y = -1), reduce by 50%
 					float downwardFactor = -dir.Y; // 0 to 1, where 1 is straight down
-					float forceReduction = downwardFactor * 0.5f; // 0% to 50% reduction
+					float forceReduction = downwardFactor * 0.8f; // 0% to 50% reduction
 					pullForce = PULL_FORCE * (1f - forceReduction);
 				}
 				
@@ -488,7 +488,7 @@ public class RopeController
 		if(currentMelee == WeaponItem.KNIFE) weaponDamage = 15f;
 		else if(currentMelee == WeaponItem.MACHETE) weaponDamage = 20f;
 		else if(currentMelee == WeaponItem.KATANA) weaponDamage = 25f;
-		else if(currentMelee == WeaponItem.CHAINSAW) weaponDamage = 30f;
+		else if(currentMelee == WeaponItem.AXE) weaponDamage = 32f;
 		else if(currentMelee == WeaponItem.BAT) weaponDamage = 12f;
 		else if(currentMelee == WeaponItem.PIPE) weaponDamage = 14f;
 		else if(currentMelee == WeaponItem.BATON) weaponDamage = 10f;
