@@ -27,6 +27,12 @@ public class RopeController
 	private const float MELEE_COOLDOWN = 100f; // Cooldown between area damage applications
 	private int meleeAreaAttacksRemaining = 0; // Remaining area damage attacks for current rope
 	private const int MAX_MELEE_AREA_ATTACKS_PER_ROPE = 2; // Maximum attacks allowed per rope
+	
+	// --- roll power-up system ---
+	private bool wasRolling = false; // Track if player was rolling last frame
+	private float rollPowerUpEndTime = 0f; // Time when roll power-up expires
+	private const float ROLL_POWERUP_DURATION = 2000f; // 2 seconds window after roll
+	// ---------------------------
 
 	// --- aiming system ---
 	private bool isAiming = false;
@@ -462,6 +468,26 @@ public class RopeController
 			ropeReleaseTime = 0f;
 		}
 		
+		// Detect roll action while on rope to activate power-up window
+		if(isOnRope)
+		{
+			bool isRollingNow = ply.IsDiving || ply.IsRecoveryRolling;
+			
+			// Detect roll end (was rolling, now not rolling)
+			if(wasRolling && !isRollingNow)
+			{
+				// Activate 2-second power-up window for 4x damage
+				rollPowerUpEndTime = Game.TotalElapsedGameTime + ROLL_POWERUP_DURATION;
+			}
+			
+			wasRolling = isRollingNow;
+		}
+		else
+		{
+			// Reset roll tracking when not on rope
+			wasRolling = false;
+		}
+		
 		// Update walk key state for next frame
 		this.wasWalkingPressed = ply.IsWalking;
 	}
@@ -503,8 +529,10 @@ public class RopeController
 		else if(currentMelee == WeaponItem.BOTTLE) weaponDamage = 8f;
 		else if(currentMelee == WeaponItem.CHAIN) weaponDamage = 11f;
 		
-		// Calculate total damage (2x multiplier)
-		float totalDamage = weaponDamage * meleeDamageDealt * 2f;
+		// Calculate total damage (2x or 4x multiplier based on roll power-up)
+		bool hasRollPowerUp = Game.TotalElapsedGameTime < rollPowerUpEndTime;
+		float damageMultiplier = hasRollPowerUp ? 4f : 2f;
+		float totalDamage = weaponDamage * meleeDamageDealt * damageMultiplier;
 		
 		// Get attacker's team
 		PlayerTeam attackerTeam = ply.GetTeam();
@@ -538,7 +566,16 @@ public class RopeController
 					target.DealDamage(totalDamage);
 					// Play blood effect at the damaged player's position
 					Game.PlayEffect(EffectName.Blood, targetPos);
-                	Game.PlaySound("KatanaDraw", targetPos);
+					
+					// Play enhanced sound effect if using roll power-up
+					if(hasRollPowerUp)
+					{
+						Game.PlaySound("GrenadeLauncherFire", targetPos, 0.5f);
+					}
+					else
+					{
+						Game.PlaySound("KatanaDraw", targetPos);
+					}
 				}
 			}
 		}
@@ -569,6 +606,10 @@ public class RopeController
 		
 		// Reset melee area attack counter for new rope
 		this.meleeAreaAttacksRemaining = MAX_MELEE_AREA_ATTACKS_PER_ROPE;
+		
+		// Reset roll power-up state for new rope
+		this.wasRolling = false;
+		this.rollPowerUpEndTime = 0f;
 	}
 }
 
