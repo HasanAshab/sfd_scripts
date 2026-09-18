@@ -34,6 +34,15 @@ public class RopeController
 	private const float ROLL_POWERUP_DURATION = 2000f; // 2 seconds window after roll
 	// ---------------------------
 
+	// --- airborne-since-grab requirement ---
+	// Stops players from just planting the hook nearby, standing on the
+	// ground next to it, and using the melee area power for free - the power
+	// is meant for players actually swinging on the rope. Requires the
+	// player's feet to have left the ground at least once (even for a single
+	// tick) since the rope was created before OnMeleeAction() will do anything.
+	private bool hasLeftGroundSinceGrab = false;
+	// ---------------------------
+
 	// --- roll-hit knockdown system (native Fall command) ---
 	// When a 4x (roll power-up) melee hit connects, the victim is forced
 	// through the game's own "Fall" reaction via PlayerCommand. PlayerCommands
@@ -555,6 +564,14 @@ public class RopeController
 			}
 			
 			wasRolling = isRollingNow;
+			
+			// Latch true the moment the player's feet leave the ground -
+			// even a single mid-air tick counts. Once true it stays true for
+			// the rest of this rope (reset happens in CreateRope()).
+			if(!ply.IsOnGround)
+			{
+				hasLeftGroundSinceGrab = true;
+			}
 		}
 		else
 		{
@@ -570,6 +587,9 @@ public class RopeController
 	{
 		// Only apply area damage if on rope and cooldown has passed
 		if(!isOnRope) return;
+		// Must have actually left the ground at some point on this rope -
+		// blocks the "plant the hook, stand on the ground next to it" exploit
+		if(!hasLeftGroundSinceGrab) return;
 		if(Game.TotalElapsedGameTime - lastMeleeActionTime < MELEE_COOLDOWN) return;
 		
 		// Check if player has remaining area damage attacks for this rope
@@ -691,6 +711,10 @@ public class RopeController
 		// Reset roll power-up state for new rope
 		this.wasRolling = false;
 		this.rollPowerUpEndTime = 0f;
+		
+		// Reset airborne requirement for new rope - must leave the ground
+		// again on this fresh grab before the melee area power can fire
+		this.hasLeftGroundSinceGrab = false;
 	}
 }
 
