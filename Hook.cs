@@ -25,6 +25,8 @@ public class RopeController
 	
 	private float lastMeleeActionTime = 0f; // Track last melee action
 	private const float MELEE_COOLDOWN = 100f; // Cooldown between area damage applications
+	private int meleeAreaAttacksRemaining = 0; // Remaining area damage attacks for current rope
+	private const int MAX_MELEE_AREA_ATTACKS_PER_ROPE = 2; // Maximum attacks allowed per rope
 
 	// --- aiming system ---
 	private bool isAiming = false;
@@ -470,7 +472,11 @@ public class RopeController
 		if(!isOnRope) return;
 		if(Game.TotalElapsedGameTime - lastMeleeActionTime < MELEE_COOLDOWN) return;
 		
+		// Check if player has remaining area damage attacks for this rope
+		if(meleeAreaAttacksRemaining <= 0) return;
+		
 		lastMeleeActionTime = Game.TotalElapsedGameTime;
+		meleeAreaAttacksRemaining--; // Consume one attack
 		
 		Vector2 playerPos = ply.GetWorldPosition();
 		const float MELEE_AREA_RADIUS = 30f;
@@ -560,6 +566,9 @@ public class RopeController
 		BuildRegulatorJoints();
 		
 		this.lastRopeShrinkTime = Game.TotalElapsedGameTime;
+		
+		// Reset melee area attack counter for new rope
+		this.meleeAreaAttacksRemaining = MAX_MELEE_AREA_ATTACKS_PER_ROPE;
 	}
 }
 
