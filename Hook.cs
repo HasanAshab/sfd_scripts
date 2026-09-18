@@ -471,8 +471,7 @@ public class RopeController
 		// Detect roll action while on rope to activate power-up window
 		if(isOnRope)
 		{
-			bool isRollingNow = ply.IsDiving || ply.IsRecoveryRolling;
-			
+			bool isRollingNow = ply.IsRolling || ply.IsRecoveryRolling;
 			// Detect roll end (was rolling, now not rolling)
 			if(wasRolling && !isRollingNow)
 			{
@@ -570,11 +569,13 @@ public class RopeController
 					// Play enhanced sound effect if using roll power-up
 					if(hasRollPowerUp)
 					{
-						Game.PlaySound("GrenadeLauncherFire", targetPos, 0.5f);
+						Game.PlayEffect(EffectName.Blood, targetPos);
+						Game.PlayEffect(EffectName.Blood, targetPos);
+						Game.PlaySound("KatanaDraw", targetPos);
 					}
 					else
 					{
-						Game.PlaySound("KatanaDraw", targetPos);
+						Game.PlaySound("MacheteDraw", targetPos);
 					}
 				}
 			}
