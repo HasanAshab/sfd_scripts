@@ -390,8 +390,22 @@ public class RopeController
 			{
 				Vector2 dir = anchor.GetWorldPosition() - playerSwingRegulator.GetWorldPosition();
 				dir.Normalize();
+				
+				// Calculate pull force with downward compensation
+				// When pulling downward (dir.Y < 0), reduce force to compensate for gravity
+				float pullForce = PULL_FORCE;
+				if(dir.Y < 0f)
+				{
+					// dir.Y ranges from 0 (horizontal) to -1 (straight down)
+					// Reduce force by 5% per 10% of downward angle
+					// So at 100% downward (dir.Y = -1), reduce by 50%
+					float downwardFactor = -dir.Y; // 0 to 1, where 1 is straight down
+					float forceReduction = downwardFactor * 0.5f; // 0% to 50% reduction
+					pullForce = PULL_FORCE * (1f - forceReduction);
+				}
+				
 				Vector2 currentVel = playerSwingRegulator.GetLinearVelocity();
-				Vector2 newVel = currentVel + (dir * PULL_FORCE);
+				Vector2 newVel = currentVel + (dir * pullForce);
 				playerSwingRegulator.SetLinearVelocity(newVel);
 				
 				// Periodically rebuild the joint at the current (shorter)

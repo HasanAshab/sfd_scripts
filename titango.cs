@@ -187,9 +187,6 @@ public void SpawnTitan(float elapsed)
     mods.CurrentHealth = mods.MaxHealth;
     mods.MeleeDamageDealtModifier = 2.5f + (float)titanRnd.NextDouble() * 1.5f; // 2.5x - 4x melee damage
     mods.MeleeForceModifier = 3f;
-    mods.MeleeDamageTakenModifier = 0.5f;
-    mods.ProjectileDamageTakenModifier = 0.6f;
-    mods.ExplosionDamageTakenModifier = 0.6f;
     mods.RunSpeedModifier = 0.8f;
     mods.SprintSpeedModifier = 0.8f;
     titan.SetModifiers(mods);
