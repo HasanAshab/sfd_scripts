@@ -36,9 +36,9 @@ public class RopeController
 	private const float MELEE_DAMAGE_MAX_DISTANCE = 30f;     // Farthest effective distance
 	private const float MELEE_DAMAGE_MID_DISTANCE = 20f;     // Mid-point distance
 	private const float MELEE_DAMAGE_MIN_DISTANCE = 0.5f;    // Point-blank distance
-	private const float MELEE_DAMAGE_MIN_MULTIPLIER = 1.5f;  // Damage at max distance
+	private const float MELEE_DAMAGE_MIN_MULTIPLIER = 0.5f;  // Damage at max distance
 	private const float MELEE_DAMAGE_MID_MULTIPLIER = 2f;    // Damage at mid distance
-	private const float MELEE_DAMAGE_MAX_MULTIPLIER = 2.5f;  // Damage at min distance
+	private const float MELEE_DAMAGE_MAX_MULTIPLIER = 3.5f;  // Damage at min distance
 	
 	// --- roll power-up system ---
 	private bool wasRolling = false; // Track if player was rolling last frame
