@@ -292,6 +292,8 @@ public class RopeController
 	
 	public void Update()
 	{
+		if (ply.IsDead) return;
+
 		// Detect walk key press (rising edge)
 		bool walkJustPressed = ply.IsWalking && !this.wasWalkingPressed;
 		bool walkJustReleased = !ply.IsWalking && this.wasWalkingPressed;
