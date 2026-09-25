@@ -36,9 +36,28 @@ public class RopeController
 	private const float MELEE_DAMAGE_MAX_DISTANCE = 30f;     // Farthest effective distance
 	private const float MELEE_DAMAGE_MID_DISTANCE = 20f;     // Mid-point distance
 	private const float MELEE_DAMAGE_MIN_DISTANCE = 0.5f;    // Point-blank distance
-	private const float MELEE_DAMAGE_MIN_MULTIPLIER = 0.5f;  // Damage at max distance
+	private const float MELEE_DAMAGE_MIN_MULTIPLIER = 1.5f;  // Damage at max distance
 	private const float MELEE_DAMAGE_MID_MULTIPLIER = 2f;    // Damage at mid distance
-	private const float MELEE_DAMAGE_MAX_MULTIPLIER = 3.5f;  // Damage at min distance
+	private const float MELEE_DAMAGE_MAX_MULTIPLIER = 2.5f;  // Damage at min distance
+	
+	// --- Gas system configuration ---
+	private const float GAS_MAX_CAPACITY = 100f;           // Maximum gas storage
+	private const float GAS_PULL_COST_PER_SECOND = 1.5f;   // Gas consumed per second while pulling
+	private const float GAS_THROW_COST = 1f;               // Flat gas cost per hook throw
+	private const float GAS_REFILL_FROM_CRATE = 15f;       // Gas gained from breaking crates
+	private const string GAS_REFILL_OBJECT_PREFIX = "Crate"; // Object name prefix for gas refill
+	
+	private float currentGas = 100f; // Current gas amount (starts full)
+	private float lastGasUpdateTime = 0f; // Track when gas was last updated
+	
+	// Gas bar visualization
+	private const int GAS_BAR_SEGMENTS = 10;               // Number of boxes in the gas bar
+	private const float GAS_BAR_OFFSET_Y = 25f;           // Vertical offset above player
+	private const float GAS_BAR_SEGMENT_WIDTH = 3f;       // Width of each box segment
+	private const float GAS_BAR_SEGMENT_HEIGHT = 3f;      // Height of each box segment
+	private const float GAS_BAR_SEGMENT_SPACING = 1f;     // Space between segments
+	private List<IObject> gasBarSegments = new List<IObject>(); // Visual gas bar boxes
+	// ---------------------------
 	
 	// --- roll power-up system ---
 	private bool wasRolling = false; // Track if player was rolling last frame
@@ -246,6 +265,10 @@ public class RopeController
 			this.aimIndicator.Remove();
 			this.aimIndicator = null;
 		}
+		
+		// Destroy gas bar when exiting aim mode
+		DestroyGasBar();
+		
 		this.isAiming = false;
 		// NOTE: intentionally NOT touching walkKeyHoldTime here anymore.
 		// It used to be reset to 0f, which - when this is called right after
@@ -255,6 +278,17 @@ public class RopeController
 	
 	private void ThrowHook(float angleRadians)
 	{
+		// Check if player has enough gas to throw
+		if(currentGas < GAS_THROW_COST)
+		{
+			// Not enough gas - don't throw
+			return;
+		}
+		
+		// Consume gas for throwing
+		currentGas -= GAS_THROW_COST;
+		if(currentGas < 0f) currentGas = 0f;
+		
 		Vector2 direction = new Vector2((float)Math.Cos(angleRadians), (float)Math.Sin(angleRadians));
 		hook = Game.CreateObject("Bottle00Broken", 
 			ply.GetWorldPosition() + new Vector2(direction.X * 10, 10), 
@@ -302,9 +336,82 @@ public class RopeController
 		this.regulatorTargetObjectJoint = newTargetObjectJoint;
 	}
 	
+	// Creates gas bar visualization above player's head
+	private void CreateGasBar()
+	{
+		DestroyGasBar(); // Clean up any existing bar first
+		
+		Vector2 playerPos = ply.GetWorldPosition();
+		float totalWidth = (GAS_BAR_SEGMENT_WIDTH + GAS_BAR_SEGMENT_SPACING) * GAS_BAR_SEGMENTS - GAS_BAR_SEGMENT_SPACING;
+		float startX = playerPos.X - (totalWidth / 2f);
+		float barY = playerPos.Y + GAS_BAR_OFFSET_Y;
+		
+		for(int i = 0; i < GAS_BAR_SEGMENTS; i++)
+		{
+			float segmentX = startX + i * (GAS_BAR_SEGMENT_WIDTH + GAS_BAR_SEGMENT_SPACING);
+			IObject segment = Game.CreateObject("InvisibleBlockNoCollision", new Vector2(segmentX, barY));
+			segment.SetSizeFactor(new Point(GAS_BAR_SEGMENT_WIDTH, GAS_BAR_SEGMENT_HEIGHT));
+			gasBarSegments.Add(segment);
+		}
+		
+		UpdateGasBar();
+	}
+	
+	// Updates gas bar colors based on current gas level
+	private void UpdateGasBar()
+	{
+		if(gasBarSegments.Count == 0) return;
+		
+		float gasPercent = currentGas / GAS_MAX_CAPACITY;
+		int filledSegments = (int)Math.Ceiling(gasPercent * GAS_BAR_SEGMENTS);
+		
+		Vector2 playerPos = ply.GetWorldPosition();
+		float totalWidth = (GAS_BAR_SEGMENT_WIDTH + GAS_BAR_SEGMENT_SPACING) * GAS_BAR_SEGMENTS - GAS_BAR_SEGMENT_SPACING;
+		float startX = playerPos.X - (totalWidth / 2f);
+		float barY = playerPos.Y + GAS_BAR_OFFSET_Y;
+		
+		for(int i = 0; i < gasBarSegments.Count; i++)
+		{
+			if(!gasBarSegments[i].IsRemoved)
+			{
+				// Update position to follow player
+				float segmentX = startX + i * (GAS_BAR_SEGMENT_WIDTH + GAS_BAR_SEGMENT_SPACING);
+				gasBarSegments[i].SetWorldPosition(new Vector2(segmentX, barY));
+				
+				// Set color based on whether segment is filled
+				if(i < filledSegments)
+				{
+					// Filled segment - cyan color (#00ff99)
+					gasBarSegments[i].SetColor1(new Color(0, 255, 153));
+				}
+				else
+				{
+					// Empty segment - dark gray
+					gasBarSegments[i].SetColor1(new Color(50, 50, 50));
+				}
+			}
+		}
+	}
+	
+	// Destroys all gas bar segments
+	private void DestroyGasBar()
+	{
+		foreach(IObject segment in gasBarSegments)
+		{
+			if(segment != null && !segment.IsRemoved)
+			{
+				segment.Remove();
+			}
+		}
+		gasBarSegments.Clear();
+	}
+	
 	public void Update()
 	{
 		if (ply.IsDead) return;
+		
+		// Check for broken crates near player to refill gas
+		CheckForCrateRefill();
 
 		// Detect walk key press (rising edge)
 		bool walkJustPressed = ply.IsWalking && !this.wasWalkingPressed;
@@ -339,12 +446,17 @@ public class RopeController
 				
 				// Create aim indicator
 				this.aimIndicator = Game.CreateObject("IsMIcon", ply.GetWorldPosition());
+				
+				// Create gas bar when entering aim mode
+				CreateGasBar();
 			}
 		}
 		
 		// Update aiming
 		if(isAiming)
 		{
+			// Update gas bar position and display
+			UpdateGasBar();
 			// Rotate aim continuously using the left/right virtual keys.
 			// These are the same keys that normally move the player left/right,
 			// so we cancel out any horizontal velocity they cause below.
@@ -491,46 +603,63 @@ public class RopeController
 		// Apply pulling force to the swing regulator which pulls the player
 		if(pulling && anchor != null && playerSwingRegulator != null)
 		{
-			float dist = Vector2.Distance(playerSwingRegulator.GetWorldPosition(), anchor.GetWorldPosition());
-			if(dist > MIN_PULL_DIST)
+			// Check if player has gas - if not, stop pulling
+			if(currentGas <= 0f)
 			{
-				Vector2 dir = anchor.GetWorldPosition() - playerSwingRegulator.GetWorldPosition();
-				dir.Normalize();
-				
-				// Calculate pull force with downward compensation
-				// When pulling downward (dir.Y < 0), reduce force to compensate for gravity
-				float pullForce = PULL_FORCE;
-				if(dir.Y < 0f)
-				{
-					// dir.Y ranges from 0 (horizontal) to -1 (straight down)
-					// Reduce force by 5% per 10% of downward angle
-					// So at 100% downward (dir.Y = -1), reduce by 50%
-					float downwardFactor = -dir.Y; // 0 to 1, where 1 is straight down
-					float forceReduction = downwardFactor * 0.8f; // 0% to 50% reduction
-					pullForce = PULL_FORCE * (1f - forceReduction);
-				}
-				
-				Vector2 currentVel = playerSwingRegulator.GetLinearVelocity();
-				Vector2 newVel = currentVel + (dir * pullForce);
-				playerSwingRegulator.SetLinearVelocity(newVel);
-				
-				// Periodically rebuild the joint at the current (shorter)
-				// distance. The Elastic joint's rest length is fixed at
-				// creation time and there's no API to change it directly, so
-				// this "ratchets" it inward every ROPE_SHRINK_INTERVAL_MS
-				// instead of letting it spring back to the original grab
-				// distance whenever PULL_FORCE isn't actively overpowering it.
-				if(Game.TotalElapsedGameTime - lastRopeShrinkTime >= ROPE_SHRINK_INTERVAL_MS)
-				{
-					BuildRegulatorJoints();
-					lastRopeShrinkTime = Game.TotalElapsedGameTime;
-				}
+				pulling = false;
 			}
 			else
 			{
-				pulling = false; // arrived - stop pulling
-				// Lock in the final, fully-reeled-in length.
-				BuildRegulatorJoints();
+				// Consume gas over time while pulling (1.5f per second = 0.015f per 10ms tick)
+				float gasCostThisTick = (GAS_PULL_COST_PER_SECOND / 1000f) * 10f; // 10ms per tick
+				currentGas -= gasCostThisTick;
+				if(currentGas < 0f) currentGas = 0f;
+			}
+			
+			// Only apply pull force if still pulling (has gas)
+			if(pulling)
+			{
+				float dist = Vector2.Distance(playerSwingRegulator.GetWorldPosition(), anchor.GetWorldPosition());
+				if(dist > MIN_PULL_DIST)
+				{
+					Vector2 dir = anchor.GetWorldPosition() - playerSwingRegulator.GetWorldPosition();
+					dir.Normalize();
+					
+					// Calculate pull force with downward compensation
+					// When pulling downward (dir.Y < 0), reduce force to compensate for gravity
+					float pullForce = PULL_FORCE;
+					if(dir.Y < 0f)
+					{
+						// dir.Y ranges from 0 (horizontal) to -1 (straight down)
+						// Reduce force by 5% per 10% of downward angle
+						// So at 100% downward (dir.Y = -1), reduce by 50%
+						float downwardFactor = -dir.Y; // 0 to 1, where 1 is straight down
+						float forceReduction = downwardFactor * 0.8f; // 0% to 50% reduction
+						pullForce = PULL_FORCE * (1f - forceReduction);
+					}
+					
+					Vector2 currentVel = playerSwingRegulator.GetLinearVelocity();
+					Vector2 newVel = currentVel + (dir * pullForce);
+					playerSwingRegulator.SetLinearVelocity(newVel);
+					
+					// Periodically rebuild the joint at the current (shorter)
+					// distance. The Elastic joint's rest length is fixed at
+					// creation time and there's no API to change it directly, so
+					// this "ratchets" it inward every ROPE_SHRINK_INTERVAL_MS
+					// instead of letting it spring back to the original grab
+					// distance whenever PULL_FORCE isn't actively overpowering it.
+					if(Game.TotalElapsedGameTime - lastRopeShrinkTime >= ROPE_SHRINK_INTERVAL_MS)
+					{
+						BuildRegulatorJoints();
+						lastRopeShrinkTime = Game.TotalElapsedGameTime;
+					}
+				}
+				else
+				{
+					pulling = false; // arrived - stop pulling
+					// Lock in the final, fully-reeled-in length.
+					BuildRegulatorJoints();
+				}
 			}
 		}
 		
@@ -595,6 +724,35 @@ public class RopeController
 		
 		// Update walk key state for next frame
 		this.wasWalkingPressed = ply.IsWalking;
+	}
+	
+	// Check for broken crates nearby and refill gas
+	private void CheckForCrateRefill()
+	{
+		// Get all objects in a small radius around the player
+		Vector2 playerPos = ply.GetWorldPosition();
+		Area checkArea = new Area(playerPos.Y + 15, playerPos.X - 15, playerPos.Y - 15, playerPos.X + 15);
+		IObject[] nearbyObjects = Game.GetObjectsByArea(checkArea);
+		
+		foreach(IObject obj in nearbyObjects)
+		{
+			// Check if object name starts with the refill prefix and is being destroyed
+			if(obj.Name.StartsWith(GAS_REFILL_OBJECT_PREFIX) && obj.DestructionInitiated)
+			{
+				// Refill gas
+				currentGas += GAS_REFILL_FROM_CRATE;
+				if(currentGas > GAS_MAX_CAPACITY)
+				{
+					currentGas = GAS_MAX_CAPACITY;
+				}
+				
+				// Play a sound effect to indicate gas pickup
+				Game.PlaySound("StrengthBoostStart", playerPos);
+				
+				// Remove the crate immediately so it doesn't give gas multiple times
+				obj.Remove();
+			}
+		}
 	}
 	
 	// Calculate smooth damage multiplier based on distance using linear interpolation
