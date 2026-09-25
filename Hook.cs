@@ -28,6 +28,14 @@ public class RopeController
 	private int meleeAreaAttacksRemaining = 0; // Remaining area damage attacks for current rope
 	private const int MAX_MELEE_AREA_ATTACKS_PER_ROPE = 2; // Maximum attacks allowed per rope
 	
+	// Distance-based damage scaling configuration
+	private const float MELEE_DAMAGE_RANGE_FAR = 20f;      // Distance where far range begins (20f-30f)
+	private const float MELEE_DAMAGE_RANGE_MID = 10f;      // Distance where mid range begins (10f-19f)
+	private const float MELEE_DAMAGE_RANGE_CLOSE = 0.5f;   // Distance where close range begins (0.5f-9f)
+	private const float MELEE_DAMAGE_MULTIPLIER_FAR = 1.5f;   // Damage multiplier for far range
+	private const float MELEE_DAMAGE_MULTIPLIER_MID = 2f;     // Damage multiplier for mid range
+	private const float MELEE_DAMAGE_MULTIPLIER_CLOSE = 2.5f; // Damage multiplier for close range
+	
 	// --- roll power-up system ---
 	private bool wasRolling = false; // Track if player was rolling last frame
 	private float rollPowerUpEndTime = 0f; // Time when roll power-up expires
@@ -625,10 +633,8 @@ public class RopeController
 		else if(currentMelee == WeaponItem.BOTTLE) weaponDamage = 8f;
 		else if(currentMelee == WeaponItem.CHAIN) weaponDamage = 11f;
 		
-		// Calculate total damage (2x or 4x multiplier based on roll power-up)
+		// Check if roll power-up is active (doubles the final damage)
 		bool hasRollPowerUp = Game.TotalElapsedGameTime < rollPowerUpEndTime;
-		float damageMultiplier = hasRollPowerUp ? 4f : 2f;
-		float totalDamage = weaponDamage * meleeDamageDealt * damageMultiplier;
 		
 		// Get attacker's team
 		PlayerTeam attackerTeam = ply.GetTeam();
@@ -659,6 +665,38 @@ public class RopeController
 				
 				if(shouldDamage)
 				{
+					// Calculate distance-based damage multiplier
+					float distanceMultiplier;
+					if(distance >= MELEE_DAMAGE_RANGE_FAR)
+					{
+						// Far range: 20f to 30f = 1.5x damage
+						distanceMultiplier = MELEE_DAMAGE_MULTIPLIER_FAR;
+					}
+					else if(distance >= MELEE_DAMAGE_RANGE_MID)
+					{
+						// Mid range: 10f to 19f = 2x damage
+						distanceMultiplier = MELEE_DAMAGE_MULTIPLIER_MID;
+					}
+					else if(distance >= MELEE_DAMAGE_RANGE_CLOSE)
+					{
+						// Close range: 0.5f to 9f = 2.5x damage
+						distanceMultiplier = MELEE_DAMAGE_MULTIPLIER_CLOSE;
+					}
+					else
+					{
+						// Point blank: less than 0.5f = 2.5x damage (same as close)
+						distanceMultiplier = MELEE_DAMAGE_MULTIPLIER_CLOSE;
+					}
+					
+					// Apply roll power-up (doubles the distance multiplier)
+					if(hasRollPowerUp)
+					{
+						distanceMultiplier *= 2f;
+					}
+					
+					// Calculate final damage
+					float totalDamage = weaponDamage * meleeDamageDealt * distanceMultiplier;
+					
 					target.DealDamage(totalDamage);
 					// Play blood effect at the damaged player's position
 					Game.PlayEffect(EffectName.Blood, targetPos);
