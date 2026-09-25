@@ -28,13 +28,17 @@ public class RopeController
 	private int meleeAreaAttacksRemaining = 0; // Remaining area damage attacks for current rope
 	private const int MAX_MELEE_AREA_ATTACKS_PER_ROPE = 2; // Maximum attacks allowed per rope
 	
-	// Distance-based damage scaling configuration
-	private const float MELEE_DAMAGE_RANGE_FAR = 20f;      // Distance where far range begins (20f-30f)
-	private const float MELEE_DAMAGE_RANGE_MID = 10f;      // Distance where mid range begins (10f-19f)
-	private const float MELEE_DAMAGE_RANGE_CLOSE = 0.5f;   // Distance where close range begins (0.5f-9f)
-	private const float MELEE_DAMAGE_MULTIPLIER_FAR = 1.5f;   // Damage multiplier for far range
-	private const float MELEE_DAMAGE_MULTIPLIER_MID = 2f;     // Damage multiplier for mid range
-	private const float MELEE_DAMAGE_MULTIPLIER_CLOSE = 2.5f; // Damage multiplier for close range
+	// Distance-based damage scaling configuration (smooth interpolation)
+	// These define control points for the damage curve:
+	// At maxDistance, damage = minMultiplier
+	// At midDistance, damage = midMultiplier  
+	// At minDistance, damage = maxMultiplier
+	private const float MELEE_DAMAGE_MAX_DISTANCE = 30f;     // Farthest effective distance
+	private const float MELEE_DAMAGE_MID_DISTANCE = 20f;     // Mid-point distance
+	private const float MELEE_DAMAGE_MIN_DISTANCE = 0.5f;    // Point-blank distance
+	private const float MELEE_DAMAGE_MIN_MULTIPLIER = 1.5f;  // Damage at max distance
+	private const float MELEE_DAMAGE_MID_MULTIPLIER = 2f;    // Damage at mid distance
+	private const float MELEE_DAMAGE_MAX_MULTIPLIER = 2.5f;  // Damage at min distance
 	
 	// --- roll power-up system ---
 	private bool wasRolling = false; // Track if player was rolling last frame
@@ -593,6 +597,35 @@ public class RopeController
 		this.wasWalkingPressed = ply.IsWalking;
 	}
 	
+	// Calculate smooth damage multiplier based on distance using linear interpolation
+	// between three control points: max distance (1.5x), mid distance (2x), min distance (2.5x)
+	private float CalculateDistanceMultiplier(float distance)
+	{
+		// Clamp distance to valid range
+		if(distance >= MELEE_DAMAGE_MAX_DISTANCE)
+		{
+			return MELEE_DAMAGE_MIN_MULTIPLIER; // At or beyond max distance
+		}
+		else if(distance <= MELEE_DAMAGE_MIN_DISTANCE)
+		{
+			return MELEE_DAMAGE_MAX_MULTIPLIER; // At or closer than min distance
+		}
+		else if(distance >= MELEE_DAMAGE_MID_DISTANCE)
+		{
+			// Interpolate between max distance and mid distance
+			// distance 30 -> 20: multiplier 1.5 -> 2.0
+			float t = (MELEE_DAMAGE_MAX_DISTANCE - distance) / (MELEE_DAMAGE_MAX_DISTANCE - MELEE_DAMAGE_MID_DISTANCE);
+			return MELEE_DAMAGE_MIN_MULTIPLIER + (MELEE_DAMAGE_MID_MULTIPLIER - MELEE_DAMAGE_MIN_MULTIPLIER) * t;
+		}
+		else
+		{
+			// Interpolate between mid distance and min distance
+			// distance 20 -> 0.5: multiplier 2.0 -> 2.5
+			float t = (MELEE_DAMAGE_MID_DISTANCE - distance) / (MELEE_DAMAGE_MID_DISTANCE - MELEE_DAMAGE_MIN_DISTANCE);
+			return MELEE_DAMAGE_MID_MULTIPLIER + (MELEE_DAMAGE_MAX_MULTIPLIER - MELEE_DAMAGE_MID_MULTIPLIER) * t;
+		}
+	}
+	
 	public void OnMeleeAction()
 	{
 		// Only apply area damage if on rope and cooldown has passed
@@ -665,28 +698,8 @@ public class RopeController
 				
 				if(shouldDamage)
 				{
-					// Calculate distance-based damage multiplier
-					float distanceMultiplier;
-					if(distance >= MELEE_DAMAGE_RANGE_FAR)
-					{
-						// Far range: 20f to 30f = 1.5x damage
-						distanceMultiplier = MELEE_DAMAGE_MULTIPLIER_FAR;
-					}
-					else if(distance >= MELEE_DAMAGE_RANGE_MID)
-					{
-						// Mid range: 10f to 19f = 2x damage
-						distanceMultiplier = MELEE_DAMAGE_MULTIPLIER_MID;
-					}
-					else if(distance >= MELEE_DAMAGE_RANGE_CLOSE)
-					{
-						// Close range: 0.5f to 9f = 2.5x damage
-						distanceMultiplier = MELEE_DAMAGE_MULTIPLIER_CLOSE;
-					}
-					else
-					{
-						// Point blank: less than 0.5f = 2.5x damage (same as close)
-						distanceMultiplier = MELEE_DAMAGE_MULTIPLIER_CLOSE;
-					}
+					// Calculate smooth distance-based damage multiplier
+					float distanceMultiplier = CalculateDistanceMultiplier(distance);
 					
 					// Apply roll power-up (doubles the distance multiplier)
 					if(hasRollPowerUp)
