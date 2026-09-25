@@ -53,8 +53,8 @@ public class RopeController
 	// Gas bar visualization
 	private const int GAS_BAR_SEGMENTS = 10;               // Number of boxes in the gas bar
 	private const float GAS_BAR_OFFSET_Y = 25f;           // Vertical offset above player
-	private const float GAS_BAR_SEGMENT_WIDTH = 3f;       // Width of each box segment
-	private const float GAS_BAR_SEGMENT_HEIGHT = 3f;      // Height of each box segment
+	private const int GAS_BAR_SEGMENT_WIDTH = 3;          // Width of each box segment (int for Point)
+	private const int GAS_BAR_SEGMENT_HEIGHT = 3;         // Height of each box segment (int for Point)
 	private const float GAS_BAR_SEGMENT_SPACING = 1f;     // Space between segments
 	private List<IObject> gasBarSegments = new List<IObject>(); // Visual gas bar boxes
 	// ---------------------------
@@ -382,12 +382,12 @@ public class RopeController
 				if(i < filledSegments)
 				{
 					// Filled segment - cyan color (#00ff99)
-					gasBarSegments[i].SetColor1(new Color(0, 255, 153));
+					gasBarSegments[i].SetColor1("ClothingCyan");
 				}
 				else
 				{
 					// Empty segment - dark gray
-					gasBarSegments[i].SetColor1(new Color(50, 50, 50));
+					gasBarSegments[i].SetColor1("ClothingDarkGray");
 				}
 			}
 		}
