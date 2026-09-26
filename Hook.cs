@@ -866,9 +866,21 @@ public class RopeController
 			// Skip non-destructible objects, background objects, and the player's regulator/anchor
 			if(obj == null || obj.IsRemoved) continue;
 			if(obj.Destructable == false) continue;
-			if(obj.Name.StartsWith("Bg") || obj.Name.StartsWith("BG")) continue;
+			if(obj.Name.StartsWith("Bg") || obj.Name.StartsWith("BG") || obj.Name == "BarrelExplosive" || obj.Name == "BarrelWreck" || obj.Name == "PropaneTank") continue;
 			if(obj.UniqueID == anchor.UniqueID || obj.UniqueID == playerSwingRegulator.UniqueID) continue;
 			if(obj.Name.Contains("Trigger") || obj.Name.Contains("Spawn") || obj.Name.Contains("Marker")) continue;
+			
+			// Skip players - they're handled in the separate player loop above
+			bool isPlayer = false;
+			foreach(IPlayer p in Game.GetPlayers())
+			{
+				if(p.UniqueID == obj.UniqueID)
+				{
+					isPlayer = true;
+					break;
+				}
+			}
+			if(isPlayer) continue;
 			
 			Vector2 objPos = obj.GetWorldPosition();
 			float distance = Vector2.Distance(playerPos, objPos);
