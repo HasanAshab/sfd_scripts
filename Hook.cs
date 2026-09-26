@@ -542,14 +542,21 @@ public class RopeController
 		if(pulling && anchor != null && playerSwingRegulator != null)
 		{
 			// Check if player has gas - if not, stop pulling
-			if(currentGas <= 0f)
+			 if(currentGas <= 0f)
 			{
 				pulling = false;
+				// Lock the rope at its current, accurate length immediately.
+				// Otherwise the Elastic joint is left pointing at a stale (longer)
+				// rest length from the last ratchet tick, and it'll spring back out
+				// to it once our manual force stops fighting it - producing a
+				// visible kink instead of a clean stop.
+				BuildRegulatorJoints();
+				lastRopeShrinkTime = Game.TotalElapsedGameTime;
 			}
 			else
 			{
-				// Consume gas over time while pulling (1.5f per second = 0.015f per 10ms tick)
-				float gasCostThisTick = (GAS_PULL_COST_PER_SECOND / 1000f) * 10f; // 10ms per tick
+				// Consume gas over time while pulling
+				float gasCostThisTick = (GAS_PULL_COST_PER_SECOND / 1000f) * 10f;
 				currentGas -= gasCostThisTick;
 				if(currentGas < 0f) currentGas = 0f;
 			}
