@@ -43,7 +43,7 @@ public class RopeController
 	// SetStatusBarsVisible. That gives us a following, auto-styled meter for free, instead of
 	// manually spawning/positioning placeholder objects every tick.
 	private const float GAS_MAX_CAPACITY = 100f;           // Maximum gas storage
-	private const float GAS_PULL_COST_PER_SECOND = 1.5f;   // Gas consumed per second while pulling
+	private const float GAS_PULL_COST_PER_SECOND = 5.5f;   // Gas consumed per second while pulling
 	private const float GAS_THROW_COST = 1f;               // Flat gas cost per hook throw
 	private const float GAS_REFILL_FROM_CRATE = 15f;       // Gas gained from breaking crates
 	private const string GAS_REFILL_OBJECT_PREFIX = "Crate"; // Object name prefix for gas refill
