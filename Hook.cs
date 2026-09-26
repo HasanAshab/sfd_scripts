@@ -284,6 +284,7 @@ public class RopeController
 		if(currentGas < GAS_THROW_COST)
 		{
 			// Not enough gas - don't throw
+			Game.PlaySound("OutOfAmmoHeavy", ply.GetWorldPosition())
 			return;
 		}
 		
