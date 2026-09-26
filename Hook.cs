@@ -865,7 +865,7 @@ public class RopeController
 		{
 			// Skip non-destructible objects, background objects, and the player's regulator/anchor
 			if(obj == null || obj.IsRemoved) continue;
-			if(obj.Destructible == false) continue;
+			if(obj.Destructable == false) continue;
 			if(obj.Name.StartsWith("Bg") || obj.Name.StartsWith("BG")) continue;
 			if(obj.UniqueID == anchor.UniqueID || obj.UniqueID == playerSwingRegulator.UniqueID) continue;
 			if(obj.Name.Contains("Trigger") || obj.Name.Contains("Spawn") || obj.Name.Contains("Marker")) continue;
