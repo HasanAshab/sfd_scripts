@@ -78,11 +78,11 @@ public void OnUpdate(float elapsed)
     if (players.Length >= 2)
     {
         // Process main players (p1 and p2) with normal timers and energy requirement
-        ProcessPlayerRegeneration(players[0], ref p1MaxEnergyTime, p1LastCombatTime, REGEN_DELAY, COMBAT_COOLDOWN);
-        ProcessPlayerRegeneration(players[1], ref p2MaxEnergyTime, p2LastCombatTime, REGEN_DELAY, COMBAT_COOLDOWN);
+        // ProcessPlayerRegeneration(players[0], ref p1MaxEnergyTime, p1LastCombatTime, REGEN_DELAY, COMBAT_COOLDOWN);
+        // ProcessPlayerRegeneration(players[1], ref p2MaxEnergyTime, p2LastCombatTime, REGEN_DELAY, COMBAT_COOLDOWN);
         
         // Process bots (p3 to p8) with faster timers and no energy requirement
-        for (int i = 2; i < players.Length && i < 8; i++)
+        for (int i = 0; i < players.Length && i < 8; i++)
         {
             int botIndex = i - 2; // Convert to bot array index (0-5)
             ProcessBotRegeneration(players[i], ref botMaxEnergyTimes[botIndex], botLastCombatTimes[botIndex]);
