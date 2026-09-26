@@ -148,7 +148,7 @@ public class RopeController
 	// Tuned for continuous per-tick rotation (Update runs every 10ms).
 	// 0.03 rad/tick ~= 1.7 rad/sec ~= 100 deg/sec. Adjust to taste.
 	private const float AIM_ROTATE_SPEED = 0.03f;
-	private IObject aimIndicator = null;
+	private IObjectText aimIndicator = null;
 	private float walkKeyHoldTime = 0f;
 	private const float QUICK_TAP_THRESHOLD = 200f;
 	private Vector2 aimStartPosition; // player position when aiming began; X is locked while aiming
@@ -388,7 +388,15 @@ public class RopeController
 				this.aimStartPosition = ply.GetWorldPosition();
 				
 				// Create aim indicator
-				this.aimIndicator = Game.CreateObject("IsMIcon", ply.GetWorldPosition());
+				this.aimIndicator = (IObjectText)Game.CreateObject(
+					"Text",
+					ply.GetWorldPosition()
+				);
+
+				this.aimIndicator.SetText("+");
+				this.aimIndicator.SetTextScale(0.8f);
+				this.aimIndicator.SetTextAlignment(TextAlignment.Middle);
+				this.aimIndicator.SetTextColor(new Color(255, 255, 255));
 			}
 		}
 		
