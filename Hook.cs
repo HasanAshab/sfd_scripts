@@ -770,17 +770,17 @@ public class RopeController
 		WeaponItem currentMelee = ply.CurrentMeleeWeapon.WeaponItem;
 		
 		// Weapon base damages (approximate values from game)
-		if(currentMelee == WeaponItem.KNIFE) weaponDamage = 15f;
-		else if(currentMelee == WeaponItem.MACHETE) weaponDamage = 20f;
-		else if(currentMelee == WeaponItem.KATANA) weaponDamage = 25f;
-		else if(currentMelee == WeaponItem.AXE) weaponDamage = 32f;
-		else if(currentMelee == WeaponItem.BAT) weaponDamage = 12f;
-		else if(currentMelee == WeaponItem.PIPE) weaponDamage = 14f;
-		else if(currentMelee == WeaponItem.BATON) weaponDamage = 10f;
-		else if(currentMelee == WeaponItem.HAMMER) weaponDamage = 18f;
+		if(currentMelee == WeaponItem.AXE) weaponDamage = 32f;
+		else if(currentMelee == WeaponItem.KATANA) weaponDamage = 26f;
+		else if(currentMelee == WeaponItem.MACHETE) weaponDamage = 19f;
 		else if(currentMelee == WeaponItem.LEAD_PIPE) weaponDamage = 16f;
-		else if(currentMelee == WeaponItem.BOTTLE) weaponDamage = 8f;
-		else if(currentMelee == WeaponItem.CHAIN) weaponDamage = 11f;
+		else if(currentMelee == WeaponItem.KNIFE) weaponDamage = 15f;
+		else if(currentMelee == WeaponItem.BAT) weaponDamage = 14f;
+		else if(currentMelee == WeaponItem.HAMMER) weaponDamage = 14f;
+		else if(currentMelee == WeaponItem.PIPE) weaponDamage = 12f;
+		else if(currentMelee == WeaponItem.BATON) weaponDamage = 11f;
+		else if(currentMelee == WeaponItem.BOTTLE) weaponDamage = 9f;
+		else if(currentMelee == WeaponItem.CHAIN) weaponDamage = 10f;
 		
 		// Check if roll power-up is active (doubles the final damage)
 		bool hasRollPowerUp = Game.TotalElapsedGameTime < rollPowerUpEndTime;
