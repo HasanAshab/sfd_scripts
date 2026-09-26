@@ -36,6 +36,7 @@ public class RopeController
 	private const float MELEE_DAMAGE_MIN_MULTIPLIER = 1.5f;  // Damage at max distance
 	private const float MELEE_DAMAGE_MID_MULTIPLIER = 2f;    // Damage at mid distance
 	private const float MELEE_DAMAGE_MAX_MULTIPLIER = 2.5f;  // Damage at min distance
+	private const float MELEE_DAMAGE_OBJECT_MODIFIER = 0.5f; // Additional multiplier for objects (reduces damage)
 	
 	// --- Gas system configuration ---
 	// Gas is piggybacked onto the player's native Energy stat (PlayerModifiers.MaxEnergy /
@@ -848,6 +849,52 @@ public class RopeController
 						Game.PlaySound("MacheteDraw", targetPos);
 					}
 				}
+			}
+		}
+		
+		// Damage destructible objects in the area
+		Area objectCheckArea = new Area(
+			playerPos.Y + MELEE_AREA_RADIUS,
+			playerPos.X - MELEE_AREA_RADIUS,
+			playerPos.Y - MELEE_AREA_RADIUS,
+			playerPos.X + MELEE_AREA_RADIUS
+		);
+		IObject[] nearbyObjects = Game.GetObjectsByArea(objectCheckArea);
+		
+		foreach(IObject obj in nearbyObjects)
+		{
+			// Skip non-destructible objects, background objects, and the player's regulator/anchor
+			if(obj == null || obj.IsRemoved) continue;
+			if(obj.Destructible == false) continue;
+			if(obj.Name.StartsWith("Bg") || obj.Name.StartsWith("BG")) continue;
+			if(obj.UniqueID == anchor.UniqueID || obj.UniqueID == playerSwingRegulator.UniqueID) continue;
+			if(obj.Name.Contains("Trigger") || obj.Name.Contains("Spawn") || obj.Name.Contains("Marker")) continue;
+			
+			Vector2 objPos = obj.GetWorldPosition();
+			float distance = Vector2.Distance(playerPos, objPos);
+			
+			if(distance <= MELEE_AREA_RADIUS)
+			{
+				// Calculate smooth distance-based damage multiplier
+				float distanceMultiplier = CalculateDistanceMultiplier(distance);
+				
+				// Apply roll power-up (doubles the distance multiplier)
+				if(hasRollPowerUp)
+				{
+					distanceMultiplier *= 2f;
+				}
+				
+				// Apply object damage modifier (0.5x for objects)
+				float objectDamageModifier = MELEE_DAMAGE_OBJECT_MODIFIER;
+				
+				// Calculate final damage for objects
+				float totalObjectDamage = weaponDamage * meleeDamageDealt * distanceMultiplier * objectDamageModifier;
+				
+				// Apply damage to object
+				obj.DealDamage(totalObjectDamage);
+				
+				// Play impact effect at object position
+				Game.PlayEffect(EffectName.Sparks, objPos);
 			}
 		}
 	}
