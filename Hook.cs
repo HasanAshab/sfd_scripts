@@ -1,6 +1,3 @@
-//GrapplingHook Script!
-//Made by ClockworkDice
-
 public class RopeController
 {
 	public IObjectDistanceJoint distanceJoint = null;
@@ -41,22 +38,17 @@ public class RopeController
 	private const float MELEE_DAMAGE_MAX_MULTIPLIER = 2.5f;  // Damage at min distance
 	
 	// --- Gas system configuration ---
+	// Gas is piggybacked onto the player's native Energy stat (PlayerModifiers.MaxEnergy /
+	// CurrentEnergy), which the game already renders as a bar next to the health bar via
+	// SetStatusBarsVisible. That gives us a following, auto-styled meter for free, instead of
+	// manually spawning/positioning placeholder objects every tick.
 	private const float GAS_MAX_CAPACITY = 100f;           // Maximum gas storage
 	private const float GAS_PULL_COST_PER_SECOND = 1.5f;   // Gas consumed per second while pulling
 	private const float GAS_THROW_COST = 1f;               // Flat gas cost per hook throw
 	private const float GAS_REFILL_FROM_CRATE = 15f;       // Gas gained from breaking crates
 	private const string GAS_REFILL_OBJECT_PREFIX = "Crate"; // Object name prefix for gas refill
 	
-	private float currentGas = 100f; // Current gas amount (starts full)
-	private float lastGasUpdateTime = 0f; // Track when gas was last updated
-	
-	// Gas bar visualization
-	private const int GAS_BAR_SEGMENTS = 10;               // Number of boxes in the gas bar
-	private const float GAS_BAR_OFFSET_Y = 25f;           // Vertical offset above player
-	private const int GAS_BAR_SEGMENT_WIDTH = 3;          // Width of each box segment (int for Point)
-	private const int GAS_BAR_SEGMENT_HEIGHT = 3;         // Height of each box segment (int for Point)
-	private const float GAS_BAR_SEGMENT_SPACING = 1f;     // Space between segments
-	private List<IObject> gasBarSegments = new List<IObject>(); // Visual gas bar boxes
+	private float currentGas = 100f; // Current gas amount (starts full) - mirrored into CurrentEnergy
 	// ---------------------------
 	
 	// --- roll power-up system ---
@@ -222,6 +214,19 @@ public class RopeController
 		
 		// Apply the modified profile back to the player
 		ply.SetProfile(profile);
+
+		// --- Claim the native Energy stat as our gas gauge ---
+		// This makes the gas level show up as a real status bar right next to
+		// health (via SetStatusBarsVisible), following the player automatically,
+		// with no extra objects or per-tick positioning needed on our end.
+		// We zero out the recharge/consumption modifiers so nothing else (native
+		// or otherwise) changes this value out from under our own gas economy.
+		PlayerModifiers mods = ply.GetModifiers();
+		mods.MaxEnergy = (int)GAS_MAX_CAPACITY;
+		mods.CurrentEnergy = currentGas;
+		mods.EnergyRechargeModifier = 0f;
+		mods.EnergyConsumptionModifier = 0f;
+		ply.SetModifiers(mods);
 	}
 	
 	private void CancelRope()
@@ -265,9 +270,6 @@ public class RopeController
 			this.aimIndicator.Remove();
 			this.aimIndicator = null;
 		}
-		
-		// Destroy gas bar when exiting aim mode
-		DestroyGasBar();
 		
 		this.isAiming = false;
 		// NOTE: intentionally NOT touching walkKeyHoldTime here anymore.
@@ -336,74 +338,15 @@ public class RopeController
 		this.regulatorTargetObjectJoint = newTargetObjectJoint;
 	}
 	
-	// Creates gas bar visualization above player's head
-	private void CreateGasBar()
+	// Pushes our authoritative currentGas value into the player's native
+	// Energy stat, which the game renders as a bar next to health. Cheap
+	// enough to call once per tick rather than after every individual
+	// gas-changing event.
+	private void SyncGasBar()
 	{
-		DestroyGasBar(); // Clean up any existing bar first
-		
-		Vector2 playerPos = ply.GetWorldPosition();
-		float totalWidth = (GAS_BAR_SEGMENT_WIDTH + GAS_BAR_SEGMENT_SPACING) * GAS_BAR_SEGMENTS - GAS_BAR_SEGMENT_SPACING;
-		float startX = playerPos.X - (totalWidth / 2f);
-		float barY = playerPos.Y + GAS_BAR_OFFSET_Y;
-		
-		for(int i = 0; i < GAS_BAR_SEGMENTS; i++)
-		{
-			float segmentX = startX + i * (GAS_BAR_SEGMENT_WIDTH + GAS_BAR_SEGMENT_SPACING);
-			IObject segment = Game.CreateObject("InvisibleBlockNoCollision", new Vector2(segmentX, barY));
-			segment.SetSizeFactor(new Point(GAS_BAR_SEGMENT_WIDTH, GAS_BAR_SEGMENT_HEIGHT));
-			gasBarSegments.Add(segment);
-		}
-		
-		UpdateGasBar();
-	}
-	
-	// Updates gas bar colors based on current gas level
-	private void UpdateGasBar()
-	{
-		if(gasBarSegments.Count == 0) return;
-		
-		float gasPercent = currentGas / GAS_MAX_CAPACITY;
-		int filledSegments = (int)Math.Ceiling(gasPercent * GAS_BAR_SEGMENTS);
-		
-		Vector2 playerPos = ply.GetWorldPosition();
-		float totalWidth = (GAS_BAR_SEGMENT_WIDTH + GAS_BAR_SEGMENT_SPACING) * GAS_BAR_SEGMENTS - GAS_BAR_SEGMENT_SPACING;
-		float startX = playerPos.X - (totalWidth / 2f);
-		float barY = playerPos.Y + GAS_BAR_OFFSET_Y;
-		
-		for(int i = 0; i < gasBarSegments.Count; i++)
-		{
-			if(!gasBarSegments[i].IsRemoved)
-			{
-				// Update position to follow player
-				float segmentX = startX + i * (GAS_BAR_SEGMENT_WIDTH + GAS_BAR_SEGMENT_SPACING);
-				gasBarSegments[i].SetWorldPosition(new Vector2(segmentX, barY));
-				
-				// Set color based on whether segment is filled
-				if(i < filledSegments)
-				{
-					// Filled segment - cyan color (#00ff99)
-					gasBarSegments[i].SetColor1("ClothingCyan");
-				}
-				else
-				{
-					// Empty segment - dark gray
-					gasBarSegments[i].SetColor1("ClothingDarkGray");
-				}
-			}
-		}
-	}
-	
-	// Destroys all gas bar segments
-	private void DestroyGasBar()
-	{
-		foreach(IObject segment in gasBarSegments)
-		{
-			if(segment != null && !segment.IsRemoved)
-			{
-				segment.Remove();
-			}
-		}
-		gasBarSegments.Clear();
+		PlayerModifiers mods = ply.GetModifiers();
+		mods.CurrentEnergy = currentGas;
+		ply.SetModifiers(mods);
 	}
 	
 	public void Update()
@@ -446,17 +389,12 @@ public class RopeController
 				
 				// Create aim indicator
 				this.aimIndicator = Game.CreateObject("IsMIcon", ply.GetWorldPosition());
-				
-				// Create gas bar when entering aim mode
-				CreateGasBar();
 			}
 		}
 		
 		// Update aiming
 		if(isAiming)
 		{
-			// Update gas bar position and display
-			UpdateGasBar();
 			// Rotate aim continuously using the left/right virtual keys.
 			// These are the same keys that normally move the player left/right,
 			// so we cancel out any horizontal velocity they cause below.
@@ -673,24 +611,24 @@ public class RopeController
 		// Handle impact damage protection when on rope or recently released
 		bool shouldHaveProtection = isOnRope || (ropeReleaseTime > 0f && (Game.TotalElapsedGameTime - ropeReleaseTime) < IMPACT_PROTECTION_DURATION);
 		
-		PlayerModifiers mods = ply.GetModifiers();
+		PlayerModifiers protectionMods = ply.GetModifiers();
 		if(shouldHaveProtection)
 		{
 			// Store original modifier if not already stored
-			if(originalImpactDamageMod < 0f && mods.ImpactDamageTakenModifier >= 0f)
+			if(originalImpactDamageMod < 0f && protectionMods.ImpactDamageTakenModifier >= 0f)
 			{
-				originalImpactDamageMod = mods.ImpactDamageTakenModifier;
+				originalImpactDamageMod = protectionMods.ImpactDamageTakenModifier;
 			}
 			
 			// Apply reduced impact damage
-			mods.ImpactDamageTakenModifier = 0.5f;
-			ply.SetModifiers(mods);
+			protectionMods.ImpactDamageTakenModifier = 0.5f;
+			ply.SetModifiers(protectionMods);
 		}
 		else if(originalImpactDamageMod >= 0f)
 		{
 			// Restore original modifier after protection expires
-			mods.ImpactDamageTakenModifier = originalImpactDamageMod;
-			ply.SetModifiers(mods);
+			protectionMods.ImpactDamageTakenModifier = originalImpactDamageMod;
+			ply.SetModifiers(protectionMods);
 			originalImpactDamageMod = -1f;
 			ropeReleaseTime = 0f;
 		}
@@ -721,6 +659,11 @@ public class RopeController
 			// Reset roll tracking when not on rope
 			wasRolling = false;
 		}
+		
+		// Push the current gas value into the player's native Energy stat so
+		// the status-bar UI reflects it. One GetModifiers/SetModifiers pair
+		// per tick is enough - no per-segment object work required.
+		SyncGasBar();
 		
 		// Update walk key state for next frame
 		this.wasWalkingPressed = ply.IsWalking;
