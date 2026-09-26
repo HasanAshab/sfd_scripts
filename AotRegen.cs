@@ -114,7 +114,7 @@ private void ProcessPlayerRegeneration(IPlayer player, ref float regenTimer, flo
     // Check if enough time has passed for regeneration
     if (currentTime - regenTimer >= REGEN_DELAY)
     {
-        RegenerateHealth(player, mods, 0.03f);
+        RegenerateHealth(player, mods, 0.015f);
     }
 }
 
