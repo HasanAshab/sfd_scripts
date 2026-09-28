@@ -940,7 +940,7 @@ public class RopeController
 					obj.DealDamage(totalObjectDamage);
 					
 					// Play impact effect at object position
-					Game.PlayEffect(EffectName.Sparks, objPos);
+					Game.PlayEffect(EffectName.Smack, objPos);
 				}
 			}
 		}
