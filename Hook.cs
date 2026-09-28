@@ -867,8 +867,8 @@ public class RopeController
 		}
 		
 		// Damage destructible objects in the area
-		// Only damage objects if player is rolling or recovery rolling
-		if(isRollingNow)
+		// Damage objects if player is currently rolling OR has roll power-up active (recently rolled)
+		if(isRollingNow || hasRollPowerUp)
 		{
 			Area objectCheckArea = new Area(
 				playerPos.Y + MELEE_AREA_RADIUS,
