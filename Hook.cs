@@ -148,7 +148,7 @@ public class RopeController
 	private const float AIM_DISTANCE = 25f;
 	// Tuned for continuous per-tick rotation (Update runs every 10ms).
 	// 0.03 rad/tick ~= 1.7 rad/sec ~= 100 deg/sec. Adjust to taste.
-	private const float AIM_ROTATE_SPEED = 0.03f;
+	private const float AIM_ROTATE_SPEED = 0.06f;
 	private IObjectText aimIndicator = null;
 	private float walkKeyHoldTime = 0f;
 	private const float QUICK_TAP_THRESHOLD = 200f;
