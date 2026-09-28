@@ -842,6 +842,9 @@ public class RopeController
 					// Calculate final damage
 					float totalDamage = weaponDamage * meleeDamageDealt * distanceMultiplier;
 					
+					// Check if victim will die from this hit (for gib effect)
+					bool willDie = target.GetHealth() <= totalDamage;
+					
 					target.DealDamage(totalDamage);
 					// Play blood effect at the damaged player's position
 					Game.PlayEffect(EffectName.Blood, targetPos);
@@ -857,6 +860,12 @@ public class RopeController
 						// native Fall reaction (see ForceFall for why input
 						// has to be disabled for this to take effect).
 						ForceFall(target);
+						
+						// If recovery roll killed the victim, gib them
+						if(isRecoveryRolling && willDie)
+						{
+							target.Gib();
+						}
 					}
 					else
 					{
