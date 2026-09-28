@@ -36,7 +36,7 @@ public class RopeController
 	private const float MELEE_DAMAGE_MIN_MULTIPLIER = 1.5f;  // Damage at max distance
 	private const float MELEE_DAMAGE_MID_MULTIPLIER = 2f;    // Damage at mid distance
 	private const float MELEE_DAMAGE_MAX_MULTIPLIER = 2.5f;  // Damage at min distance
-	private const float MELEE_DAMAGE_OBJECT_MODIFIER = 0.7f; // Additional multiplier for objects (reduces damage)
+	private const float MELEE_DAMAGE_OBJECT_MODIFIER = 1f; // Additional multiplier for objects (reduces damage)
 	
 	// --- Gas system configuration ---
 	// Gas is piggybacked onto the player's native Energy stat (PlayerModifiers.MaxEnergy /
