@@ -787,6 +787,12 @@ public class RopeController
 		// Check if roll power-up is active (doubles the final damage)
 		bool hasRollPowerUp = Game.TotalElapsedGameTime < rollPowerUpEndTime;
 		
+		// Check if player is currently recovery rolling for 4x damage instead of 2x
+		bool isRecoveryRolling = ply.IsRecoveryRolling;
+		
+		// Check if player is rolling or recovery rolling for object damage
+		bool isRollingNow = ply.IsRolling || isRecoveryRolling;
+		
 		// Get attacker's team
 		PlayerTeam attackerTeam = ply.GetTeam();
 		
@@ -820,9 +826,17 @@ public class RopeController
 					float distanceMultiplier = CalculateDistanceMultiplier(distance);
 					
 					// Apply roll power-up (doubles the distance multiplier)
+					// Recovery roll gives 4x instead of 2x
 					if(hasRollPowerUp)
 					{
-						distanceMultiplier *= 2f;
+						if(isRecoveryRolling)
+						{
+							distanceMultiplier *= 4f; // 4x for recovery roll
+						}
+						else
+						{
+							distanceMultiplier *= 2f; // 2x for normal roll
+						}
 					}
 					
 					// Calculate final damage
@@ -853,60 +867,72 @@ public class RopeController
 		}
 		
 		// Damage destructible objects in the area
-		Area objectCheckArea = new Area(
-			playerPos.Y + MELEE_AREA_RADIUS,
-			playerPos.X - MELEE_AREA_RADIUS,
-			playerPos.Y - MELEE_AREA_RADIUS,
-			playerPos.X + MELEE_AREA_RADIUS
-		);
-		IObject[] nearbyObjects = Game.GetObjectsByArea(objectCheckArea);
-		
-		foreach(IObject obj in nearbyObjects)
+		// Only damage objects if player is rolling or recovery rolling
+		if(isRollingNow)
 		{
-			// Skip non-destructible objects, background objects, and the player's regulator/anchor
-			if(obj == null || obj.IsRemoved) continue;
-			if(obj.Destructable == false) continue;
-			if(obj.Name.StartsWith("Bg") || obj.Name.StartsWith("BG") || obj.Name == "BarrelExplosive" || obj.Name == "BarrelWreck" || obj.Name == "PropaneTank") continue;
-			if(obj.UniqueID == anchor.UniqueID || obj.UniqueID == playerSwingRegulator.UniqueID) continue;
-			if(obj.Name.Contains("Trigger") || obj.Name.Contains("Spawn") || obj.Name.Contains("Marker")) continue;
+			Area objectCheckArea = new Area(
+				playerPos.Y + MELEE_AREA_RADIUS,
+				playerPos.X - MELEE_AREA_RADIUS,
+				playerPos.Y - MELEE_AREA_RADIUS,
+				playerPos.X + MELEE_AREA_RADIUS
+			);
+			IObject[] nearbyObjects = Game.GetObjectsByArea(objectCheckArea);
 			
-			// Skip players - they're handled in the separate player loop above
-			bool isPlayer = false;
-			foreach(IPlayer p in Game.GetPlayers())
+			foreach(IObject obj in nearbyObjects)
 			{
-				if(p.UniqueID == obj.UniqueID)
+				// Skip non-destructible objects, background objects, and the player's regulator/anchor
+				if(obj == null || obj.IsRemoved) continue;
+				if(obj.Destructable == false) continue;
+				if(obj.Name.StartsWith("Bg") || obj.Name.StartsWith("BG") || obj.Name == "BarrelExplosive" || obj.Name == "BarrelWreck" || obj.Name == "PropaneTank") continue;
+				if(obj.UniqueID == anchor.UniqueID || obj.UniqueID == playerSwingRegulator.UniqueID) continue;
+				if(obj.Name.Contains("Trigger") || obj.Name.Contains("Spawn") || obj.Name.Contains("Marker")) continue;
+				
+				// Skip players - they're handled in the separate player loop above
+				bool isPlayer = false;
+				foreach(IPlayer p in Game.GetPlayers())
 				{
-					isPlayer = true;
-					break;
+					if(p.UniqueID == obj.UniqueID)
+					{
+						isPlayer = true;
+						break;
+					}
 				}
-			}
-			if(isPlayer) continue;
-			
-			Vector2 objPos = obj.GetWorldPosition();
-			float distance = Vector2.Distance(playerPos, objPos);
-			
-			if(distance <= MELEE_AREA_RADIUS)
-			{
-				// Calculate smooth distance-based damage multiplier
-				float distanceMultiplier = CalculateDistanceMultiplier(distance);
+				if(isPlayer) continue;
 				
-				// Apply roll power-up (doubles the distance multiplier)
-				if(hasRollPowerUp)
+				Vector2 objPos = obj.GetWorldPosition();
+				float distance = Vector2.Distance(playerPos, objPos);
+				
+				if(distance <= MELEE_AREA_RADIUS)
 				{
-					distanceMultiplier *= 2f;
+					// Calculate smooth distance-based damage multiplier
+					float distanceMultiplier = CalculateDistanceMultiplier(distance);
+					
+					// Apply roll power-up if active (doubles the distance multiplier)
+					// Recovery roll gives 4x instead of 2x
+					if(hasRollPowerUp)
+					{
+						if(isRecoveryRolling)
+						{
+							distanceMultiplier *= 4f; // 4x for recovery roll
+						}
+						else
+						{
+							distanceMultiplier *= 2f; // 2x for normal roll
+						}
+					}
+					
+					// Apply object damage modifier (0.5x for objects)
+					float objectDamageModifier = MELEE_DAMAGE_OBJECT_MODIFIER;
+					
+					// Calculate final damage for objects
+					float totalObjectDamage = weaponDamage * meleeDamageDealt * distanceMultiplier * objectDamageModifier;
+					
+					// Apply damage to object
+					obj.DealDamage(totalObjectDamage);
+					
+					// Play impact effect at object position
+					Game.PlayEffect(EffectName.Sparks, objPos);
 				}
-				
-				// Apply object damage modifier (0.5x for objects)
-				float objectDamageModifier = MELEE_DAMAGE_OBJECT_MODIFIER;
-				
-				// Calculate final damage for objects
-				float totalObjectDamage = weaponDamage * meleeDamageDealt * distanceMultiplier * objectDamageModifier;
-				
-				// Apply damage to object
-				obj.DealDamage(totalObjectDamage);
-				
-				// Play impact effect at object position
-				Game.PlayEffect(EffectName.Sparks, objPos);
 			}
 		}
 	}
