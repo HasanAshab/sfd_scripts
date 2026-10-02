@@ -243,14 +243,14 @@ public class RopeController
 		
 		Vector2 playerPos = ply.GetWorldPosition();
 		
+		// Calculate layout
+		float totalWidth = (GAS_BAR_SEGMENTS - 1) * GAS_BAR_SEGMENT_SPACING;
+		float startX = playerPos.X - (totalWidth / 2f);
+		
 		// Create segments if they don't exist
 		if(gasIndicatorSegments == null)
 		{
 			gasIndicatorSegments = new IObjectText[GAS_BAR_SEGMENTS];
-			
-			// Calculate starting X position to center the bar
-			float totalWidth = (GAS_BAR_SEGMENTS - 1) * GAS_BAR_SEGMENT_SPACING;
-			float startX = playerPos.X - (totalWidth / 2f);
 			
 			for(int i = 0; i < GAS_BAR_SEGMENTS; i++)
 			{
@@ -264,9 +264,6 @@ public class RopeController
 		}
 		
 		// Update colors and positions
-		float totalWidth = (GAS_BAR_SEGMENTS - 1) * GAS_BAR_SEGMENT_SPACING;
-		float startX = playerPos.X - (totalWidth / 2f);
-		
 		for(int i = 0; i < GAS_BAR_SEGMENTS; i++)
 		{
 			if(gasIndicatorSegments[i] != null)
