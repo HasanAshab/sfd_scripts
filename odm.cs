@@ -146,6 +146,7 @@ public class RopeController
 	private const float GAS_REFILL_FROM_CRATE = 17f;
 	private const float ROLL_POWERUP_DURATION = 2000f; // Normal roll duration
 	private const float RECOVERY_ROLL_POWERUP_DURATION = 4000f; // Recovery roll duration (4 seconds)
+	private const float RECOVERY_ROLL_SLOWMO_DURATION = 5f; // Slowmo duration in seconds (using SLOWMO_5)
 	private const float ROLL_HIT_FALL_INPUT_DISABLE_DURATION = 2000f;
 	private const float AIM_DISTANCE = 25f;
 	private const float AIM_ROTATE_SPEED = 0.06f;
@@ -663,12 +664,11 @@ public class RopeController
 				// Determine which type of roll just ended
 				if(wasRecoveryRolling)
 				{
-					// Recovery roll ended - set 4 second powerup and activate slow-mo
+					// Recovery roll ended - set 4 second powerup and give slowmo item
 					rollPowerUpEndTime = now + RECOVERY_ROLL_POWERUP_DURATION;
 					
-					// Stop any existing slow-mo and start new one with 4 second duration
-					Game.SetSlowMotion(SlowMotionState.Disabled);
-					Game.SetSlowMotion(SlowMotionState.Enabled, RECOVERY_ROLL_POWERUP_DURATION / 1000f);
+					// Give slowmo powerup (SLOWMO_5 gives 5 seconds of slowmotion)
+					ply.GiveWeaponItem(WeaponItem.SLOWMO_5);
 				}
 				else
 				{
