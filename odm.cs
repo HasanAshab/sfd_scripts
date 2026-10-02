@@ -979,9 +979,11 @@ public class RopeController
 
 List<RopeController> ropeControllers = new List<RopeController>();
 Dictionary<int, RopeController> controllersByPlayerId = new Dictionary<int, RopeController>();
+HashSet<int> handledStreetsweeperCrates = new HashSet<int>(); // Track which crates have been handled
 Events.PlayerMeleeActionCallback meleeCallback = null;
 Events.UpdateCallback updateCallback = null;
 Events.ObjectTerminatedCallback objectTerminatedCallback = null;
+Events.PlayerKeyInputCallback keyInputCallback = null; // For detecting crate activation
 
 public void OnStartup()
 {
@@ -1003,6 +1005,9 @@ public void OnStartup()
 	// Replaces the old per-tick, per-player Game.GetObjectsByArea() polling for
 	// broken supply crates - see the file header and TryClaimGasRefill for details.
 	objectTerminatedCallback = Events.ObjectTerminatedCallback.Start(OnObjectTerminated);
+	
+	// Track player interactions to detect streetsweeper crate activations
+	keyInputCallback = Events.PlayerKeyInputCallback.Start(OnPlayerKeyInput);
 }
 
 public void GrapplingHookUpdate(float elapsed)
@@ -1018,6 +1023,9 @@ public void GrapplingHookUpdate(float elapsed)
 	}
 
 	RopeController.ProcessPendingFallReleases();
+	
+	// Check all streetsweeper crates for activation
+	CheckStreetsweeperCrates();
 }
 
 public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
@@ -1045,9 +1053,11 @@ public void OnShutdown()
 	if(updateCallback != null) { updateCallback.Stop(); updateCallback = null; }
 	if(objectTerminatedCallback != null) { objectTerminatedCallback.Stop(); objectTerminatedCallback = null; }
 	if(meleeCallback != null) { meleeCallback.Stop(); meleeCallback = null; }
+	if(keyInputCallback != null) { keyInputCallback.Stop(); keyInputCallback = null; }
 
 	ropeControllers.Clear();
 	controllersByPlayerId.Clear();
+	handledStreetsweeperCrates.Clear();
 }
 
 public void OnObjectTerminated(IObject[] objs)
@@ -1074,5 +1084,96 @@ public void OnObjectTerminated(IObject[] objs)
 				break;
 			}
 		}
+	}
+}
+
+private IPlayer lastActivatingPlayer = null;
+
+public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
+{
+	// Track when a player presses the interact key near a streetsweeper crate
+	for(int i = 0; i < keyInfos.Length; i++)
+	{
+		if(keyInfos[i].Event == VirtualKeyEvent.Pressed && 
+		   keyInfos[i].Key == VirtualKey.ACTIVATE_OBJECT)
+		{
+			lastActivatingPlayer = player;
+			break;
+		}
+	}
+}
+
+private void CheckStreetsweeperCrates()
+{
+	IObject[] allObjects = Game.GetObjects();
+	
+	for(int i = 0; i < allObjects.Length; i++)
+	{
+		IObject obj = allObjects[i];
+		if(obj == null || obj.IsRemoved) continue;
+		
+		IObjectStreetsweeperCrate crate = obj as IObjectStreetsweeperCrate;
+		if(crate == null) continue;
+		
+		// Check if this crate is opening and hasn't been handled yet
+		if(crate.IsActivatedAndOpening && !handledStreetsweeperCrates.Contains(crate.UniqueID))
+		{
+			handledStreetsweeperCrates.Add(crate.UniqueID);
+			SpawnStreetsweeperBots(crate, lastActivatingPlayer);
+		}
+	}
+}
+
+private void SpawnStreetsweeperBots(IObjectStreetsweeperCrate crate, IPlayer activator)
+{
+	if(crate == null || crate.IsRemoved) return;
+	
+	Vector2 spawnPos = crate.GetWorldPosition();
+	
+	// Remove the streetsweeper crate/drone
+	crate.Remove();
+	
+	// Don't spawn bots if no valid activator or activator is dead
+	if(activator == null || activator.IsDead) return;
+	
+	PlayerTeam team = activator.GetTeam();
+	
+	// Create the bot profile
+	IProfile botProfile = new IProfile();
+	Gender gender = activator.GetProfile().Gender;
+	
+	botProfile.ChestOver = new IProfileClothingItem(
+		gender == Gender.Female ? "Jacket_fem" : "Jacket",
+		"ClothingOrange", "ClothingOrange"
+	);
+	botProfile.Feet = new IProfileClothingItem("RidingBoots", "ClothingDarkBrown");
+	botProfile.Accessory = new IProfileClothingItem(
+		gender == Gender.Female ? "Armband_fem" : "Armband",
+		"ClothingGray"
+	);
+	botProfile.Gender = gender;
+	
+	// Spawn 2 bots
+	for(int i = 0; i < 2; i++)
+	{
+		IPlayer bot = Game.CreatePlayer(spawnPos);
+		if(bot == null) continue;
+		
+		bot.SetTeam(team);
+		bot.SetProfile(botProfile);
+		
+		// Give them assault rifle
+		bot.GiveWeaponItem(WeaponItem.ASSAULT);
+		
+		// Set bot AI behavior
+		bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
+		
+		// Have the bots follow/guard the activator
+		bot.SetGuardTarget(activator);
+		
+		// Hide UI elements
+		bot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+		bot.SetNametagVisible(false);
+		bot.SetStatusBarsVisible(false);
 	}
 }
