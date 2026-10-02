@@ -107,6 +107,14 @@ public class RopeController
 
 	// Object reference
 	private IObjectText aimIndicator;
+	
+	// Gas bar visualization using text emojis
+	private IObjectText gasIndicator;
+	private const int GAS_BAR_SEGMENTS = 6; // 6 emoji boxes
+	private const float GAS_PER_SEGMENT = GAS_MAX_CAPACITY / GAS_BAR_SEGMENTS; // ~16.67f per box
+	private const float GAS_BAR_OFFSET_Y = 20f; // Height above player head
+	private const float GAS_INDICATOR_SHOW_DURATION = 2000f; // Show for 2 seconds
+	private float gasIndicatorHideTime; // When to hide the gas indicator
 
 	// Reused scratch buffer for the melee "is this object actually a player" check,
 	// avoids allocating a fresh int[] on every qualifying melee hit.
@@ -187,13 +195,10 @@ public class RopeController
 
 		ply.SetProfile(profile);
 
-		// Setup gas system
-		PlayerModifiers mods = ply.GetModifiers();
-		mods.MaxEnergy = (int)GAS_MAX_CAPACITY;
-		mods.CurrentEnergy = currentGas;
-		mods.EnergyRechargeModifier = 0f;
-		mods.EnergyConsumptionModifier = 0f;
-		ply.SetModifiers(mods);
+		// Setup gas system - no longer using PlayerModifiers energy bar
+		// Gas is tracked internally and displayed with emoji indicators
+		currentGas = GAS_MAX_CAPACITY;
+		lastSyncedGas = GAS_MAX_CAPACITY;
 	}
 
 	private void CancelRope(float now)
@@ -224,6 +229,59 @@ public class RopeController
 			aimIndicator = null;
 		}
 		isAiming = false;
+		// Don't hide gas indicator here - let it auto-hide after duration
+	}
+	
+	// Creates/updates the gas indicator with emoji representation
+	private void ShowGasIndicator(float now)
+	{
+		// Calculate how many segments should be filled
+		int filledSegments = (int)Math.Ceiling(currentGas / GAS_PER_SEGMENT);
+		if(filledSegments > GAS_BAR_SEGMENTS) filledSegments = GAS_BAR_SEGMENTS;
+		if(filledSegments < 0) filledSegments = 0;
+		
+		// Build the emoji string
+		string gasText = "";
+		for(int i = 0; i < GAS_BAR_SEGMENTS; i++)
+		{
+			gasText += (i < filledSegments) ? "🟩" : "⬜";
+		}
+		
+		Vector2 playerPos = ply.GetWorldPosition();
+		
+		if(gasIndicator == null)
+		{
+			// Create new indicator
+			gasIndicator = (IObjectText)Game.CreateObject("Text", 
+				new Vector2(playerPos.X, playerPos.Y + GAS_BAR_OFFSET_Y));
+			gasIndicator.SetTextAlignment(TextAlignment.Middle);
+			gasIndicator.SetTextScale(0.6f);
+		}
+		
+		gasIndicator.SetText(gasText);
+		gasIndicator.SetWorldPosition(new Vector2(playerPos.X, playerPos.Y + GAS_BAR_OFFSET_Y));
+		
+		// Set hide time
+		gasIndicatorHideTime = now + GAS_INDICATOR_SHOW_DURATION;
+	}
+	
+	private void UpdateGasIndicator(float now)
+	{
+		if(gasIndicator != null)
+		{
+			if(now >= gasIndicatorHideTime && !isAiming)
+			{
+				// Time to hide
+				gasIndicator.Remove();
+				gasIndicator = null;
+			}
+			else
+			{
+				// Update position to follow player
+				Vector2 playerPos = ply.GetWorldPosition();
+				gasIndicator.SetWorldPosition(new Vector2(playerPos.X, playerPos.Y + GAS_BAR_OFFSET_Y));
+			}
+		}
 	}
 
 	private void ThrowHook(float angleRadians)
@@ -279,24 +337,16 @@ public class RopeController
 		regulatorTargetObjectJoint = newTargetObjectJoint;
 	}
 
-	// Consolidates what used to be two separate GetModifiers()/SetModifiers() round
-	// trips (impact protection + gas bar sync) into at most one of each per tick,
-	// and skips the call entirely when neither actually needs to change this tick.
+	// Consolidates impact protection state management. No longer manages gas bar
+	// since we use emoji indicators instead of PlayerModifiers.CurrentEnergy.
 	private void SyncPlayerState(float now, bool shouldHaveProtection)
 	{
-		bool needGasSync = currentGas != lastSyncedGas;
 		bool enteringProtection = shouldHaveProtection && !impactProtectionActive;
 		bool leavingProtection = !shouldHaveProtection && (impactProtectionActive || originalImpactDamageMod >= 0f);
 
-		if(!needGasSync && !enteringProtection && !leavingProtection) return;
+		if(!enteringProtection && !leavingProtection) return;
 
 		PlayerModifiers mods = ply.GetModifiers();
-
-		if(needGasSync)
-		{
-			mods.CurrentEnergy = currentGas;
-			lastSyncedGas = currentGas;
-		}
 
 		if(enteringProtection)
 		{
@@ -366,6 +416,9 @@ public class RopeController
 				aimIndicator.SetTextScale(0.8f);
 				aimIndicator.SetTextAlignment(TextAlignment.Middle);
 				aimIndicator.SetTextColor(new Color(255, 255, 255));
+				
+				// Show gas indicator when entering aim mode
+				ShowGasIndicator(now);
 			}
 		}
 
@@ -575,6 +628,9 @@ public class RopeController
 			wasRolling = false;
 		}
 
+		// Update gas indicator position/visibility
+		UpdateGasIndicator(now);
+
 		SyncPlayerState(now, shouldHaveProtection);
 		wasWalkingPressed = isWalkingNow;
 	}
@@ -587,7 +643,7 @@ public class RopeController
 	// same crate to any other (further down the list) player - matching the
 	// original's behavior where whichever player's check ran first consumed the
 	// object via obj.Remove() before anyone else's check could see it.
-	public bool TryClaimGasRefill(Vector2 objPos)
+	public bool TryClaimGasRefill(Vector2 objPos, float now)
 	{
 		if(currentGas >= GAS_MAX_CAPACITY) return false;
 
@@ -599,6 +655,10 @@ public class RopeController
 		if(currentGas > GAS_MAX_CAPACITY) currentGas = GAS_MAX_CAPACITY;
 
 		Game.PlaySound("StrengthBoostStart", playerPos);
+		
+		// Show gas indicator when picking up gas
+		ShowGasIndicator(now);
+		
 		return true;
 	}
 
@@ -918,6 +978,7 @@ public void OnShutdown()
 
 public void OnObjectTerminated(IObject[] objs)
 {
+	float now = Game.TotalElapsedGameTime;
 	int objCount = objs.Length;
 	for(int i = 0; i < objCount; i++)
 	{
@@ -933,7 +994,7 @@ public void OnObjectTerminated(IObject[] objs)
 		int count = ropeControllers.Count;
 		for(int j = 0; j < count; j++)
 		{
-			if(ropeControllers[j].TryClaimGasRefill(objPos))
+			if(ropeControllers[j].TryClaimGasRefill(objPos, now))
 			{
 				obj.Remove();
 				break;
