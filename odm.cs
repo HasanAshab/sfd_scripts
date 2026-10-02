@@ -82,6 +82,7 @@ public class RopeController
 	private bool pulling;
 	private bool isAiming;
 	private bool wasRolling;
+	private bool wasRecoveryRolling; // Track recovery roll specifically
 	private bool hasLeftGroundSinceGrab;
 	private bool impactProtectionActive; // tracks whether we've currently pushed the 0.5 impact modifier to the engine
 
@@ -143,7 +144,8 @@ public class RopeController
 	private const float GAS_PULL_COST_PER_SECOND = 10f;
 	private const float GAS_THROW_COST = 2f;
 	private const float GAS_REFILL_FROM_CRATE = 17f;
-	private const float ROLL_POWERUP_DURATION = 2000f;
+	private const float ROLL_POWERUP_DURATION = 2000f; // Normal roll duration
+	private const float RECOVERY_ROLL_POWERUP_DURATION = 4000f; // Recovery roll duration (4 seconds)
 	private const float ROLL_HIT_FALL_INPUT_DISABLE_DURATION = 2000f;
 	private const float AIM_DISTANCE = 25f;
 	private const float AIM_ROTATE_SPEED = 0.06f;
@@ -653,17 +655,37 @@ public class RopeController
 		if(isOnRope)
 		{
 			bool isRollingNow = ply.IsRolling || ply.IsRecoveryRolling;
+			bool isRecoveryRollingNow = ply.IsRecoveryRolling;
+			
+			// Check if any roll just ended
 			if(wasRolling && !isRollingNow)
 			{
-				rollPowerUpEndTime = now + ROLL_POWERUP_DURATION;
+				// Determine which type of roll just ended
+				if(wasRecoveryRolling)
+				{
+					// Recovery roll ended - set 4 second powerup and activate slow-mo
+					rollPowerUpEndTime = now + RECOVERY_ROLL_POWERUP_DURATION;
+					
+					// Stop any existing slow-mo and start new one with 4 second duration
+					Game.SetSlowMotion(SlowMotionState.Disabled);
+					Game.SetSlowMotion(SlowMotionState.Enabled, RECOVERY_ROLL_POWERUP_DURATION / 1000f);
+				}
+				else
+				{
+					// Normal roll ended - set 2 second powerup (no slow-mo)
+					rollPowerUpEndTime = now + ROLL_POWERUP_DURATION;
+				}
 			}
+			
 			wasRolling = isRollingNow;
+			wasRecoveryRolling = isRecoveryRollingNow;
 
 			if(!ply.IsOnGround) hasLeftGroundSinceGrab = true;
 		}
 		else
 		{
 			wasRolling = false;
+			wasRecoveryRolling = false;
 		}
 
 		// Update gas indicator position/visibility
@@ -894,6 +916,7 @@ public class RopeController
 		lastRopeShrinkTime = Game.TotalElapsedGameTime;
 		meleeAreaAttacksRemaining = MAX_MELEE_AREA_ATTACKS_PER_ROPE;
 		wasRolling = false;
+		wasRecoveryRolling = false;
 		rollPowerUpEndTime = 0f;
 		hasLeftGroundSinceGrab = false;
 	}
