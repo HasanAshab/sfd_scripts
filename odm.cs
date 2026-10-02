@@ -97,6 +97,7 @@ public class RopeController
 	private float originalImpactDamageMod = -1f;
 	private float currentGas = GAS_MAX_CAPACITY;
 	private float lastSyncedGas = GAS_MAX_CAPACITY; // last value actually pushed to PlayerModifiers
+	private float slowmoEndRealTime; // Real-time when slowmo should end (unaffected by slowmo)
 
 	// Counters
 	private int meleeAreaAttacksRemaining;
@@ -146,7 +147,8 @@ public class RopeController
 	private const float GAS_REFILL_FROM_CRATE = 17f;
 	private const float ROLL_POWERUP_DURATION = 2000f; // Normal roll duration
 	private const float RECOVERY_ROLL_POWERUP_DURATION = 4000f; // Recovery roll duration (4 seconds)
-	private const float RECOVERY_ROLL_SLOWMO_DURATION = 5f; // Slowmo duration in seconds (using SLOWMO_5)
+	private const float RECOVERY_ROLL_SLOWMO_DURATION = 4000f; // Slowmo duration in real milliseconds (4 seconds)
+	private const float RECOVERY_ROLL_SLOWMO_SPEED = 0.25f; // Slowmo speed (25% of normal)
 	private const float ROLL_HIT_FALL_INPUT_DISABLE_DURATION = 2000f;
 	private const float AIM_DISTANCE = 25f;
 	private const float AIM_ROTATE_SPEED = 0.06f;
@@ -419,6 +421,14 @@ public class RopeController
 		if (ply.IsDead) return;
 
 		float now = Game.TotalElapsedGameTime; // read once, reused for the whole tick
+		float realNow = Game.TotalElapsedRealTime; // real-time for slowmo tracking
+
+		// Check if slowmo should end (using real-time)
+		if(slowmoEndRealTime > 0f && realNow >= slowmoEndRealTime)
+		{
+			Game.RunCommand("/settime 1");
+			slowmoEndRealTime = 0f;
+		}
 
 		// Gas refill from crates is now handled by the script-level
 		// Events.ObjectTerminatedCallback (see OnObjectTerminated) instead of a
@@ -664,11 +674,14 @@ public class RopeController
 				// Determine which type of roll just ended
 				if(wasRecoveryRolling)
 				{
-					// Recovery roll ended - set 4 second powerup and give slowmo item
+					// Recovery roll ended - set 4 second powerup and activate slow-mo
 					rollPowerUpEndTime = now + RECOVERY_ROLL_POWERUP_DURATION;
 					
-					// Give slowmo powerup (SLOWMO_5 gives 5 seconds of slowmotion)
-					ply.GiveWeaponItem(WeaponItem.SLOWMO_5);
+					// Start slowmo using /settime command
+					Game.RunCommand("/settime " + RECOVERY_ROLL_SLOWMO_SPEED.ToString());
+					
+					// Set when slowmo should end (using real-time which is unaffected by slowmo)
+					slowmoEndRealTime = realNow + RECOVERY_ROLL_SLOWMO_DURATION;
 				}
 				else
 				{
