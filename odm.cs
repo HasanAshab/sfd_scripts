@@ -112,7 +112,7 @@ public class RopeController
 	private IObjectText[] gasIndicatorSegments = null;
 	private const int GAS_BAR_SEGMENTS = 6; // 6 asterisk segments
 	private const float GAS_PER_SEGMENT = GAS_MAX_CAPACITY / GAS_BAR_SEGMENTS; // ~16.67f per asterisk
-	private const float GAS_BAR_OFFSET_Y = 20f; // Height above player head
+	private const float GAS_BAR_OFFSET_Y = 22f; // Height above player head
 	private const float GAS_BAR_SEGMENT_SPACING = 3f; // Space between asterisks
 	private const float GAS_INDICATOR_SHOW_DURATION = 2000f; // Show for 2 seconds
 	private float gasIndicatorHideTime; // When to hide the gas indicator
@@ -258,7 +258,7 @@ public class RopeController
 					new Vector2(startX + (i * GAS_BAR_SEGMENT_SPACING), playerPos.Y + GAS_BAR_OFFSET_Y));
 				segment.SetTextAlignment(TextAlignment.Middle);
 				segment.SetTextScale(1.2f);
-				segment.SetText("*");
+				segment.SetText(".");
 				gasIndicatorSegments[i] = segment;
 			}
 		}
