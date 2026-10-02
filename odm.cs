@@ -232,7 +232,7 @@ public class RopeController
 		// Don't hide gas indicator here - let it auto-hide after duration
 	}
 	
-	// Creates/updates the gas indicator with emoji representation
+	// Creates/updates the gas indicator with colored asterisks
 	private void ShowGasIndicator(float now)
 	{
 		// Calculate how many segments should be filled
@@ -240,11 +240,19 @@ public class RopeController
 		if(filledSegments > GAS_BAR_SEGMENTS) filledSegments = GAS_BAR_SEGMENTS;
 		if(filledSegments < 0) filledSegments = 0;
 		
-		// Build the emoji string
+		// Build the asterisk string with color codes
+		// Color format: {COLOR} where COLOR is the hex color code
 		string gasText = "";
 		for(int i = 0; i < GAS_BAR_SEGMENTS; i++)
 		{
-			gasText += (i < filledSegments) ? "🟩" : "⬜";
+			if(i < filledSegments)
+			{
+				gasText += "{00FF99}*"; // Green for filled
+			}
+			else
+			{
+				gasText += "{888888}*"; // Grey for empty
+			}
 		}
 		
 		Vector2 playerPos = ply.GetWorldPosition();
@@ -255,7 +263,7 @@ public class RopeController
 			gasIndicator = (IObjectText)Game.CreateObject("Text", 
 				new Vector2(playerPos.X, playerPos.Y + GAS_BAR_OFFSET_Y));
 			gasIndicator.SetTextAlignment(TextAlignment.Middle);
-			gasIndicator.SetTextScale(0.6f);
+			gasIndicator.SetTextScale(1.2f); // Larger size
 		}
 		
 		gasIndicator.SetText(gasText);
