@@ -28,24 +28,55 @@ public void OnStartup()
 
     PlayerModifiers p1Mods = p1.GetModifiers();
 
-    p1Mods.RunSpeedModifier = 1.15f;
-    p1Mods.SprintSpeedModifier = 1.3f;
+    // p1Mods.RunSpeedModifier = 1.15f;
+    // p1Mods.SprintSpeedModifier = 1.3f;
 
-    p1Mods.MaxEnergy = (int)(p1Mods.MaxEnergy * 1.2f);
-    p1Mods.CurrentEnergy = (int)(p1Mods.CurrentEnergy * 1.2f);
-    p1Mods.EnergyRechargeModifier *= 1.2f;
+    // p1Mods.MaxEnergy = (int)(p1Mods.MaxEnergy * 1.2f);
+    // p1Mods.CurrentEnergy = (int)(p1Mods.CurrentEnergy * 1.2f);
+    // p1Mods.EnergyRechargeModifier *= 1.2f;
+
+    p1Mods.SizeModifier = 0.81f;
+    p1Mods.MeleeForceModifier *= 0.8f;
+    p1Mods.MeleeDamageDealtModifier *= 1.2f;
     p1.SetModifiers(p1Mods);
+    p1.SetProfile(new IProfile()
+    {
+        Name = "daul",
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGreen"),
+        Head = new IProfileClothingItem("Cap", "ClothingGray"),
+        ChestUnder = new IProfileClothingItem("LumberjackShirt2_fem", "ClothingBlue", "ClothingLightGray"),
+        Legs = new IProfileClothingItem("Pants_fem", "ClothingDarkBlue"),
+        Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+    });
 
 
     PlayerModifiers p2Mods = p2.GetModifiers();
 
-    p2Mods.SizeModifier = 1.12f;
-    p2Mods.RunSpeedModifier = 0.8f;
-    p2Mods.SprintSpeedModifier = 0.95f;
-    p2Mods.MeleeForceModifier *= 1.2f;
-    p2Mods.MeleeDamageDealtModifier *= 1.4f;
+    // p2Mods.SizeModifier = 1.12f;
+    // p2Mods.RunSpeedModifier = 0.8f;
+    // p2Mods.SprintSpeedModifier = 0.95f;
+    // p2Mods.MeleeForceModifier *= 1.2f;
+    // p2Mods.MeleeDamageDealtModifier *= 1.4f;
+
+    p2Mods.SizeModifier = 0.76f;
+    p2Mods.MeleeForceModifier *= 0.8f;
+    p2Mods.MeleeDamageDealtModifier *= 1.2f;
+    // p2Mods.RunSpeedModifier = 0.8f;
+    // p2Mods.SprintSpeedModifier = 0.95f;
 
     p2.SetModifiers(p2Mods);
+    p2.SetProfile(new IProfile()
+    {
+        Name = "saul",
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGreen"),
+        Head = new IProfileClothingItem("Cap", "ClothingGray"),
+        ChestUnder = new IProfileClothingItem("LumberjackShirt2_fem", "ClothingLightRed", "ClothingLightGray"),
+        Legs = new IProfileClothingItem("Pants_fem", "ClothingRed"),
+        Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+    });
+
 
     TransformPlayersToUjiri();
 }
@@ -240,15 +271,15 @@ public void SetupBots()
         xrayBot.SetBotName("Xray");
         xrayBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.CompanionD));
         xrayBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
-        xrayBot.SetProfile(new IProfile(){
+        xrayBot.SetProfile(new IProfile()
+{
     Name = "Xray",
     Gender = Gender.Female,
     Skin = new IProfileClothingItem("Normal_fem", "Skin1", "ClothingLightGreen"),
-    Head = new IProfileClothingItem("Buzzcut", "ClothingDarkGray"),
+    Head = new IProfileClothingItem("WoolCap", "ClothingLightGray"),
     ChestUnder = new IProfileClothingItem("SleevelessShirt_fem", "ClothingLightGray"),
     Legs = new IProfileClothingItem("Skirt_fem", "ClothingBlue"),
     Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-    Accesory = new IProfileClothingItem("Glasses", "ClothingLightGray", "ClothingLightGray"),
 });
     }
     
@@ -260,13 +291,16 @@ public void SetupBots()
         pakhiBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.CompanionD));
         pakhiBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
         pakhiBot.SetProfile(new IProfile()
-        {
-            Name = "pakhi",
-            Gender = Gender.Female,
-            Skin = new IProfileClothingItem("Normal_fem", "Skin3", "ClothingLightGray"),
-            Legs = new IProfileClothingItem("Shorts_fem", "ClothingDarkGray"),
-            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-        });
+{
+    Name = "pakhi",
+    Gender = Gender.Female,
+    Skin = new IProfileClothingItem("Normal_fem", "Skin2", "ClothingLightGreen"),
+    Head = new IProfileClothingItem("Buzzcut", "ClothingDarkGray"),
+    ChestOver = new IProfileClothingItem("Coat_fem", "ClothingLightGray", "ClothingLightGray"),
+    Hands = new IProfileClothingItem("Gloves", "ClothingLightPink"),
+    Legs = new IProfileClothingItem("Pants_fem", "ClothingDarkGray"),
+    Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+});
     }
     botsCreated = true;
 }
