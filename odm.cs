@@ -1023,9 +1023,6 @@ public void GrapplingHookUpdate(float elapsed)
 	}
 
 	RopeController.ProcessPendingFallReleases();
-	
-	// Check all streetsweeper crates for activation
-	CheckStreetsweeperCrates();
 }
 
 public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
@@ -1088,28 +1085,41 @@ public void OnObjectTerminated(IObject[] objs)
 }
 
 private IPlayer lastActivatingPlayer = null;
+private const float STREETSWEEPER_CHECK_RADIUS = 30f; // Search radius around player
 
 public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
 {
-	// Track when a player presses the interact key near a streetsweeper crate
+	// Track when a player presses the interact key and check for nearby streetsweeper crates
 	for(int i = 0; i < keyInfos.Length; i++)
 	{
 		if(keyInfos[i].Event == VirtualKeyEvent.Pressed && 
 		   keyInfos[i].Key == VirtualKey.ACTIVATE_OBJECT)
 		{
-			lastActivatingPlayer = player;
+			CheckStreetsweeperCratesNearPlayer(player);
 			break;
 		}
 	}
 }
 
-private void CheckStreetsweeperCrates()
+private void CheckStreetsweeperCratesNearPlayer(IPlayer player)
 {
-	IObject[] allObjects = Game.GetObjects();
+	if(player == null || player.IsDead) return;
 	
-	for(int i = 0; i < allObjects.Length; i++)
+	Vector2 playerPos = player.GetWorldPosition();
+	
+	// Only search in a small area around the player
+	Area searchArea = new Area(
+		playerPos.Y + STREETSWEEPER_CHECK_RADIUS,
+		playerPos.X - STREETSWEEPER_CHECK_RADIUS,
+		playerPos.Y - STREETSWEEPER_CHECK_RADIUS,
+		playerPos.X + STREETSWEEPER_CHECK_RADIUS
+	);
+	
+	IObject[] nearbyObjects = Game.GetObjectsByArea(searchArea);
+	
+	for(int i = 0; i < nearbyObjects.Length; i++)
 	{
-		IObject obj = allObjects[i];
+		IObject obj = nearbyObjects[i];
 		if(obj == null || obj.IsRemoved) continue;
 		
 		IObjectStreetsweeperCrate crate = obj as IObjectStreetsweeperCrate;
@@ -1119,7 +1129,7 @@ private void CheckStreetsweeperCrates()
 		if(crate.IsActivatedAndOpening && !handledStreetsweeperCrates.Contains(crate.UniqueID))
 		{
 			handledStreetsweeperCrates.Add(crate.UniqueID);
-			SpawnStreetsweeperBots(crate, lastActivatingPlayer);
+			SpawnStreetsweeperBots(crate, player);
 		}
 	}
 }
