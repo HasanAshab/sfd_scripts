@@ -270,14 +270,14 @@ public void SetupBots()
         mods.SizeModifier = 1.01f;
         edurBot.SetModifiers(mods);
         edurBot.SetProfile(new IProfile()
-         {
-    Name = "Edur",
-    Gender = Gender.Male,
-    Skin = new IProfileClothingItem("BearSkin", ""),
-    ChestUnder = new IProfileClothingItem("Shirt", "ClothingLightGray"),
-    Legs = new IProfileClothingItem("PantsBlack", "ClothingDarkGray"),
-    Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-});
+            {
+                Name = "Edur",
+                Gender = Gender.Male,
+                Skin = new IProfileClothingItem("Normal", "Skin3", "ClothingLightGreen"),
+                ChestUnder = new IProfileClothingItem("Shirt", "ClothingLightGray"),
+                Legs = new IProfileClothingItem("PantsBlack", "ClothingDarkGray"),
+                Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+            });
     }
 
     xrayBot = Game.CreatePlayer(spawnPositions[4]);
