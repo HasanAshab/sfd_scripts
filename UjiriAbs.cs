@@ -35,9 +35,11 @@ public void OnStartup()
     // p1Mods.CurrentEnergy = (int)(p1Mods.CurrentEnergy * 1.2f);
     // p1Mods.EnergyRechargeModifier *= 1.2f;
 
-    p1Mods.SizeModifier = 0.81f;
+    p1Mods.SizeModifier = 0.89f;
     p1Mods.MeleeForceModifier *= 0.8f;
     p1Mods.MeleeDamageDealtModifier *= 1.2f;
+    p1Mods.RunSpeedModifier = 1.1f;
+    p1Mods.SprintSpeedModifier = 1.15f;
     p1.SetModifiers(p1Mods);
     p1.SetProfile(new IProfile()
     {
@@ -59,9 +61,11 @@ public void OnStartup()
     // p2Mods.MeleeForceModifier *= 1.2f;
     // p2Mods.MeleeDamageDealtModifier *= 1.4f;
 
-    p2Mods.SizeModifier = 0.76f;
+    p2Mods.SizeModifier = 0.86f;
     p2Mods.MeleeForceModifier *= 0.8f;
     p2Mods.MeleeDamageDealtModifier *= 1.2f;
+    p2Mods.RunSpeedModifier = 1.13f;
+    p2Mods.SprintSpeedModifier = 1.19f;
     // p2Mods.RunSpeedModifier = 0.8f;
     // p2Mods.SprintSpeedModifier = 0.95f;
 
@@ -195,6 +199,9 @@ public void SetupBots()
         timpaBot.SetBotName("Timpa");
         timpaBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
         timpaBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+        PlayerModifiers mods = timpaBot.GetModifiers();
+        mods.SizeModifier = 0.98f;
+        timpaBot.SetModifiers(mods);
         timpaBot.SetProfile(new IProfile()
         {
             Name = "Timpa",
@@ -214,6 +221,9 @@ public void SetupBots()
         bichiBot.SetBotName("Bichi");
         bichiBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
         bichiBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+        PlayerModifiers mods = bichiBot.GetModifiers();
+        mods.SizeModifier = 0.92f;
+        bichiBot.SetModifiers(mods);
         bichiBot.SetProfile(new IProfile()
 {
     Name = "Bichi",
@@ -233,6 +243,9 @@ public void SetupBots()
         kokolaBot.SetBotName("Kokola");
         kokolaBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotC));
         kokolaBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+        PlayerModifiers mods = kokolaBot.GetModifiers();
+        mods.SizeModifier = 0.95f;
+        kokolaBot.SetModifiers(mods);
         kokolaBot.SetProfile(new IProfile()
 {
     Name = "Kokola",
@@ -253,6 +266,9 @@ public void SetupBots()
         edurBot.SetBotName("Edur");
         edurBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.CompanionC));
         edurBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+        PlayerModifiers mods = edurBot.GetModifiers();
+        mods.SizeModifier = 1.01f;
+        edurBot.SetModifiers(mods);
         edurBot.SetProfile(new IProfile()
          {
     Name = "Edur",
@@ -271,6 +287,9 @@ public void SetupBots()
         xrayBot.SetBotName("Xray");
         xrayBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.CompanionD));
         xrayBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+        PlayerModifiers mods = xrayBot.GetModifiers();
+        mods.SizeModifier = 0.98f;
+        xrayBot.SetModifiers(mods);
         xrayBot.SetProfile(new IProfile()
 {
     Name = "Xray",
@@ -290,6 +309,11 @@ public void SetupBots()
         pakhiBot.SetBotName("Pakhi");
         pakhiBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.CompanionD));
         pakhiBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+        
+        PlayerModifiers mods = pakhiBot.GetModifiers();
+        mods.SizeModifier = 0.92f;
+        pakhiBot.SetModifiers(mods);
+
         pakhiBot.SetProfile(new IProfile()
 {
     Name = "pakhi",
