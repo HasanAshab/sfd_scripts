@@ -1188,9 +1188,6 @@ private void SpawnStreetsweeperBots(IObjectStreetsweeperCrate crate, IPlayer act
 		// Set bot AI behavior
 		bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
 		
-		// Have the bots follow/guard the activator
-		bot.SetGuardTarget(activator);
-		
 		// Hide UI elements
 		bot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
 		bot.SetNametagVisible(false);
