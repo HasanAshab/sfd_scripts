@@ -1093,7 +1093,7 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
 	for(int i = 0; i < keyInfos.Length; i++)
 	{
 		if(keyInfos[i].Event == VirtualKeyEvent.Pressed && 
-		   keyInfos[i].Key == VirtualKey.ACTIVATE_OBJECT)
+		   keyInfos[i].Key == VirtualKey.ACTIVATE)
 		{
 			CheckStreetsweeperCratesNearPlayer(player);
 			break;
