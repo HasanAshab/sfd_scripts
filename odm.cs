@@ -83,6 +83,7 @@ public class RopeController
 	private bool isAiming;
 	private bool wasRolling;
 	private bool wasDiving; // Track diving specifically
+	private bool diveRollPowerupActive; // Track if we're waiting for the post-dive roll
 	private bool hasLeftGroundSinceGrab;
 	private bool impactProtectionActive; // tracks whether we've currently pushed the 0.5 impact modifier to the engine
 
@@ -668,14 +669,19 @@ public class RopeController
 			bool isRollingNow = ply.IsRolling;
 			bool isDivingNow = ply.IsDiving;
 			bool isRollingOrDiving = isRollingNow || isDivingNow;
-			
+
 			// Check if any roll/dive just ended
 			if(wasRolling && !isRollingOrDiving)
 			{
 				// Determine which type just ended
 				if(wasDiving)
 				{
-					// Dive ended - set 4 second powerup and activate slow-mo
+					// Dive ended - mark that we need to wait for the post-dive roll
+					diveRollPowerupActive = true;
+				}
+				else if(diveRollPowerupActive)
+				{
+					// Post-dive roll ended - NOW activate the 4 second powerup and slow-mo
 					rollPowerUpEndTime = now + DIVE_POWERUP_DURATION;
 					
 					// Start slowmo using /settime command
@@ -683,10 +689,12 @@ public class RopeController
 					
 					// Set when slowmo should end (using real-time which is unaffected by slowmo)
 					slowmoEndRealTime = realNow + DIVE_SLOWMO_DURATION;
+					
+					diveRollPowerupActive = false;
 				}
 				else
 				{
-					// Normal roll ended - set 2 second powerup (no slow-mo)
+					// Normal roll ended (not after dive) - set 2 second powerup (no slow-mo)
 					rollPowerUpEndTime = now + ROLL_POWERUP_DURATION;
 				}
 			}
@@ -700,6 +708,7 @@ public class RopeController
 		{
 			wasRolling = false;
 			wasDiving = false;
+			diveRollPowerupActive = false;
 		}
 
 		// Update gas indicator position/visibility
@@ -931,6 +940,7 @@ public class RopeController
 		meleeAreaAttacksRemaining = MAX_MELEE_AREA_ATTACKS_PER_ROPE;
 		wasRolling = false;
 		wasDiving = false;
+		diveRollPowerupActive = false;
 		rollPowerUpEndTime = 0f;
 		hasLeftGroundSinceGrab = false;
 	}
