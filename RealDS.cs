@@ -29,16 +29,14 @@ public void SetupPlayers()
         p1Mods.RunSpeedModifier = 1.1f;
         p1Mods.SprintSpeedModifier = 1.15f;
         p1.SetModifiers(p1Mods);
-        p1.SetProfile(new IProfile()
-        {
-            Name = "daul",
-            Gender = Gender.Female,
-            Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGreen"),
-            Head = new IProfileClothingItem("Cap", "ClothingGray"),
-            ChestUnder = new IProfileClothingItem("LumberjackShirt2_fem", "ClothingBlue", "ClothingLightGray"),
-            Legs = new IProfileClothingItem("Pants_fem", "ClothingDarkBlue"),
-            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-        });
+        
+        IProfile p1Profile = p1.GetProfile();
+        p1Profile.Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGreen");
+        p1Profile.Head = new IProfileClothingItem("Cap", "ClothingGray");
+        p1Profile.ChestUnder = new IProfileClothingItem("LumberjackShirt2_fem", "ClothingBlue", "ClothingLightGray");
+        p1Profile.Legs = new IProfileClothingItem("Pants_fem", "ClothingDarkBlue");
+        p1Profile.Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown");
+        p1.SetProfile(p1Profile);
     }
 
     if (p2 != null)
@@ -60,15 +58,13 @@ public void SetupPlayers()
         // p2Mods.SprintSpeedModifier = 0.95f;
 
         p2.SetModifiers(p2Mods);
-        p2.SetProfile(new IProfile()
-        {
-            Name = "saul",
-            Gender = Gender.Female,
-            Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGreen"),
-            Head = new IProfileClothingItem("Cap", "ClothingGray"),
-            ChestUnder = new IProfileClothingItem("LumberjackShirt2_fem", "ClothingLightRed", "ClothingLightGray"),
-            Legs = new IProfileClothingItem("Pants_fem", "ClothingRed"),
-            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-        });
+        
+        IProfile p2Profile = p2.GetProfile();
+        p2Profile.Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGreen");
+        p2Profile.Head = new IProfileClothingItem("Cap", "ClothingGray");
+        p2Profile.ChestUnder = new IProfileClothingItem("LumberjackShirt2_fem", "ClothingLightRed", "ClothingLightGray");
+        p2Profile.Legs = new IProfileClothingItem("Pants_fem", "ClothingRed");
+        p2Profile.Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown");
+        p2.SetProfile(p2Profile);
     }
 }
