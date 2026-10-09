@@ -82,7 +82,7 @@ public class RopeController
 	private bool pulling;
 	private bool isAiming;
 	private bool wasRolling;
-	private bool wasRecoveryRolling; // Track recovery roll specifically
+	private bool wasDiving; // Track diving specifically
 	private bool hasLeftGroundSinceGrab;
 	private bool impactProtectionActive; // tracks whether we've currently pushed the 0.5 impact modifier to the engine
 
@@ -146,9 +146,9 @@ public class RopeController
 	private const float GAS_THROW_COST = 2f;
 	private const float GAS_REFILL_FROM_CRATE = 17f;
 	private const float ROLL_POWERUP_DURATION = 2000f; // Normal roll duration
-	private const float RECOVERY_ROLL_POWERUP_DURATION = 4000f; // Recovery roll duration (4 seconds)
-	private const float RECOVERY_ROLL_SLOWMO_DURATION = 4000f; // Slowmo duration in real milliseconds (4 seconds)
-	private const float RECOVERY_ROLL_SLOWMO_SPEED = 0.25f; // Slowmo speed (25% of normal)
+	private const float DIVE_POWERUP_DURATION = 4000f; // Dive duration (4 seconds)
+	private const float DIVE_SLOWMO_DURATION = 4000f; // Slowmo duration in real milliseconds (4 seconds)
+	private const float DIVE_SLOWMO_SPEED = 0.25f; // Slowmo speed (25% of normal)
 	private const float ROLL_HIT_FALL_INPUT_DISABLE_DURATION = 2000f;
 	private const float AIM_DISTANCE = 25f;
 	private const float AIM_ROTATE_SPEED = 0.06f;
@@ -662,26 +662,27 @@ public class RopeController
 		// happens once, at the end, in SyncPlayerState)
 		bool shouldHaveProtection = isOnRope || (ropeReleaseTime > 0f && (now - ropeReleaseTime) < IMPACT_PROTECTION_DURATION);
 
-		// Roll detection
+		// Roll/Dive detection
 		if(isOnRope)
 		{
-			bool isRollingNow = ply.IsRolling || ply.IsRecoveryRolling;
-			bool isRecoveryRollingNow = ply.IsRecoveryRolling;
+			bool isRollingNow = ply.IsRolling;
+			bool isDivingNow = ply.IsDiving;
+			bool isRollingOrDiving = isRollingNow || isDivingNow;
 			
-			// Check if any roll just ended
-			if(wasRolling && !isRollingNow)
+			// Check if any roll/dive just ended
+			if(wasRolling && !isRollingOrDiving)
 			{
-				// Determine which type of roll just ended
-				if(wasRecoveryRolling)
+				// Determine which type just ended
+				if(wasDiving)
 				{
-					// Recovery roll ended - set 4 second powerup and activate slow-mo
-					rollPowerUpEndTime = now + RECOVERY_ROLL_POWERUP_DURATION;
+					// Dive ended - set 4 second powerup and activate slow-mo
+					rollPowerUpEndTime = now + DIVE_POWERUP_DURATION;
 					
 					// Start slowmo using /settime command
-					Game.RunCommand("/settime " + RECOVERY_ROLL_SLOWMO_SPEED.ToString());
+					Game.RunCommand("/settime " + DIVE_SLOWMO_SPEED.ToString());
 					
 					// Set when slowmo should end (using real-time which is unaffected by slowmo)
-					slowmoEndRealTime = realNow + RECOVERY_ROLL_SLOWMO_DURATION;
+					slowmoEndRealTime = realNow + DIVE_SLOWMO_DURATION;
 				}
 				else
 				{
@@ -690,15 +691,15 @@ public class RopeController
 				}
 			}
 			
-			wasRolling = isRollingNow;
-			wasRecoveryRolling = isRecoveryRollingNow;
+			wasRolling = isRollingOrDiving;
+			wasDiving = isDivingNow;
 
 			if(!ply.IsOnGround) hasLeftGroundSinceGrab = true;
 		}
 		else
 		{
 			wasRolling = false;
-			wasRecoveryRolling = false;
+			wasDiving = false;
 		}
 
 		// Update gas indicator position/visibility
@@ -786,8 +787,8 @@ public class RopeController
 		else if(currentMelee == WeaponItem.BOTTLE) weaponDamage = 9f;
 
 		bool hasRollPowerUp = now < rollPowerUpEndTime;
-		bool isRecoveryRolling = ply.IsRecoveryRolling;
-		bool isRollingNow = ply.IsRolling || isRecoveryRolling;
+		bool isDiving = ply.IsDiving;
+		bool isRollingNow = ply.IsRolling || isDiving;
 
 		PlayerTeam attackerTeam = ply.GetTeam();
 
@@ -815,7 +816,7 @@ public class RopeController
 
 					if(hasRollPowerUp)
 					{
-						distanceMultiplier *= isRecoveryRolling ? 4f : 2f;
+						distanceMultiplier *= isDiving ? 4f : 2f;
 					}
 
 					float totalDamage = weaponDamage * meleeDamageDealt * distanceMultiplier;
@@ -831,7 +832,7 @@ public class RopeController
 						Game.PlaySound("KatanaDraw", targetPos);
 						ForceFall(target, now);
 
-						if(isRecoveryRolling && willDie) target.Gib();
+						if(isDiving && willDie) target.Gib();
 					}
 					else
 					{
@@ -899,7 +900,7 @@ public class RopeController
 
 					if(hasRollPowerUp)
 					{
-						distanceMultiplier *= isRecoveryRolling ? 4f : 2f;
+						distanceMultiplier *= isDiving ? 4f : 2f;
 					}
 
 					float totalObjectDamage = weaponDamage * meleeDamageDealt * distanceMultiplier * MELEE_DAMAGE_OBJECT_MODIFIER;
@@ -929,7 +930,7 @@ public class RopeController
 		lastRopeShrinkTime = Game.TotalElapsedGameTime;
 		meleeAreaAttacksRemaining = MAX_MELEE_AREA_ATTACKS_PER_ROPE;
 		wasRolling = false;
-		wasRecoveryRolling = false;
+		wasDiving = false;
 		rollPowerUpEndTime = 0f;
 		hasLeftGroundSinceGrab = false;
 	}
