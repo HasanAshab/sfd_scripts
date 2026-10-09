@@ -1152,15 +1152,24 @@ private void SpawnStreetsweeperBots(IObjectStreetsweeperCrate crate, IPlayer act
 	IProfile botProfile = new IProfile();
 	Gender gender = activator.GetProfile().Gender;
 	
-	botProfile.ChestOver = new IProfileClothingItem(
-		gender == Gender.Female ? "Jacket_fem" : "Jacket",
-		"ClothingOrange", "ClothingOrange"
-	);
-	botProfile.Feet = new IProfileClothingItem("RidingBoots", "ClothingDarkBrown");
-	botProfile.Accessory = new IProfileClothingItem(
-		gender == Gender.Female ? "Armband_fem" : "Armband",
-		"ClothingGray"
-	);
+	if(gender == Gender.Female)
+	{
+		botProfile.Head = new IProfileClothingItem("Beret", "ClothingLightGray", "ClothingLightGray");
+		botProfile.ChestOver = new IProfileClothingItem("Jacket_fem", "ClothingOrange", "ClothingOrange");
+		botProfile.ChestUnder = new IProfileClothingItem("Shirt_fem", "ClothingLightGray");
+		botProfile.Legs = new IProfileClothingItem("Pants_fem", "ClothingLightGray");
+		botProfile.Feet = new IProfileClothingItem("RidingBoots", "ClothingBrown");
+		botProfile.Accessory = new IProfileClothingItem("Armband_fem", "ClothingGray");
+	}
+	else
+	{
+		botProfile.Head = new IProfileClothingItem("Beret", "ClothingLightGray", "ClothingLightGray");
+		botProfile.ChestOver = new IProfileClothingItem("Jacket", "ClothingOrange", "ClothingOrange");
+		botProfile.ChestUnder = new IProfileClothingItem("Shirt", "ClothingLightGray");
+		botProfile.Legs = new IProfileClothingItem("Pants", "ClothingLightGray");
+		botProfile.Feet = new IProfileClothingItem("RidingBoots", "ClothingBrown");
+		botProfile.Accessory = new IProfileClothingItem("Armband", "ClothingGray");
+	}
 	botProfile.Gender = gender;
 	
 	// Spawn 2 bots
