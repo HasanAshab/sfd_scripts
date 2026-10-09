@@ -1172,8 +1172,8 @@ private void SpawnStreetsweeperBots(IObjectStreetsweeperCrate crate, IPlayer act
 		bot.SetTeam(team);
 		bot.SetProfile(botProfile);
 		
-		// Give them assault rifle
-		bot.GiveWeaponItem(WeaponItem.ASSAULT);
+		// Give them weapon
+		bot.GiveWeaponItem(WeaponItem.CARBINE);
 		
 		// Set bot AI behavior
 		bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
