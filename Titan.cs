@@ -18,6 +18,9 @@ private Dictionary<int, bool> playerWasOnGround = new Dictionary<int, bool>();
 // Track player strength boost state to detect when they pick it up
 private Dictionary<int, bool> playerHadStrengthBoost = new Dictionary<int, bool>();
 
+// Track titans that are exhausted (out of energy)
+private Dictionary<int, bool> titanExhausted = new Dictionary<int, bool>();
+
 public void OnStartup()
 {
     // Set up update callback to detect strength boost pickups and falls
@@ -146,6 +149,12 @@ public void OnUpdate(float elapsed)
         
         playerHadStrengthBoost[playerId] = hasStrengthBoost;
         
+        // Check titan energy exhaustion
+        if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId])
+        {
+            CheckTitanExhaustion(player, playerId);
+        }
+        
         // Check if titan and just landed
         if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId])
         {
@@ -177,6 +186,38 @@ private void OnTitanLanded(IPlayer titan)
     
     // Make nearby non-titan players fall
     MakeNearbyPlayersFall(titanPos, FALL_IMPACT_RADIUS, titan.UniqueID);
+}
+
+private void CheckTitanExhaustion(IPlayer titan, int titanId)
+{
+    PlayerModifiers mods = titan.GetModifiers();
+    
+    // Initialize exhaustion state if not tracked
+    if (!titanExhausted.ContainsKey(titanId))
+    {
+        titanExhausted[titanId] = false;
+    }
+    
+    bool isExhausted = titanExhausted[titanId];
+    bool hasNoEnergy = mods.CurrentEnergy <= 0;
+    bool hasMaxEnergy = mods.CurrentEnergy >= mods.MaxEnergy;
+    
+    // Titan just ran out of energy
+    if (hasNoEnergy && !isExhausted)
+    {
+        // Disable input and make titan kneel
+        titan.SetInputEnabled(false);
+        QuickCommand(titan, new PlayerCommand(PlayerCommandType.DeathKneelInfinite));
+        titanExhausted[titanId] = true;
+    }
+    // Titan has recovered to full energy
+    else if (isExhausted && hasMaxEnergy)
+    {
+        // Stop kneeling and re-enable input
+        titan.AddCommand(new PlayerCommand(PlayerCommandType.StopDeathKneel));
+        titan.SetInputEnabled(true);
+        titanExhausted[titanId] = false;
+    }
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)
