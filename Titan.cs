@@ -108,7 +108,7 @@ private void MakeNearbyPlayersFall(Vector2 explosionPos, float radius, int titan
         if (distance <= radius)
         {
             // Make player fall
-            player.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
+            QuickCommand(player, new PlayerCommand(PlayerCommandType.Fall));
         }
     }
 }
@@ -177,4 +177,21 @@ private void OnTitanLanded(IPlayer titan)
     
     // Make nearby non-titan players fall
     MakeNearbyPlayersFall(titanPos, FALL_IMPACT_RADIUS, titan.UniqueID);
+}
+
+private void QuickCommand(IPlayer player, PlayerCommand command)
+{
+    bool inputEnabled = player.IsInputEnabled;
+
+    player.AddCommand(command);
+
+    if (inputEnabled)
+    {
+        player.SetInputEnabled(false);
+
+        Game.Events.StartUpdateCallback(dlt =>
+        {
+            player?.SetInputEnabled(true);
+        }, 1, 1);
+    }
 }
