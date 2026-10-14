@@ -15,24 +15,13 @@ private Dictionary<int, PlayerModifiers> originalModifiers = new Dictionary<int,
 // Track player ground state for fall detection
 private Dictionary<int, bool> playerWasOnGround = new Dictionary<int, bool>();
 
+// Track player strength boost state to detect when they pick it up
+private Dictionary<int, bool> playerHadStrengthBoost = new Dictionary<int, bool>();
+
 public void OnStartup()
 {
-    // Set up powerup pickup callback to detect strength boost
-    Events.PlayerPowerupCallback.Start(OnPlayerPowerup);
-    
-    // Set up update callback to detect falls
+    // Set up update callback to detect strength boost pickups and falls
     Events.UpdateCallback.Start(OnUpdate, 50); // Check every 50ms
-}
-
-public void OnPlayerPowerup(IPlayer player, PowerupEventArgs args)
-{
-    if (player == null) return;
-    
-    // Check if player picked up strength boost
-    if (args.Powerup == Powerup.Streangth && args.PowerupState == PowerupState.Activated)
-    {
-        TransformToTitan(player);
-    }
 }
 
 private void TransformToTitan(IPlayer player)
@@ -126,7 +115,6 @@ private void MakeNearbyPlayersFall(Vector2 explosionPos, float radius, int titan
 
 public void OnUpdate(float elapsed)
 {
-    // Check all titan players for landing (fall impact)
     IPlayer[] allPlayers = Game.GetPlayers();
     
     foreach (IPlayer player in allPlayers)
@@ -139,8 +127,24 @@ public void OnUpdate(float elapsed)
         if (!playerWasOnGround.ContainsKey(playerId))
         {
             playerWasOnGround[playerId] = player.IsOnGround;
-            continue;
         }
+        
+        if (!playerHadStrengthBoost.ContainsKey(playerId))
+        {
+            playerHadStrengthBoost[playerId] = false;
+        }
+        
+        // Check if player just picked up strength boost
+        bool hasStrengthBoost = player.GetStrengthBoostTime() > 0;
+        bool hadStrengthBoost = playerHadStrengthBoost[playerId];
+        
+        if (hasStrengthBoost && !hadStrengthBoost)
+        {
+            // Player just picked up strength boost - transform!
+            TransformToTitan(player);
+        }
+        
+        playerHadStrengthBoost[playerId] = hasStrengthBoost;
         
         // Check if titan and just landed
         if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId])
