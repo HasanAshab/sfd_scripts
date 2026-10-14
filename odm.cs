@@ -678,8 +678,14 @@ public class RopeController
 				{
 					// Dive ended - mark that we need to wait for the post-dive roll
 					diveRollPowerupActive = true;
+					// Don't give any powerup yet - wait for the roll
 				}
-				else if(diveRollPowerupActive)
+				else if(isRollingNow && diveRollPowerupActive)
+				{
+					// This shouldn't happen - we're still rolling
+					// Keep waiting
+				}
+				else if(!wasDiving && diveRollPowerupActive)
 				{
 					// Post-dive roll ended - NOW activate the 4 second powerup and slow-mo
 					rollPowerUpEndTime = now + DIVE_POWERUP_DURATION;
@@ -692,7 +698,7 @@ public class RopeController
 					
 					diveRollPowerupActive = false;
 				}
-				else
+				else if(!diveRollPowerupActive)
 				{
 					// Normal roll ended (not after dive) - set 2 second powerup (no slow-mo)
 					rollPowerUpEndTime = now + ROLL_POWERUP_DURATION;
