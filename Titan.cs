@@ -102,7 +102,7 @@ private void TransformToTitan(IPlayer player)
     
     // Disable item searching
     BotBehaviorSet bS = player.GetBotBehaviorSet();
-    bS.SearchForItems = false;
+    bS.SearchItems = 0;
     player.SetBotBehaviorSet(bS);
     
     // Clear all items from player
