@@ -5,7 +5,7 @@
 private const float TRANSFORM_EXPLOSION_RADIUS = 30f;
 private const float TITAN_HP_BONUS = 0.15f; // 15% HP increase
 private const float TITAN_MELEE_DAMAGE_BONUS = 0.10f; // 10% melee damage increase
-private const float FALL_IMPACT_RADIUS = 15f;
+private const float FALL_IMPACT_RADIUS = 23f;
 
 // Track titan players
 private Dictionary<int, bool> titanPlayers = new Dictionary<int, bool>();
@@ -49,6 +49,7 @@ private void TransformToTitan(IPlayer player)
     Game.PlayEffect(EffectName.Electric, playerPos);
     Game.PlayEffect(EffectName.CameraShaker, playerPos);
     Game.PlaySound("StrengthBoostStart", playerPos);
+    Game.PlaySound("Explosion", playerPos);
     
     // Make nearby non-titan players fall
     MakeNearbyPlayersFall(playerPos, TRANSFORM_EXPLOSION_RADIUS, playerId);
@@ -167,34 +168,26 @@ public void OnUpdate(float elapsed)
             CheckTitanExhaustion(player, playerId);
         }
         
-        // Check if titan and just landed
+        // Check titan falling state for impact effect
         if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId])
         {
-            bool wasOnGround = playerWasOnGround[playerId];
-            bool isOnGround = player.IsOnGround;
+            bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
             
-            // Detect landing (was in air, now on ground)
-            if (!wasOnGround && isOnGround)
+            // Detect when titan is falling
+            if (isFalling)
             {
-                OnTitanLanded(player);
+                OnTitanFalling(player);
             }
-            
-            playerWasOnGround[playerId] = isOnGround;
-        }
-        else
-        {
-            playerWasOnGround[playerId] = player.IsOnGround;
         }
     }
 }
 
-private void OnTitanLanded(IPlayer titan)
+private void OnTitanFalling(IPlayer titan)
 {
     Vector2 titanPos = titan.GetWorldPosition();
     
-    // Camera shake at landing position
+    // Camera shake while falling
     Game.PlayEffect(EffectName.CameraShaker, titanPos);
-    Game.PlaySound("Explosion", titanPos);
     
     // Make nearby non-titan players fall
     MakeNearbyPlayersFall(titanPos, FALL_IMPACT_RADIUS, titan.UniqueID);

@@ -1,6 +1,3 @@
-some more updates:
-1.  transforming to titan profile while still keeping the player trademark:
-    - head, skin color, gender are trademarks
-    - use get profile for current
-
-2. set strength boost time to 0, after transformation
+1. i said when titan fall not when he land, check api if you not sure how to check fall
+2. make explode sound on transformation not on fall
+3. set fall range to 23f
