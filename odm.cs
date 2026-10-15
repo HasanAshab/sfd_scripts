@@ -158,7 +158,7 @@ public class RopeController
 	private const float PULL_FORCE = 0.7f;
 	private const float MIN_PULL_DIST = 20f;
 	private const float MIN_HOOK_BREAK_DIST = 60f;
-	private const float MAX_HOOK_RANGE = 300f;
+	private const float MAX_HOOK_RANGE = 230f;
 	private const float ROPE_SHRINK_INTERVAL_MS = 100f;
 	private const float GAS_COST_PER_TICK = (GAS_PULL_COST_PER_SECOND / 100f); // Precomputed
 	private const float DOWNWARD_FORCE_REDUCTION = 0.8f;
@@ -419,8 +419,6 @@ public class RopeController
 	// RopeController instead of each one calling Game.GetPlayers() independently.
 	public void Update(IPlayer[] allPlayers)
 	{
-		if (ply.IsDead) return;
-
 		float now = Game.TotalElapsedGameTime; // read once, reused for the whole tick
 		float realNow = Game.TotalElapsedRealTime; // real-time for slowmo tracking
 
@@ -440,7 +438,7 @@ public class RopeController
 		bool walkJustReleased = !isWalkingNow && wasWalkingPressed;
 
 		// Cancel rope/hook if walk pressed while rope active
-		if(walkJustPressed && (hook != null || pendingGrab || isOnRope))
+		if(!ply.IsDead && walkJustPressed && (hook != null || pendingGrab || isOnRope))
 		{
 			CancelAiming();
 			CancelRope(now);
@@ -455,7 +453,7 @@ public class RopeController
 			walkKeyHoldTime = now;
 		}
 
-		if(isWalkingNow && !walkPressConsumedByCancel && !isOnRope && hook == null && !pendingGrab && !isAiming)
+		if(!ply.IsDead && isWalkingNow && !walkPressConsumedByCancel && !isOnRope && hook == null && !pendingGrab && !isAiming)
 		{
 			if(now - walkKeyHoldTime >= QUICK_TAP_THRESHOLD)
 			{
@@ -474,7 +472,10 @@ public class RopeController
 			}
 		}
 
-		if(isAiming)
+		if (ply.IsDead) {
+			// do nothing
+		}
+		else if(isAiming)
 		{
 			int facingDir = ply.FacingDirection;
 
@@ -691,7 +692,8 @@ public class RopeController
 					rollPowerUpEndTime = now + DIVE_POWERUP_DURATION;
 					
 					// Start slowmo using /settime command
-					Game.RunCommand("/settime " + DIVE_SLOWMO_SPEED.ToString());
+					// TEMP: disabled slow motion
+					// Game.RunCommand("/settime " + DIVE_SLOWMO_SPEED.ToString());
 					
 					// Set when slowmo should end (using real-time which is unaffected by slowmo)
 					slowmoEndRealTime = realNow + DIVE_SLOWMO_DURATION;
