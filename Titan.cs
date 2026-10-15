@@ -60,17 +60,22 @@ private void TransformToTitan(IPlayer player)
     originalProfiles[playerId] = player.GetProfile();
     originalModifiers[playerId] = player.GetModifiers();
     
-    // 3. Set titan profile
+    // 3. Set titan profile while keeping player trademarks
+    IProfile currentProfile = player.GetProfile();
     IProfile titanProfile = new IProfile()
     {
-        Gender = player.GetProfile().Gender,
+        Gender = currentProfile.Gender, // Keep gender
         Skin = new IProfileClothingItem(
-            player.GetProfile().Gender == Gender.Female ? "Normal_fem" : "Normal",
-            "Skin4",
+            currentProfile.Gender == Gender.Female ? "Normal_fem" : "Normal",
+            currentProfile.Skin.Color1, // Keep skin color
             "ClothingLightPink"
-        )
+        ),
+        Head = currentProfile.Head, // Keep head
     };
     player.SetProfile(titanProfile);
+    
+    // Remove strength boost after transformation
+    player.SetStrengthBoostTime(0);
     
     // 4. Increase HP and melee damage
     PlayerModifiers mods = player.GetModifiers();
