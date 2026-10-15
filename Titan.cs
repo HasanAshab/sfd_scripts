@@ -46,9 +46,10 @@ private void TransformToTitan(IPlayer player)
     Vector2 playerPos = player.GetWorldPosition();
     
     // 1. Explosion effect + sound at player position
-    Game.PlayEffect(EffectName.Electric, playerPos);
+    Game.PlayEffect(EffectName.Explosion, playerPos);
     Game.PlayEffect(EffectName.CameraShaker, playerPos);
-    Game.PlaySound("StrengthBoostStart", playerPos);
+    Game.PlaySound("Explosion", playerPos);
+    Game.PlaySound("Explosion", playerPos);
     Game.PlaySound("Explosion", playerPos);
     
     // Make nearby non-titan players fall
