@@ -21,6 +21,12 @@ private Dictionary<int, bool> playerHadStrengthBoost = new Dictionary<int, bool>
 // Track titans that are exhausted (out of energy)
 private Dictionary<int, bool> titanExhausted = new Dictionary<int, bool>();
 
+// Track when exhausted titans should recover
+private Dictionary<int, float> titanExhaustionRecoverTime = new Dictionary<int, float>();
+
+// Exhaustion duration constant
+private const float TITAN_EXHAUSTION_DURATION = 6000f; // 6 seconds in milliseconds
+
 public void OnStartup()
 {
     // Set up update callback to detect strength boost pickups and falls
@@ -200,7 +206,7 @@ private void CheckTitanExhaustion(IPlayer titan, int titanId)
     
     bool isExhausted = titanExhausted[titanId];
     bool hasNoEnergy = mods.CurrentEnergy <= 0;
-    bool hasMaxEnergy = mods.CurrentEnergy >= mods.MaxEnergy;
+    float currentTime = Game.TotalElapsedGameTime;
     
     // Titan just ran out of energy
     if (hasNoEnergy && !isExhausted)
@@ -209,13 +215,21 @@ private void CheckTitanExhaustion(IPlayer titan, int titanId)
         titan.SetInputEnabled(false);
         QuickCommand(titan, new PlayerCommand(PlayerCommandType.DeathKneelInfinite));
         titanExhausted[titanId] = true;
+        
+        // Set recovery time to 6 seconds from now
+        titanExhaustionRecoverTime[titanId] = currentTime + TITAN_EXHAUSTION_DURATION;
     }
-    // Titan has recovered to full energy
-    else if (isExhausted && hasMaxEnergy)
+    // Check if titan has finished exhaustion period
+    else if (isExhausted && currentTime >= titanExhaustionRecoverTime[titanId])
     {
         // Stop kneeling and re-enable input
         titan.AddCommand(new PlayerCommand(PlayerCommandType.StopDeathKneel));
         titan.SetInputEnabled(true);
+        
+        // Restore energy to full
+        mods.CurrentEnergy = mods.MaxEnergy;
+        titan.SetModifiers(mods);
+        
         titanExhausted[titanId] = false;
     }
 }
