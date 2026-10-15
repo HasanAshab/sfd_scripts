@@ -71,6 +71,7 @@ private void TransformToTitan(IPlayer player)
             "ClothingLightPink"
         ),
         Head = currentProfile.Head, // Keep head
+        Accesory = currentProfile.Accesory, // Keep accessory
     };
     player.SetProfile(titanProfile);
     
