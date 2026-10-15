@@ -97,6 +97,21 @@ private void TransformToTitan(IPlayer player)
     
     player.SetModifiers(mods);
     
+    // Set bot behavior to ZombieA
+    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.ZombieA));
+    
+    // Disable item searching
+    BotBehaviorSet bS = player.GetBotBehaviorSet();
+    bS.SearchForItems = false;
+    player.SetBotBehaviorSet(bS);
+    
+    // Clear all items from player
+    player.RemoveWeaponItemType(WeaponItemType.Rifle);
+    player.RemoveWeaponItemType(WeaponItemType.Handgun);
+    player.RemoveWeaponItemType(WeaponItemType.Melee);
+    player.RemoveWeaponItemType(WeaponItemType.Thrown);
+    player.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
     // Mark as titan
     titanPlayers[playerId] = true;
     
