@@ -35,11 +35,11 @@ private const float ATTACK_TITAN_SPEED_PENALTY = 0.20f; // 20% speed reduction
 private const float ATTACK_TITAN_ENERGY_BONUS = 0.30f; // 30% energy increase
 
 // Attack Titan hardening costs and bonuses
-private const float HARDENING_ENERGY_COST_PER_SECOND = 0.07f; // 7% of max energy per second
-private const float HARDENING_OFFENSIVE_DAMAGE_BONUS = 0.20f; // 20% melee damage increase
+private const float HARDENING_ENERGY_COST_PER_SECOND = 0.14f; // 14% of max energy per second
+private const float HARDENING_OFFENSIVE_DAMAGE_BONUS = 0.40f; // 40% melee damage increase
 private const float HARDENING_OFFENSIVE_STAGGER_CHANCE = 0.20f; // 20% stagger chance
 private const float HARDENING_DEFENSIVE_SPEED_PENALTY = 0.20f; // 20% speed reduction
-private const float HARDENING_DEFENSIVE_DEFENSE_BONUS = 0.45f; // 45% damage reduction
+private const float HARDENING_DEFENSIVE_DEFENSE_BONUS = 0.90f; // 90% damage reduction
 private const float HARDENING_OFFENSIVE_TRIGGER_DISTANCE = 25f; // Distance to trigger offensive mode
 private const float HARDENING_DEFENSIVE_CHECK_INTERVAL = 2000f; // Check every 2 seconds
 private const float HARDENING_OFFENSIVE_MELEE_TIMEOUT = 2000f; // 2 seconds without melee = back to neutral
@@ -49,8 +49,8 @@ private const float HARDENING_SWITCH_TO_NEUTRAL_CHANCE = 0.60f; // 60% chance to
 private const float AIM_DETECTION_RANGE = 800f; // Range for raycast aim detection
 
 // Attack Titan slowmo ability
-private const float SLOWMO_ENERGY_COST = 0.20f; // 20% of max energy
-private const float SLOWMO_ACTIVATION_DELAY = 2000f; // 2 seconds before ending slowmo
+private const float SLOWMO_ENERGY_COST = 0.30f; // 30% of max energy
+private const float SLOWMO_ACTIVATION_DELAY = 1000f; // 1 seconds before ending slowmo
 
 // Titan size range
 private const float TITAN_MIN_SIZE = 0.8f;
