@@ -46,6 +46,7 @@ private const float HARDENING_OFFENSIVE_MELEE_TIMEOUT = 2000f; // 2 seconds with
 private const float HARDENING_LOW_ENERGY_THRESHOLD = 0.30f; // 30% energy threshold
 private const float HARDENING_AVOID_TRIGGER_CHANCE = 0.80f; // 80% chance to avoid when low energy
 private const float HARDENING_SWITCH_TO_NEUTRAL_CHANCE = 0.60f; // 60% chance to switch back when low energy
+private const float AIM_DETECTION_RANGE = 800f; // Range for raycast aim detection
 
 // Attack Titan slowmo ability
 private const float SLOWMO_ENERGY_COST = 0.20f; // 20% of max energy
@@ -918,19 +919,12 @@ private void CheckAttackTitanBotHardening(IPlayer player, int playerId, float cu
                 PlayerTeam otherTeam = otherPlayer.GetTeam();
                 if (otherTeam == botTeam || otherTeam == PlayerTeam.Independent) continue;
                 
-                // Check if other player is aiming
-                if (otherPlayer.IsManualAiming)
+                // Use raycast to check if other player is aiming at this bot
+                IPlayer aimedTarget = GetAimedPlayer(otherPlayer);
+                if (aimedTarget != null && aimedTarget.UniqueID == playerId)
                 {
-                    Vector2 otherPos = otherPlayer.GetWorldPosition();
-                    int facingDir = otherPlayer.FacingDirection;
-                    
-                    // Simple check: if bot is in the direction the enemy is facing and aiming
-                    float dx = botPos.X - otherPos.X;
-                    if ((facingDir == 1 && dx > 0) || (facingDir == -1 && dx < 0))
-                    {
-                        enemyAimingAtBot = true;
-                        break;
-                    }
+                    enemyAimingAtBot = true;
+                    break;
                 }
             }
         }
@@ -1175,6 +1169,47 @@ private void UpdateTitanPlayersStorage()
     // Update shared storage
     IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
     storage.SetItem("TITAN_PLAYERS", titanPlayerList);
+}
+
+// Helper method to detect which player (if any) is being aimed at using raycast
+private IPlayer GetAimedPlayer(IPlayer shooter)
+{
+    if (shooter == null || shooter.IsDead) return null;
+    
+    // Get aim ray starting point and direction
+    Vector2 start, dir;
+    if (!shooter.GetWeaponMuzzleInfo(out start, out dir))
+    {
+        // No weapon drawn: fall back to player position + AimVector
+        start = shooter.GetWorldPosition();
+        dir = shooter.AimVector;
+    }
+    
+    // Normalize direction vector to ensure consistent ray length
+    float dirLength = (float)Math.Sqrt(dir.X * dir.X + dir.Y * dir.Y);
+    if (dirLength > 0)
+    {
+        dir = new Vector2(dir.X / dirLength, dir.Y / dirLength);
+    }
+    
+    // Cast ray to detect what the player is aiming at
+    RayCastInput input = new RayCastInput(true); // ClosestHitOnly = true (walls block line of sight)
+    Vector2 end = start + dir * AIM_DETECTION_RANGE;
+    RayCastResult[] results = Game.RayCast(start, end, input);
+    
+    // Check results for player hits
+    foreach (RayCastResult r in results)
+    {
+        if (!r.Hit || !r.IsPlayer) continue;
+        
+        IPlayer hitPlayer = r.HitObject as IPlayer;
+        if (hitPlayer != null && hitPlayer.UniqueID != shooter.UniqueID)
+        {
+            return hitPlayer;
+        }
+    }
+    
+    return null;
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)
