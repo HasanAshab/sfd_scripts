@@ -161,10 +161,12 @@ private void TransformToTitan(IPlayer player)
     
     // Apply size-based stat bonuses to HP and melee damage
     mods.MaxHealth = (int)(mods.MaxHealth * statMultiplier);
-    mods.CurrentHealth = (int)(mods.CurrentHealth * statMultiplier);
     mods.MeleeDamageDealtModifier *= statMultiplier;
     mods.MeleeForceModifier *= statMultiplier;
     mods.MeleeStunImmunity = 1;
+    
+    // Set health to full after all modifications
+    mods.CurrentHealth = mods.MaxHealth;
     
     player.SetModifiers(mods);
     
@@ -340,11 +342,11 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
         PlayerModifiers titanMods = titan.GetModifiers();
         float titanMeleeDamage = titanMods.MeleeDamageDealtModifier;
         
-        // Initialize grab damage data
+        // Initialize grab damage data - start damaging immediately (0s delay)
         titanGrabDamage[titanId] = new GrabDamageData()
         {
             Victim = currentVictim,
-            NextDamageTime = currentTime + GRAB_DAMAGE_INTERVAL,
+            NextDamageTime = currentTime, // Start damage immediately
             TitanMeleeDamage = titanMeleeDamage
         };
     }
@@ -358,10 +360,10 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
             // Grab ended or victim changed, reset tracking
             if (currentVictim != null)
             {
-                // New victim
+                // New victim - start damaging immediately
                 PlayerModifiers titanMods = titan.GetModifiers();
                 grabData.Victim = currentVictim;
-                grabData.NextDamageTime = currentTime + GRAB_DAMAGE_INTERVAL;
+                grabData.NextDamageTime = currentTime; // Start damage immediately
                 grabData.TitanMeleeDamage = titanMods.MeleeDamageDealtModifier;
             }
             else
@@ -379,8 +381,22 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
             float damagePerSecond = GRAB_DAMAGE_BASE * grabData.TitanMeleeDamage * 3f;
             float damagePerInterval = damagePerSecond * (GRAB_DAMAGE_INTERVAL / 1000f);
             
+            // Check victim health before dealing damage
+            PlayerModifiers victimMods = grabData.Victim.GetModifiers();
+            bool willDie = victimMods.CurrentHealth <= damagePerInterval;
+            
             // Deal damage
             grabData.Victim.DealDamage(damagePerInterval);
+            
+            // Play blood effect on victim
+            Vector2 victimPos = grabData.Victim.GetWorldPosition();
+            Game.PlayEffect(EffectName.Blood, victimPos);
+            
+            // If victim died from grab damage, gib them
+            if (willDie && grabData.Victim.IsDead)
+            {
+                grabData.Victim.Gib();
+            }
             
             // Update next damage time
             grabData.NextDamageTime = currentTime + GRAB_DAMAGE_INTERVAL;
