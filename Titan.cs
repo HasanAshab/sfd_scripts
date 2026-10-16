@@ -482,7 +482,7 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
 
 private void ActivateAttackTitanSlowmo(IPlayer player, int playerId)
 {
-    float currentTime = Game.TotalElapsedGameTime;
+    float currentTime = Game.TotalElapsedRealTime;
     
     // Check if slowmo is already active
     if (attackTitanSlowmoEndTime.ContainsKey(playerId) && attackTitanSlowmoEndTime[playerId] > currentTime)
@@ -634,7 +634,7 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
     }
     
     // Update last melee time for offensive mode timeout
-    float currentTime = Game.TotalElapsedGameTime;
+    float currentTime = Game.TotalElapsedRealTime;
     attackTitanLastMeleeTime[playerId] = currentTime;
     
     // Check for offensive hardening stagger chance
@@ -693,7 +693,7 @@ private void MakeNearbyPlayersFall(Vector2 explosionPos, float radius, int titan
 public void OnUpdate(float elapsed)
 {
     IPlayer[] allPlayers = Game.GetPlayers();
-    float currentTime = Game.TotalElapsedGameTime;
+    float currentTime = Game.TotalElapsedRealTime;
     
     foreach (IPlayer player in allPlayers)
     {
@@ -976,7 +976,7 @@ private void CheckTitanExhaustion(IPlayer titan, int titanId)
     
     bool isExhausted = titanExhausted[titanId];
     bool hasNoEnergy = mods.CurrentEnergy <= 0;
-    float currentTime = Game.TotalElapsedGameTime;
+    float currentTime = Game.TotalElapsedRealTime;
     
     // Titan just ran out of energy
     if (hasNoEnergy && !isExhausted)
@@ -1015,7 +1015,7 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
         return;
     }
     
-    float currentTime = Game.TotalElapsedGameTime;
+    float currentTime = Game.TotalElapsedRealTime;
     
     // Check all players to find who the titan is grabbing
     IPlayer[] allPlayers = Game.GetPlayers();
