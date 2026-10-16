@@ -35,7 +35,7 @@ ply.SetProfile(
         and the hight stab will be same as pure titan
 
     - Slow motion: 
-        - on virtual key ACTIVATE, cut 20% of max energy as cost and
+        - on virtual key ACTIVATE, cut 20% of max energy as cost and give SLOW_MO_5, then use PlayerCommandType.DrawPowerup command, and after 2 seconds, Game.RunCommand("/settime 1") 
         - Bot Usage: unlike human players, bots cant use this ability wisely, also i dont want, instead just give them better bot for fighting, like BotA
 
 
@@ -43,6 +43,7 @@ ply.SetProfile(
         - Available forms:
             - Offensive: 
                 - melee damage dealth mod +20%, 
+                - other players getting his melee hit will have a 20% chance to Stagger (PlayerCommandType.Stagger)
                 - set profile: new IProfile()
                     {
                         Gender = Gender.Male,
