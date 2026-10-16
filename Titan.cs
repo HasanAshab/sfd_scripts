@@ -922,11 +922,11 @@ private void CheckAttackTitanBotHardening(IPlayer player, int playerId, float cu
                 if (otherPlayer.IsManualAiming)
                 {
                     Vector2 otherPos = otherPlayer.GetWorldPosition();
-                    int aimDir = otherPlayer.AimFire && otherPlayer.FacingDirection == 1 ? 1 : -1;
+                    int facingDir = otherPlayer.FacingDirection;
                     
                     // Simple check: if bot is in the direction the enemy is facing and aiming
                     float dx = botPos.X - otherPos.X;
-                    if ((aimDir == 1 && dx > 0) || (aimDir == -1 && dx < 0))
+                    if ((facingDir == 1 && dx > 0) || (facingDir == -1 && dx < 0))
                     {
                         enemyAimingAtBot = true;
                         break;
