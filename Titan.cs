@@ -482,6 +482,15 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
 
 private void ActivateAttackTitanSlowmo(IPlayer player, int playerId)
 {
+    float currentTime = Game.TotalElapsedGameTime;
+    
+    // Check if slowmo is already active
+    if (attackTitanSlowmoEndTime.ContainsKey(playerId) && attackTitanSlowmoEndTime[playerId] > currentTime)
+    {
+        // Slowmo already active, ignore
+        return;
+    }
+    
     PlayerModifiers mods = player.GetModifiers();
     
     // Check if player has enough energy (20% of max)
@@ -500,10 +509,9 @@ private void ActivateAttackTitanSlowmo(IPlayer player, int playerId)
     player.GiveWeaponItem(WeaponItem.SLOWMO_5);
     
     // Force player to draw powerup
-    player.AddCommand(new PlayerCommand(PlayerCommandType.DrawPowerup));
+    QuickCommand(player, new PlayerCommand(PlayerCommandType.DrawPowerup));
     
     // Schedule slowmo end after 2 seconds
-    float currentTime = Game.TotalElapsedGameTime;
     attackTitanSlowmoEndTime[playerId] = currentTime + SLOWMO_ACTIVATION_DELAY;
 }
 
@@ -648,7 +656,7 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
                     IPlayer hitPlayer = Game.GetPlayer(hitArg.HitObject.UniqueID);
                     if (hitPlayer != null && !hitPlayer.IsDead)
                     {
-                        hitPlayer.AddCommand(new PlayerCommand(PlayerCommandType.Stagger));
+                        QuickCommand(hitPlayer, new PlayerCommand(PlayerCommandType.Stagger));
                     }
                 }
             }
@@ -985,7 +993,7 @@ private void CheckTitanExhaustion(IPlayer titan, int titanId)
     else if (isExhausted && currentTime >= titanExhaustionRecoverTime[titanId])
     {
         // Stop kneeling and re-enable input
-        titan.AddCommand(new PlayerCommand(PlayerCommandType.StopDeathKneel));
+        QuickCommand(titan, new PlayerCommand(PlayerCommandType.StopDeathKneel));
         titan.SetInputEnabled(true);
         
         // Restore energy to full
