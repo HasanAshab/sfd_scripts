@@ -5,6 +5,8 @@
 private const float TRANSFORM_EXPLOSION_RADIUS = 30f;
 private const float TITAN_HP_BONUS = 0.15f; // 15% HP increase
 private const float TITAN_MELEE_DAMAGE_BONUS = 0.10f; // 10% melee damage increase
+private const float TITAN_MELEE_FORCE_BONUS = 0.25f; // 25% melee force increase
+private const float TITAN_SPEED_PENALTY = 0.80f; // 80% speed reduction (0.2x speed)
 private const float FALL_IMPACT_RADIUS = 23f;
 
 // Titan size range
@@ -126,7 +128,7 @@ private void TransformToTitan(IPlayer player)
     player.SetModifiers(mods);
     
     // Set bot behavior to ZombieA
-    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.ZombieA));
+    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
     
     // Disable item searching and configure melee behavior
     BotBehaviorSet bS = player.GetBotBehaviorSet();
@@ -138,7 +140,7 @@ private void TransformToTitan(IPlayer player)
     meleeActions.Attack = 20;
     meleeActions.Grab = 60;
     meleeActions.Wait = 20;
-    bS.MeleeActions = meleeActions;
+    bS.SetMeleeActionsAll(meleeActions);
     
     player.SetBotBehaviorSet(bS);
     
