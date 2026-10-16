@@ -6,7 +6,7 @@ private const float TRANSFORM_EXPLOSION_RADIUS = 30f;
 private const float TITAN_HP_BONUS = 0.15f; // 15% HP increase
 private const float TITAN_MELEE_DAMAGE_BONUS = 0.10f; // 10% melee damage increase
 private const float TITAN_MELEE_FORCE_BONUS = 0.25f; // 25% melee force increase
-private const float TITAN_SPEED_PENALTY = 0.80f; // 80% speed reduction (0.2x speed)
+private const float TITAN_SPEED_PENALTY = 0.30f; // 30% speed reduction (0.7x speed)
 private const float FALL_IMPACT_RADIUS = 23f;
 
 // Titan size range
@@ -15,6 +15,9 @@ private const float TITAN_MAX_SIZE = 1.25f;
 
 // Size-based stat scaling (0.3% per 0.01 size above 0.8)
 private const float SIZE_STAT_BONUS_PER_0_01 = 0.003f; // 0.3% = 0.003
+
+// Size-based speed penalty (2% per 0.01 size above 0.8)
+private const float SIZE_SPEED_PENALTY_PER_0_01 = 0.02f; // 2% = 0.02
 
 // Grab damage constants
 private const float GRAB_DAMAGE_BASE = 7f;
@@ -122,6 +125,13 @@ private void TransformToTitan(IPlayer player)
     // Increase melee damage by 10%
     mods.MeleeDamageDealtModifier *= (1f + TITAN_MELEE_DAMAGE_BONUS);
     
+    // Increase melee force by 25%
+    mods.MeleeForceModifier *= (1f + TITAN_MELEE_FORCE_BONUS);
+    
+    // Apply speed penalty - reduce speed by 80% (multiply by 0.2)
+    mods.RunSpeedModifier *= (1f - TITAN_SPEED_PENALTY);
+    mods.SprintSpeedModifier *= (1f - TITAN_SPEED_PENALTY);
+    
     // 5. Disable item pickup
     mods.ItemDropMode = 1; // Cannot pick up items
     
@@ -158,6 +168,10 @@ private void TransformToTitan(IPlayer player)
     float sizeSteps = (titanSize - TITAN_MIN_SIZE) / 0.01f;
     float statMultiplier = 1f + (sizeSteps * SIZE_STAT_BONUS_PER_0_01);
     
+    // Calculate speed penalty based on size: each 0.01 size reduces speed by 2%
+    float speedPenalty = sizeSteps * SIZE_SPEED_PENALTY_PER_0_01;
+    float speedMultiplier = 1f - speedPenalty;
+    
     // Apply size
     mods.SizeModifier = titanSize;
     
@@ -166,6 +180,10 @@ private void TransformToTitan(IPlayer player)
     mods.MeleeDamageDealtModifier *= statMultiplier;
     mods.MeleeForceModifier *= statMultiplier;
     mods.MeleeStunImmunity = 1;
+    
+    // Apply size-based speed penalty (inverse of size bonus)
+    mods.RunSpeedModifier *= speedMultiplier;
+    mods.SprintSpeedModifier *= speedMultiplier;
     
     // Set health to full after all modifications
     mods.CurrentHealth = mods.MaxHealth;
