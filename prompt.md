@@ -34,7 +34,10 @@ ply.SetProfile(
 
         and the hight stab will be same as pure titan
 
-    - Slow motion: on virtual key ACTIVATE, cut 20% of max energy as cost and 
+    - Slow motion: 
+        - on virtual key ACTIVATE, cut 20% of max energy as cost and
+        - Bot Usage: unlike human players, bots cant use this ability wisely, also i dont want, instead just give them better bot for fighting, like BotA
+
 
     - Hardening: on virtual key SHEATHE toggle, cut 7% of max energy as cost per second and switch the titan to hardening forms:
         - Available forms:
@@ -68,3 +71,6 @@ ply.SetProfile(
             - Avoid triggers: sometimes the bot will avoid triggers:
                 - if current energy is less than 30% of max, then there will be a 80% chance that he will not switch to any mode
                 - when he is already on a mode and current energy is less than 30% of max, then there will be a 60% chance that he will switch back to neutral mode
+
+- Disablities:
+    - Grab damage: this titan not have the Grab damage power, but note that, he can get the damage from others grab ability
