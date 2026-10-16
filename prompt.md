@@ -13,7 +13,6 @@ Energy +30%
 ply.SetProfile(
     new IProfile()
     {
-        Name = "attackT",
         Gender = Gender.Male,
         Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingDarkGray"),
         Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGreen"),
@@ -35,4 +34,28 @@ ply.SetProfile(
 
         and the hight stab will be same as pure titan
 
-    - 
+    - Slow motion: on virtual key ACTIVATE, cut 20% of max energy as cost and 
+
+    - Hardening: on virtual key SHEATHE toggle, cut 7% of max energy as cost and switch the titan to these forms:
+        - Offensive: 
+            - melee damage dealth mod +20%, 
+            - set profile: new IProfile()
+                {
+                    Gender = Gender.Male,
+                    Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingDarkGray"),
+                    Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGreen"),
+                    Hands = new IProfileClothingItem("SafetyGloves", "ClothingLightGray"),
+                    Accesory = new IProfileClothingItem("Glasses", "ClothingGreen", "ClothingGreen"),
+                }
+        - Defensive:
+            - speed -20%
+            - defence +45% (both projectile and melee damage taken mod decrease by 45%)
+            - set profile: new IProfile()
+                {
+                    Gender = Gender.Male,
+                    Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingDarkGray"),
+                    Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGreen"),
+                    ChestUnder = new IProfileClothingItem("SleevelessShirt", "ClothingLightGray"),
+                    Accesory = new IProfileClothingItem("Glasses", "ClothingGreen", "ClothingGreen"),
+                }
+        - Neutral: Set profile to inital attack titan and everything as before hardening
