@@ -131,7 +131,6 @@ private void TransformToTitan(IPlayer player)
     // Disable item searching and configure melee behavior
     BotBehaviorSet bS = player.GetBotBehaviorSet();
     bS.SearchItems = 0;
-    bS.MeleeStunImmunity = 1;
     
     // Configure bot melee actions: 20% attack, 60% grab, 20% wait
     // Using weighted system where total is 100
@@ -165,6 +164,7 @@ private void TransformToTitan(IPlayer player)
     mods.CurrentHealth = (int)(mods.CurrentHealth * statMultiplier);
     mods.MeleeDamageDealtModifier *= statMultiplier;
     mods.MeleeForceModifier *= statMultiplier;
+    mods.MeleeStunImmunity = 1;
     
     player.SetModifiers(mods);
     
