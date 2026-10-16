@@ -224,7 +224,6 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     // Configure bot behavior
     BotBehaviorSet bS = player.GetBotBehaviorSet();
     bS.SearchItems = 0;
-    bS.MeleeStunImmunity = 1;
     
     // Configure bot melee actions: 20% attack, 60% grab, 20% wait
     BotMeleeActions meleeActions = new BotMeleeActions();
@@ -289,7 +288,6 @@ private void TransformToAttackTitan(IPlayer player, int playerId)
     // Configure bot behavior
     BotBehaviorSet bS = player.GetBotBehaviorSet();
     bS.SearchItems = 0;
-    bS.MeleeStunImmunity = 1;
     player.SetBotBehaviorSet(bS);
     
     // Clear all items
@@ -910,7 +908,10 @@ private void CheckAttackTitanBotHardening(IPlayer player, int playerId, float cu
             Vector2 botPos = player.GetWorldPosition();
             PlayerTeam botTeam = player.GetTeam();
             
-            foreach (IPlayer otherPlayer in allPlayers)
+            // Get all players for checking
+            IPlayer[] allPlayersForCheck = Game.GetPlayers();
+            
+            foreach (IPlayer otherPlayer in allPlayersForCheck)
             {
                 if (otherPlayer == null || otherPlayer.IsDead || otherPlayer.UniqueID == playerId) continue;
                 
