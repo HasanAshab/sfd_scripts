@@ -49,8 +49,8 @@ private Dictionary<int, float> titanSizes = new Dictionary<int, float>();
 // Track grab damage for titans
 private Dictionary<int, GrabDamageData> titanGrabDamage = new Dictionary<int, GrabDamageData>();
 
-// Track victims being grabbed (to manage input disable/enable)
-private Dictionary<int, bool> victimInputDisabled = new Dictionary<int, bool>();
+// Track titans being grabbed (to manage input disable/enable for attackers)
+private Dictionary<int, bool> titanInputDisabled = new Dictionary<int, bool>();
 
 // Helper class for grab damage tracking
 private class GrabDamageData
@@ -345,6 +345,9 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
 {
     if (titan == null || titan.IsDead) return;
     
+    // Only apply grab damage if the titan is a bot
+    if (!titan.IsBot) return;
+    
     float currentTime = Game.TotalElapsedGameTime;
     
     // Check all players to find who the titan is grabbing
@@ -368,8 +371,8 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
     {
         if (currentVictim == null) return; // No victim, no tracking needed
         
-        // Disable victim's input when grabbed
-        DisableVictimInput(currentVictim);
+        // Disable titan's (attacker's) input when grabbing
+        DisableTitanInput(titan);
         
         // Get titan's melee damage modifier
         PlayerModifiers titanMods = titan.GetModifiers();
@@ -390,17 +393,14 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
         // Check if victim changed or grab ended
         if (currentVictim == null || currentVictim.UniqueID != grabData.Victim?.UniqueID)
         {
-            // Re-enable previous victim's input when grab ends
-            if (grabData.Victim != null)
-            {
-                EnableVictimInput(grabData.Victim);
-            }
+            // Re-enable titan's (attacker's) input when grab ends
+            EnableTitanInput(titan);
             
             // Grab ended or victim changed, reset tracking
             if (currentVictim != null)
             {
-                // New victim - start damaging immediately and disable input
-                DisableVictimInput(currentVictim);
+                // New victim - start damaging immediately and disable titan's input again
+                DisableTitanInput(titan);
                 
                 PlayerModifiers titanMods = titan.GetModifiers();
                 grabData.Victim = currentVictim;
@@ -433,11 +433,11 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
             Vector2 victimPos = grabData.Victim.GetWorldPosition();
             Game.PlayEffect(EffectName.Blood, victimPos);
             
-            // If victim died from grab damage, gib them and re-enable input
+            // If victim died from grab damage, gib them and re-enable titan's input
             if (willDie && grabData.Victim.IsDead)
             {
                 grabData.Victim.Gib();
-                EnableVictimInput(grabData.Victim);
+                EnableTitanInput(titan);
             }
             
             // Update next damage time
@@ -446,41 +446,41 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
     }
 }
 
-private void DisableVictimInput(IPlayer victim)
+private void DisableTitanInput(IPlayer titan)
 {
-    if (victim == null || victim.IsDead) return;
+    if (titan == null || titan.IsDead) return;
     
-    int victimId = victim.UniqueID;
+    int titanId = titan.UniqueID;
     
     // Check if input is already disabled
-    if (victimInputDisabled.ContainsKey(victimId) && victimInputDisabled[victimId])
+    if (titanInputDisabled.ContainsKey(titanId) && titanInputDisabled[titanId])
     {
         return; // Already disabled
     }
     
     // Disable input
-    victim.SetInputEnabled(false);
-    victimInputDisabled[victimId] = true;
+    titan.SetInputEnabled(false);
+    titanInputDisabled[titanId] = true;
 }
 
-private void EnableVictimInput(IPlayer victim)
+private void EnableTitanInput(IPlayer titan)
 {
-    if (victim == null) return;
+    if (titan == null) return;
     
-    int victimId = victim.UniqueID;
+    int titanId = titan.UniqueID;
     
     // Check if input was disabled by us
-    if (!victimInputDisabled.ContainsKey(victimId) || !victimInputDisabled[victimId])
+    if (!titanInputDisabled.ContainsKey(titanId) || !titanInputDisabled[titanId])
     {
         return; // We didn't disable it
     }
     
     // Re-enable input
-    if (!victim.IsRemoved)
+    if (!titan.IsRemoved)
     {
-        victim.SetInputEnabled(true);
+        titan.SetInputEnabled(true);
     }
-    victimInputDisabled[victimId] = false;
+    titanInputDisabled[titanId] = false;
 }
 
 private void UpdateTitanPlayersStorage()
