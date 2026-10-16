@@ -1,13 +1,55 @@
 // Titan Transformation Script
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
+// Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
+
+// Titan type enum
+private enum TitanType
+{
+    Pure,
+    Attack
+}
+
+// Attack Titan hardening mode enum
+private enum HardeningMode
+{
+    Neutral,
+    Offensive,
+    Defensive
+}
 
 // Configuration variables
 private const float TRANSFORM_EXPLOSION_RADIUS = 30f;
-private const float TITAN_HP_BONUS = 0.15f; // 15% HP increase
-private const float TITAN_MELEE_DAMAGE_BONUS = 0.10f; // 10% melee damage increase
-private const float TITAN_MELEE_FORCE_BONUS = 0.25f; // 25% melee force increase
-private const float TITAN_SPEED_PENALTY = 0.30f; // 30% speed reduction (0.7x speed)
 private const float FALL_IMPACT_RADIUS = 23f;
+
+// Pure Titan stats
+private const float PURE_TITAN_HP_BONUS = 0.15f; // 15% HP increase
+private const float PURE_TITAN_MELEE_DAMAGE_BONUS = 0.10f; // 10% melee damage increase
+private const float PURE_TITAN_MELEE_FORCE_BONUS = 0.25f; // 25% melee force increase
+private const float PURE_TITAN_SPEED_PENALTY = 0.30f; // 30% speed reduction (0.7x speed)
+
+// Attack Titan stats
+private const float ATTACK_TITAN_HP_BONUS = 0.40f; // 40% HP increase
+private const float ATTACK_TITAN_MELEE_DAMAGE_BONUS = 0.32f; // 32% melee damage increase
+private const float ATTACK_TITAN_MELEE_FORCE_BONUS = 0.25f; // 25% melee force increase
+private const float ATTACK_TITAN_SPEED_PENALTY = 0.20f; // 20% speed reduction
+private const float ATTACK_TITAN_ENERGY_BONUS = 0.30f; // 30% energy increase
+
+// Attack Titan hardening costs and bonuses
+private const float HARDENING_ENERGY_COST_PER_SECOND = 0.07f; // 7% of max energy per second
+private const float HARDENING_OFFENSIVE_DAMAGE_BONUS = 0.20f; // 20% melee damage increase
+private const float HARDENING_OFFENSIVE_STAGGER_CHANCE = 0.20f; // 20% stagger chance
+private const float HARDENING_DEFENSIVE_SPEED_PENALTY = 0.20f; // 20% speed reduction
+private const float HARDENING_DEFENSIVE_DEFENSE_BONUS = 0.45f; // 45% damage reduction
+private const float HARDENING_OFFENSIVE_TRIGGER_DISTANCE = 25f; // Distance to trigger offensive mode
+private const float HARDENING_DEFENSIVE_CHECK_INTERVAL = 2000f; // Check every 2 seconds
+private const float HARDENING_OFFENSIVE_MELEE_TIMEOUT = 2000f; // 2 seconds without melee = back to neutral
+private const float HARDENING_LOW_ENERGY_THRESHOLD = 0.30f; // 30% energy threshold
+private const float HARDENING_AVOID_TRIGGER_CHANCE = 0.80f; // 80% chance to avoid when low energy
+private const float HARDENING_SWITCH_TO_NEUTRAL_CHANCE = 0.60f; // 60% chance to switch back when low energy
+
+// Attack Titan slowmo ability
+private const float SLOWMO_ENERGY_COST = 0.20f; // 20% of max energy
+private const float SLOWMO_ACTIVATION_DELAY = 2000f; // 2 seconds before ending slowmo
 
 // Titan size range
 private const float TITAN_MIN_SIZE = 0.8f;
@@ -24,9 +66,16 @@ private const float GRAB_DAMAGE_BASE = 7f;
 private const float GRAB_DAMAGE_INTERVAL = 1000f; // 1 second in milliseconds
 
 // Track titan players
-private Dictionary<int, bool> titanPlayers = new Dictionary<int, bool>();
+private Dictionary<int, TitanType> titanPlayers = new Dictionary<int, TitanType>();
 private Dictionary<int, IProfile> originalProfiles = new Dictionary<int, IProfile>();
 private Dictionary<int, PlayerModifiers> originalModifiers = new Dictionary<int, PlayerModifiers>();
+
+// Track Attack Titan specific data
+private Dictionary<int, HardeningMode> attackTitanHardeningMode = new Dictionary<int, HardeningMode>();
+private Dictionary<int, float> attackTitanHardeningEnergyCost = new Dictionary<int, float>();
+private Dictionary<int, float> attackTitanLastMeleeTime = new Dictionary<int, float>();
+private Dictionary<int, float> attackTitanLastDefensiveCheck = new Dictionary<int, float>();
+private Dictionary<int, float> attackTitanSlowmoEndTime = new Dictionary<int, float>();
 
 // Track player ground state for fall detection
 private Dictionary<int, bool> playerWasOnGround = new Dictionary<int, bool>();
@@ -71,6 +120,12 @@ public void OnStartup()
     
     // Set up update callback to detect strength boost pickups and falls
     Events.UpdateCallback.Start(OnUpdate, 50); // Check every 50ms
+    
+    // Set up key input callback for Attack Titan abilities
+    Events.PlayerKeyInputCallback.Start(OnPlayerKeyInput);
+    
+    // Set up melee action callback for Attack Titan hardening
+    Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
 }
 
 private void TransformToTitan(IPlayer player)
@@ -78,10 +133,13 @@ private void TransformToTitan(IPlayer player)
     int playerId = player.UniqueID;
     
     // Don't transform if already a titan
-    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId])
+    if (titanPlayers.ContainsKey(playerId))
     {
         return;
     }
+    
+    // Randomly choose titan type (50% Pure, 50% Attack)
+    TitanType titanType = rnd.Next(0, 2) == 0 ? TitanType.Pure : TitanType.Attack;
     
     Vector2 playerPos = player.GetWorldPosition();
     
@@ -102,112 +160,501 @@ private void TransformToTitan(IPlayer player)
     originalProfiles[playerId] = player.GetProfile();
     originalModifiers[playerId] = player.GetModifiers();
     
-    // 3. Set titan profile while keeping player trademarks
+    // 3. Transform based on titan type
+    if (titanType == TitanType.Pure)
+    {
+        TransformToPureTitan(player, playerId);
+    }
+    else
+    {
+        TransformToAttackTitan(player, playerId);
+    }
+    
+    // Mark as titan
+    titanPlayers[playerId] = titanType;
+    
+    // Update shared storage to notify odm.cs script
+    UpdateTitanPlayersStorage();
+    
+    // Show transformation message
+    string titanTypeName = titanType == TitanType.Pure ? "PURE TITAN" : "ATTACK TITAN";
+    Game.ShowChatMessage(player.Name + " has transformed into a " + titanTypeName + "!", Color.Red);
+}
+
+private void TransformToPureTitan(IPlayer player, int playerId)
+{
+    // Set Pure Titan profile while keeping player trademarks
     IProfile currentProfile = player.GetProfile();
     IProfile titanProfile = new IProfile()
     {
-        Gender = currentProfile.Gender, // Keep gender
+        Gender = currentProfile.Gender,
         Skin = new IProfileClothingItem(
             currentProfile.Gender == Gender.Female ? "Normal_fem" : "Normal",
-            currentProfile.Skin.Color1, // Keep skin color
+            currentProfile.Skin.Color1,
             "ClothingLightPink"
         ),
-        Head = currentProfile.Head, // Keep head
-        Accesory = currentProfile.Accesory, // Keep accessory
+        Head = currentProfile.Head,
+        Accesory = currentProfile.Accesory,
     };
     player.SetProfile(titanProfile);
     
     // Remove strength boost after transformation
     player.SetStrengthBoostTime(0);
     
-    // 4. Increase HP and melee damage
+    // Get modifiers
     PlayerModifiers mods = player.GetModifiers();
     
-    // Increase max health by 15%
-    int newMaxHealth = (int)(mods.MaxHealth * (1f + TITAN_HP_BONUS));
+    // Apply Pure Titan stats
+    int newMaxHealth = (int)(mods.MaxHealth * (1f + PURE_TITAN_HP_BONUS));
     int healthIncrease = newMaxHealth - mods.MaxHealth;
     mods.MaxHealth = newMaxHealth;
-    mods.CurrentHealth = mods.CurrentHealth + healthIncrease; // Add the health increase
+    mods.CurrentHealth = mods.CurrentHealth + healthIncrease;
     
-    // Increase melee damage by 10%
-    mods.MeleeDamageDealtModifier *= (1f + TITAN_MELEE_DAMAGE_BONUS);
-    
-    // Increase melee force by 25%
-    mods.MeleeForceModifier *= (1f + TITAN_MELEE_FORCE_BONUS);
-    
-    // Apply speed penalty - reduce speed by 80% (multiply by 0.2)
-    mods.RunSpeedModifier *= (1f - TITAN_SPEED_PENALTY);
-    mods.SprintSpeedModifier *= (1f - TITAN_SPEED_PENALTY);
-    
-    // 5. Disable item pickup
-    mods.ItemDropMode = 1; // Cannot pick up items
+    mods.MeleeDamageDealtModifier *= (1f + PURE_TITAN_MELEE_DAMAGE_BONUS);
+    mods.MeleeForceModifier *= (1f + PURE_TITAN_MELEE_FORCE_BONUS);
+    mods.RunSpeedModifier *= (1f - PURE_TITAN_SPEED_PENALTY);
+    mods.SprintSpeedModifier *= (1f - PURE_TITAN_SPEED_PENALTY);
+    mods.ItemDropMode = 1;
     
     player.SetModifiers(mods);
     
     // Set bot behavior to ZombieA
-    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
+    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.ZombieA));
     
-    // Disable item searching and configure melee behavior
+    // Configure bot behavior
     BotBehaviorSet bS = player.GetBotBehaviorSet();
     bS.SearchItems = 0;
+    bS.MeleeStunImmunity = 1;
     
     // Configure bot melee actions: 20% attack, 60% grab, 20% wait
-    // Using weighted system where total is 100
     BotMeleeActions meleeActions = new BotMeleeActions();
     meleeActions.Attack = 20;
     meleeActions.Grab = 60;
     meleeActions.Wait = 20;
-    bS.SetMeleeActionsAll(meleeActions);
+    bS.MeleeActions = meleeActions;
     
     player.SetBotBehaviorSet(bS);
     
-    // Clear all items from player
+    // Clear all items
     player.RemoveWeaponItemType(WeaponItemType.Rifle);
     player.RemoveWeaponItemType(WeaponItemType.Handgun);
     player.RemoveWeaponItemType(WeaponItemType.Melee);
     player.RemoveWeaponItemType(WeaponItemType.Thrown);
     player.RemoveWeaponItemType(WeaponItemType.Powerup);
     
-    // Generate random size and apply size-based stat scaling
+    // Apply size-based scaling
+    ApplySizeScaling(player, playerId, mods);
+}
+
+private void TransformToAttackTitan(IPlayer player, int playerId)
+{
+    // Set Attack Titan profile
+    IProfile titanProfile = new IProfile()
+    {
+        Gender = Gender.Male,
+        Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingDarkGray"),
+        Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGreen"),
+        Accesory = new IProfileClothingItem("Glasses", "ClothingGreen", "ClothingGreen"),
+    };
+    player.SetProfile(titanProfile);
+    
+    // Remove strength boost after transformation
+    player.SetStrengthBoostTime(0);
+    
+    // Get modifiers
+    PlayerModifiers mods = player.GetModifiers();
+    
+    // Apply Attack Titan stats
+    int newMaxHealth = (int)(mods.MaxHealth * (1f + ATTACK_TITAN_HP_BONUS));
+    int healthIncrease = newMaxHealth - mods.MaxHealth;
+    mods.MaxHealth = newMaxHealth;
+    mods.CurrentHealth = mods.CurrentHealth + healthIncrease;
+    
+    mods.MeleeDamageDealtModifier *= (1f + ATTACK_TITAN_MELEE_DAMAGE_BONUS);
+    mods.MeleeForceModifier *= (1f + ATTACK_TITAN_MELEE_FORCE_BONUS);
+    mods.RunSpeedModifier *= (1f - ATTACK_TITAN_SPEED_PENALTY);
+    mods.SprintSpeedModifier *= (1f - ATTACK_TITAN_SPEED_PENALTY);
+    
+    // Attack Titan has increased energy
+    mods.MaxEnergy = (int)(mods.MaxEnergy * (1f + ATTACK_TITAN_ENERGY_BONUS));
+    mods.CurrentEnergy = (int)(mods.CurrentEnergy * (1f + ATTACK_TITAN_ENERGY_BONUS));
+    
+    mods.ItemDropMode = 1;
+    
+    player.SetModifiers(mods);
+    
+    // Set bot behavior to BotA (better AI for Attack Titan)
+    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
+    
+    // Configure bot behavior
+    BotBehaviorSet bS = player.GetBotBehaviorSet();
+    bS.SearchItems = 0;
+    bS.MeleeStunImmunity = 1;
+    player.SetBotBehaviorSet(bS);
+    
+    // Clear all items
+    player.RemoveWeaponItemType(WeaponItemType.Rifle);
+    player.RemoveWeaponItemType(WeaponItemType.Handgun);
+    player.RemoveWeaponItemType(WeaponItemType.Melee);
+    player.RemoveWeaponItemType(WeaponItemType.Thrown);
+    player.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
+    // Initialize Attack Titan hardening mode to Neutral
+    attackTitanHardeningMode[playerId] = HardeningMode.Neutral;
+    
+    // Apply height-based scaling (different from Pure Titan's random size)
+    ApplyAttackTitanHeightScaling(player, playerId, mods);
+}
+
+private void ApplySizeScaling(IPlayer player, int playerId, PlayerModifiers mods)
+{
+    // Generate random size for Pure Titan
     float titanSize = TITAN_MIN_SIZE + (float)(rnd.NextDouble() * (TITAN_MAX_SIZE - TITAN_MIN_SIZE));
     
-    // Calculate stat multiplier based on size: 1 + ((size - 0.8) / 0.01) * 0.003
+    // Calculate stat multiplier based on size
     float sizeSteps = (titanSize - TITAN_MIN_SIZE) / 0.01f;
     float statMultiplier = 1f + (sizeSteps * SIZE_STAT_BONUS_PER_0_01);
     
-    // Calculate speed penalty based on size: each 0.01 size reduces speed by 2%
+    // Calculate speed penalty based on size
     float speedPenalty = sizeSteps * SIZE_SPEED_PENALTY_PER_0_01;
     float speedMultiplier = 1f - speedPenalty;
     
     // Apply size
     mods.SizeModifier = titanSize;
     
-    // Apply size-based stat bonuses to HP and melee damage
+    // Apply size-based stat bonuses
     mods.MaxHealth = (int)(mods.MaxHealth * statMultiplier);
     mods.MeleeDamageDealtModifier *= statMultiplier;
     mods.MeleeForceModifier *= statMultiplier;
     mods.MeleeStunImmunity = 1;
     
-    // Apply size-based speed penalty (inverse of size bonus)
+    // Apply size-based speed penalty
     mods.RunSpeedModifier *= speedMultiplier;
     mods.SprintSpeedModifier *= speedMultiplier;
     
-    // Set health to full after all modifications
+    // Set health to full
     mods.CurrentHealth = mods.MaxHealth;
     
     player.SetModifiers(mods);
     
     // Store titan size
     titanSizes[playerId] = titanSize;
+}
+
+private void ApplyAttackTitanHeightScaling(IPlayer player, int playerId, PlayerModifiers mods)
+{
+    // Calculate team health totals
+    PlayerTeam ownTeam = player.GetTeam();
+    float ownTeamTotalHP = 0f;
+    float opponentTeamTotalHP = 0f;
     
-    // Mark as titan
-    titanPlayers[playerId] = true;
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer p in allPlayers)
+    {
+        if (p == null || p.IsDead) continue;
+        
+        PlayerTeam pTeam = p.GetTeam();
+        PlayerModifiers pMods = p.GetModifiers();
+        float pHP = pMods.CurrentHealth;
+        
+        if (ownTeam == PlayerTeam.Independent)
+        {
+            // If own team is Independent/None, self is own team, everyone else is opponent
+            if (p.UniqueID == playerId)
+            {
+                ownTeamTotalHP += pHP;
+            }
+            else
+            {
+                opponentTeamTotalHP += pHP;
+            }
+        }
+        else
+        {
+            // Normal team logic
+            if (pTeam == ownTeam)
+            {
+                ownTeamTotalHP += pHP;
+            }
+            else if (pTeam != PlayerTeam.Independent)
+            {
+                opponentTeamTotalHP += pHP;
+            }
+        }
+    }
     
-    // Update shared storage to notify odm.cs script
-    UpdateTitanPlayersStorage();
+    // Calculate differ
+    float differ = opponentTeamTotalHP / (ownTeamTotalHP > 0f ? ownTeamTotalHP : 1f);
     
-    // Show transformation message
-    Game.ShowChatMessage(player.Name + " has transformed into a TITAN!", Color.Red);
+    // Calculate size based on differ using interpolation
+    float sizeMod;
+    bool giveInfiniteStrength = false;
+    
+    if (differ <= 1f)
+    {
+        sizeMod = 0.920f;
+    }
+    else if (differ < 1.7f)
+    {
+        // Interpolate between 0.920 and 1.250
+        float t = (differ - 1f) / (1.7f - 1f);
+        sizeMod = 0.920f + (1.250f - 0.920f) * t;
+    }
+    else if (differ < 2.5f)
+    {
+        // Interpolate between 1.250 and 1.600
+        float t = (differ - 1.7f) / (2.5f - 1.7f);
+        sizeMod = 1.250f + (1.600f - 1.250f) * t;
+    }
+    else if (differ < 3f)
+    {
+        // Interpolate between 1.600 and 1.600 (stay at 1.600)
+        sizeMod = 1.600f;
+    }
+    else
+    {
+        // 3 or more: 1.600 + infinite strength boost
+        sizeMod = 1.600f;
+        giveInfiniteStrength = true;
+    }
+    
+    // Apply size
+    mods.SizeModifier = sizeMod;
+    
+    // Apply same size-based scaling as Pure Titan
+    float sizeSteps = (sizeMod - TITAN_MIN_SIZE) / 0.01f;
+    float statMultiplier = 1f + (sizeSteps * SIZE_STAT_BONUS_PER_0_01);
+    float speedPenalty = sizeSteps * SIZE_SPEED_PENALTY_PER_0_01;
+    float speedMultiplier = 1f - speedPenalty;
+    
+    mods.MaxHealth = (int)(mods.MaxHealth * statMultiplier);
+    mods.MeleeDamageDealtModifier *= statMultiplier;
+    mods.MeleeForceModifier *= statMultiplier;
+    mods.MeleeStunImmunity = 1;
+    
+    mods.RunSpeedModifier *= speedMultiplier;
+    mods.SprintSpeedModifier *= speedMultiplier;
+    
+    // Set health to full
+    mods.CurrentHealth = mods.MaxHealth;
+    
+    player.SetModifiers(mods);
+    
+    // Give infinite strength boost if differ >= 3
+    if (giveInfiniteStrength)
+    {
+        player.SetStrengthBoostTime(999999f);
+    }
+    
+    // Store titan size
+    titanSizes[playerId] = sizeMod;
+}
+
+public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
+{
+    if (player == null || player.IsDead) return;
+    
+    int playerId = player.UniqueID;
+    
+    // Check if player is an Attack Titan
+    if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] != TitanType.Attack)
+    {
+        return;
+    }
+    
+    // Only allow human players to use abilities
+    if (player.IsBot) return;
+    
+    foreach (VirtualKeyInfo keyInfo in keyInfos)
+    {
+        // ACTIVATE key: Slowmo ability
+        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.ACTIVATE)
+        {
+            ActivateAttackTitanSlowmo(player, playerId);
+        }
+        
+        // SHEATHE key: Toggle hardening mode
+        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.SHEATHE)
+        {
+            ToggleAttackTitanHardening(player, playerId);
+        }
+    }
+}
+
+private void ActivateAttackTitanSlowmo(IPlayer player, int playerId)
+{
+    PlayerModifiers mods = player.GetModifiers();
+    
+    // Check if player has enough energy (20% of max)
+    float energyCost = mods.MaxEnergy * SLOWMO_ENERGY_COST;
+    if (mods.CurrentEnergy < energyCost)
+    {
+        Game.PlaySound("OutOfAmmoHeavy", player.GetWorldPosition());
+        return;
+    }
+    
+    // Deduct energy cost
+    mods.CurrentEnergy -= (int)energyCost;
+    player.SetModifiers(mods);
+    
+    // Give SLOWMO_5 powerup
+    player.GiveWeaponItem(WeaponItem.SLOWMO_5);
+    
+    // Force player to draw powerup
+    player.AddCommand(new PlayerCommand(PlayerCommandType.DrawPowerup));
+    
+    // Schedule slowmo end after 2 seconds
+    float currentTime = Game.TotalElapsedGameTime;
+    attackTitanSlowmoEndTime[playerId] = currentTime + SLOWMO_ACTIVATION_DELAY;
+}
+
+private void ToggleAttackTitanHardening(IPlayer player, int playerId)
+{
+    // Get current hardening mode
+    HardeningMode currentMode = HardeningMode.Neutral;
+    if (attackTitanHardeningMode.ContainsKey(playerId))
+    {
+        currentMode = attackTitanHardeningMode[playerId];
+    }
+    
+    // Toggle between modes: Neutral -> Offensive -> Defensive -> Neutral
+    HardeningMode newMode;
+    if (currentMode == HardeningMode.Neutral)
+    {
+        newMode = HardeningMode.Offensive;
+    }
+    else if (currentMode == HardeningMode.Offensive)
+    {
+        newMode = HardeningMode.Defensive;
+    }
+    else
+    {
+        newMode = HardeningMode.Neutral;
+    }
+    
+    // Apply hardening mode
+    ApplyAttackTitanHardening(player, playerId, newMode);
+}
+
+private void ApplyAttackTitanHardening(IPlayer player, int playerId, HardeningMode newMode)
+{
+    HardeningMode oldMode = HardeningMode.Neutral;
+    if (attackTitanHardeningMode.ContainsKey(playerId))
+    {
+        oldMode = attackTitanHardeningMode[playerId];
+    }
+    
+    // Get modifiers
+    PlayerModifiers mods = player.GetModifiers();
+    
+    // Remove old mode effects
+    if (oldMode == HardeningMode.Offensive)
+    {
+        // Remove offensive bonus
+        mods.MeleeDamageDealtModifier /= (1f + HARDENING_OFFENSIVE_DAMAGE_BONUS);
+    }
+    else if (oldMode == HardeningMode.Defensive)
+    {
+        // Remove defensive effects
+        mods.RunSpeedModifier /= (1f - HARDENING_DEFENSIVE_SPEED_PENALTY);
+        mods.SprintSpeedModifier /= (1f - HARDENING_DEFENSIVE_SPEED_PENALTY);
+        mods.MeleeDamageTakenModifier /= (1f - HARDENING_DEFENSIVE_DEFENSE_BONUS);
+        mods.ProjectileDamageTakenModifier /= (1f - HARDENING_DEFENSIVE_DEFENSE_BONUS);
+    }
+    
+    // Apply new mode effects
+    if (newMode == HardeningMode.Offensive)
+    {
+        // Apply offensive bonus
+        mods.MeleeDamageDealtModifier *= (1f + HARDENING_OFFENSIVE_DAMAGE_BONUS);
+        
+        // Set offensive profile
+        player.SetProfile(new IProfile()
+        {
+            Gender = Gender.Male,
+            Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingDarkGray"),
+            Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGreen"),
+            Hands = new IProfileClothingItem("SafetyGloves", "ClothingLightGray"),
+            Accesory = new IProfileClothingItem("Glasses", "ClothingGreen", "ClothingGreen"),
+        });
+    }
+    else if (newMode == HardeningMode.Defensive)
+    {
+        // Apply defensive effects
+        mods.RunSpeedModifier *= (1f - HARDENING_DEFENSIVE_SPEED_PENALTY);
+        mods.SprintSpeedModifier *= (1f - HARDENING_DEFENSIVE_SPEED_PENALTY);
+        mods.MeleeDamageTakenModifier *= (1f - HARDENING_DEFENSIVE_DEFENSE_BONUS);
+        mods.ProjectileDamageTakenModifier *= (1f - HARDENING_DEFENSIVE_DEFENSE_BONUS);
+        
+        // Set defensive profile
+        player.SetProfile(new IProfile()
+        {
+            Gender = Gender.Male,
+            Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingDarkGray"),
+            Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGreen"),
+            ChestUnder = new IProfileClothingItem("SleevelessShirt", "ClothingLightGray"),
+            Accesory = new IProfileClothingItem("Glasses", "ClothingGreen", "ClothingGreen"),
+        });
+    }
+    else
+    {
+        // Neutral mode - set default Attack Titan profile
+        player.SetProfile(new IProfile()
+        {
+            Gender = Gender.Male,
+            Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingDarkGray"),
+            Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGreen"),
+            Accesory = new IProfileClothingItem("Glasses", "ClothingGreen", "ClothingGreen"),
+        });
+    }
+    
+    player.SetModifiers(mods);
+    
+    // Update hardening mode
+    attackTitanHardeningMode[playerId] = newMode;
+}
+
+public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
+{
+    if (player == null || player.IsDead) return;
+    
+    int playerId = player.UniqueID;
+    
+    // Check if player is an Attack Titan
+    if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] != TitanType.Attack)
+    {
+        return;
+    }
+    
+    // Update last melee time for offensive mode timeout
+    float currentTime = Game.TotalElapsedGameTime;
+    attackTitanLastMeleeTime[playerId] = currentTime;
+    
+    // Check for offensive hardening stagger chance
+    HardeningMode mode = HardeningMode.Neutral;
+    if (attackTitanHardeningMode.ContainsKey(playerId))
+    {
+        mode = attackTitanHardeningMode[playerId];
+    }
+    
+    if (mode == HardeningMode.Offensive && args.Length > 0)
+    {
+        // 20% chance to stagger hit players
+        foreach (PlayerMeleeHitArg hitArg in args)
+        {
+            if (hitArg.HitObject != null && hitArg.IsPlayer)
+            {
+                if (rnd.NextDouble() < HARDENING_OFFENSIVE_STAGGER_CHANCE)
+                {
+                    IPlayer hitPlayer = Game.GetPlayer(hitArg.HitObject.UniqueID);
+                    if (hitPlayer != null && !hitPlayer.IsDead)
+                    {
+                        hitPlayer.AddCommand(new PlayerCommand(PlayerCommandType.Stagger));
+                    }
+                }
+            }
+        }
+    }
 }
 
 private void MakeNearbyPlayersFall(Vector2 explosionPos, float radius, int titanPlayerId)
@@ -220,7 +667,7 @@ private void MakeNearbyPlayersFall(Vector2 explosionPos, float radius, int titan
         if (player.UniqueID == titanPlayerId) continue;
         
         // Skip if already a titan
-        if (titanPlayers.ContainsKey(player.UniqueID) && titanPlayers[player.UniqueID])
+        if (titanPlayers.ContainsKey(player.UniqueID))
         {
             continue;
         }
@@ -239,6 +686,7 @@ private void MakeNearbyPlayersFall(Vector2 explosionPos, float radius, int titan
 public void OnUpdate(float elapsed)
 {
     IPlayer[] allPlayers = Game.GetPlayers();
+    float currentTime = Game.TotalElapsedGameTime;
     
     foreach (IPlayer player in allPlayers)
     {
@@ -269,25 +717,235 @@ public void OnUpdate(float elapsed)
         
         playerHadStrengthBoost[playerId] = hasStrengthBoost;
         
-        // Check titan energy exhaustion and grab damage
-        if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId])
+        // Check titan-specific updates
+        if (titanPlayers.ContainsKey(playerId))
         {
-            CheckTitanExhaustion(player, playerId);
+            TitanType titanType = titanPlayers[playerId];
             
-            // Only check grab damage if this player is actually a titan
-            CheckTitanGrabDamage(player, playerId);
+            if (titanType == TitanType.Pure)
+            {
+                // Pure Titan updates
+                CheckTitanExhaustion(player, playerId);
+                CheckTitanGrabDamage(player, playerId);
+                
+                // Check titan falling state for impact effect
+                bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
+                if (isFalling)
+                {
+                    OnTitanFalling(player);
+                }
+            }
+            else if (titanType == TitanType.Attack)
+            {
+                // Attack Titan updates
+                CheckAttackTitanSlowmo(player, playerId, currentTime);
+                CheckAttackTitanHardeningEnergy(player, playerId, currentTime);
+                CheckAttackTitanBotHardening(player, playerId, currentTime);
+                
+                // Attack Titan also has exhaustion
+                CheckTitanExhaustion(player, playerId);
+                
+                // Check titan falling state for impact effect
+                bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
+                if (isFalling)
+                {
+                    OnTitanFalling(player);
+                }
+            }
+        }
+    }
+}
+
+private void CheckAttackTitanSlowmo(IPlayer player, int playerId, float currentTime)
+{
+    // Check if slowmo should end
+    if (attackTitanSlowmoEndTime.ContainsKey(playerId) && attackTitanSlowmoEndTime[playerId] > 0)
+    {
+        if (currentTime >= attackTitanSlowmoEndTime[playerId])
+        {
+            Game.RunCommand("/settime 1");
+            attackTitanSlowmoEndTime[playerId] = 0;
+        }
+    }
+}
+
+private void CheckAttackTitanHardeningEnergy(IPlayer player, int playerId, float currentTime)
+{
+    // Only apply energy cost if in hardening mode (not neutral)
+    HardeningMode mode = HardeningMode.Neutral;
+    if (!attackTitanHardeningMode.ContainsKey(playerId))
+    {
+        return;
+    }
+    
+    mode = attackTitanHardeningMode[playerId];
+    if (mode == HardeningMode.Neutral)
+    {
+        return;
+    }
+    
+    // Calculate energy cost per tick (50ms = 0.05 seconds)
+    PlayerModifiers mods = player.GetModifiers();
+    float energyCostPerTick = (mods.MaxEnergy * HARDENING_ENERGY_COST_PER_SECOND) * 0.05f;
+    
+    // Deduct energy
+    mods.CurrentEnergy -= energyCostPerTick;
+    
+    // If energy drops to 0 or below, switch back to neutral
+    if (mods.CurrentEnergy <= 0)
+    {
+        mods.CurrentEnergy = 0;
+        ApplyAttackTitanHardening(player, playerId, HardeningMode.Neutral);
+    }
+    
+    player.SetModifiers(mods);
+}
+
+private void CheckAttackTitanBotHardening(IPlayer player, int playerId, float currentTime)
+{
+    // Only for bots
+    if (!player.IsBot) return;
+    
+    // Get current mode
+    HardeningMode currentMode = HardeningMode.Neutral;
+    if (attackTitanHardeningMode.ContainsKey(playerId))
+    {
+        currentMode = attackTitanHardeningMode[playerId];
+    }
+    
+    // Get player modifiers for energy check
+    PlayerModifiers mods = player.GetModifiers();
+    float energyPercent = mods.CurrentEnergy / (float)mods.MaxEnergy;
+    
+    // Check if should avoid triggering due to low energy
+    bool shouldAvoidTrigger = false;
+    if (energyPercent < HARDENING_LOW_ENERGY_THRESHOLD)
+    {
+        if (currentMode == HardeningMode.Neutral)
+        {
+            // 80% chance to avoid switching to a mode
+            shouldAvoidTrigger = rnd.NextDouble() < HARDENING_AVOID_TRIGGER_CHANCE;
+        }
+        else
+        {
+            // 60% chance to switch back to neutral
+            if (rnd.NextDouble() < HARDENING_SWITCH_TO_NEUTRAL_CHANCE)
+            {
+                ApplyAttackTitanHardening(player, playerId, HardeningMode.Neutral);
+                return;
+            }
+        }
+    }
+    
+    if (shouldAvoidTrigger) return;
+    
+    // Check offensive mode trigger: target is close (25f)
+    IObject target = player.GetBotTarget();
+    if (target != null && !target.IsRemoved)
+    {
+        Vector2 playerPos = player.GetWorldPosition();
+        Vector2 targetPos = target.GetWorldPosition();
+        float distance = Vector2.Distance(playerPos, targetPos);
+        
+        if (distance <= HARDENING_OFFENSIVE_TRIGGER_DISTANCE)
+        {
+            // Switch to offensive mode
+            if (currentMode != HardeningMode.Offensive)
+            {
+                ApplyAttackTitanHardening(player, playerId, HardeningMode.Offensive);
+                attackTitanLastMeleeTime[playerId] = currentTime;
+            }
+        }
+        else if (currentMode == HardeningMode.Offensive)
+        {
+            // Check if stopped melee for 2 seconds
+            if (attackTitanLastMeleeTime.ContainsKey(playerId))
+            {
+                float timeSinceLastMelee = currentTime - attackTitanLastMeleeTime[playerId];
+                if (timeSinceLastMelee >= HARDENING_OFFENSIVE_MELEE_TIMEOUT)
+                {
+                    ApplyAttackTitanHardening(player, playerId, HardeningMode.Neutral);
+                }
+            }
+        }
+    }
+    else if (currentMode == HardeningMode.Offensive)
+    {
+        // No target, check if stopped melee for 2 seconds
+        if (attackTitanLastMeleeTime.ContainsKey(playerId))
+        {
+            float timeSinceLastMelee = currentTime - attackTitanLastMeleeTime[playerId];
+            if (timeSinceLastMelee >= HARDENING_OFFENSIVE_MELEE_TIMEOUT)
+            {
+                ApplyAttackTitanHardening(player, playerId, HardeningMode.Neutral);
+            }
+        }
+    }
+    
+    // Check defensive mode trigger: enemy aims at bot and no close target
+    if (!attackTitanLastDefensiveCheck.ContainsKey(playerId) || 
+        currentTime - attackTitanLastDefensiveCheck[playerId] >= HARDENING_DEFENSIVE_CHECK_INTERVAL)
+    {
+        attackTitanLastDefensiveCheck[playerId] = currentTime;
+        
+        bool enemyAimingAtBot = false;
+        bool hasCloseTarget = false;
+        
+        // Check if target is close
+        if (target != null && !target.IsRemoved)
+        {
+            Vector2 playerPos = player.GetWorldPosition();
+            Vector2 targetPos = target.GetWorldPosition();
+            float distance = Vector2.Distance(playerPos, targetPos);
+            
+            if (distance <= HARDENING_OFFENSIVE_TRIGGER_DISTANCE)
+            {
+                hasCloseTarget = true;
+            }
         }
         
-        // Check titan falling state for impact effect
-        if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId])
+        // Check if any enemy is aiming at this bot
+        if (!hasCloseTarget)
         {
-            bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
+            Vector2 botPos = player.GetWorldPosition();
+            PlayerTeam botTeam = player.GetTeam();
             
-            // Detect when titan is falling
-            if (isFalling)
+            foreach (IPlayer otherPlayer in allPlayers)
             {
-                OnTitanFalling(player);
+                if (otherPlayer == null || otherPlayer.IsDead || otherPlayer.UniqueID == playerId) continue;
+                
+                PlayerTeam otherTeam = otherPlayer.GetTeam();
+                if (otherTeam == botTeam || otherTeam == PlayerTeam.Independent) continue;
+                
+                // Check if other player is aiming
+                if (otherPlayer.IsManualAiming)
+                {
+                    Vector2 otherPos = otherPlayer.GetWorldPosition();
+                    int aimDir = otherPlayer.AimFire && otherPlayer.FacingDirection == 1 ? 1 : -1;
+                    
+                    // Simple check: if bot is in the direction the enemy is facing and aiming
+                    float dx = botPos.X - otherPos.X;
+                    if ((aimDir == 1 && dx > 0) || (aimDir == -1 && dx < 0))
+                    {
+                        enemyAimingAtBot = true;
+                        break;
+                    }
+                }
             }
+        }
+        
+        // Apply defensive mode if conditions met
+        if (enemyAimingAtBot && !hasCloseTarget)
+        {
+            if (currentMode != HardeningMode.Defensive)
+            {
+                ApplyAttackTitanHardening(player, playerId, HardeningMode.Defensive);
+            }
+        }
+        else if (currentMode == HardeningMode.Defensive)
+        {
+            // Conditions no longer true, switch back to neutral
+            ApplyAttackTitanHardening(player, playerId, HardeningMode.Neutral);
         }
     }
 }
@@ -347,10 +1005,11 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
 {
     if (titan == null || titan.IsDead) return;
     
-    // Verify this player is actually a titan before applying grab damage
-    if (!titanPlayers.ContainsKey(titanId) || !titanPlayers[titanId])
+    // Verify this player is actually a Pure Titan before applying grab damage
+    // Attack Titans don't have grab damage ability
+    if (!titanPlayers.ContainsKey(titanId) || titanPlayers[titanId] != TitanType.Pure)
     {
-        return; // Not a titan, don't apply grab damage
+        return;
     }
     
     float currentTime = Game.TotalElapsedGameTime;
@@ -507,10 +1166,7 @@ private void UpdateTitanPlayersStorage()
     
     foreach (var kvp in titanPlayers)
     {
-        if (kvp.Value) // If player is marked as titan
-        {
-            titanIds.Add(kvp.Key.ToString());
-        }
+        titanIds.Add(kvp.Key.ToString());
     }
     
     string titanPlayerList = string.Join(",", titanIds.ToArray());
