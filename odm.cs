@@ -419,6 +419,12 @@ public class RopeController
 	// RopeController instead of each one calling Game.GetPlayers() independently.
 	public void Update(IPlayer[] allPlayers)
 	{
+		// Check if this player is a titan - skip rope controller if they are
+		if (IsTitanPlayer(ply))
+		{
+			return; // Don't execute rope controller for titan players
+		}
+		
 		float now = Game.TotalElapsedGameTime; // read once, reused for the whole tick
 		float realNow = Game.TotalElapsedRealTime; // real-time for slowmo tracking
 
@@ -953,6 +959,34 @@ public class RopeController
 		hasLeftGroundSinceGrab = false;
 	}
 
+	private bool IsTitanPlayer(IPlayer player)
+	{
+		if (player == null) return false;
+		
+		// Check shared storage for titan player list
+		IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
+		string titanPlayerList = "";
+		
+		if (storage.TryGetItemString("TITAN_PLAYERS", out titanPlayerList))
+		{
+			if (string.IsNullOrEmpty(titanPlayerList)) return false;
+			
+			// Parse comma-separated list of titan player IDs
+			string[] titanIds = titanPlayerList.Split(',');
+			string playerIdStr = player.UniqueID.ToString();
+			
+			foreach (string titanId in titanIds)
+			{
+				if (titanId == playerIdStr)
+				{
+					return true;
+				}
+			}
+		}
+		
+		return false;
+	}
+
 	private void ForceFall(IPlayer target, float now)
 	{
 		target.SetInputEnabled(false);
@@ -1006,6 +1040,10 @@ Events.PlayerKeyInputCallback keyInputCallback = null; // For detecting crate ac
 
 public void OnStartup()
 {
+	// Initialize shared storage for cooperation with Titan.cs script
+	IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
+	// Just access it to initialize - Titan.cs will manage the actual data
+	
 	// Direct delegate-based tick callback instead of a persistent TimerTrigger world
 	// object with string-based SetScriptMethod dispatch. Same 10ms cadence, same
 	// infinite repeat (repeatCount 0).

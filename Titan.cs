@@ -62,6 +62,10 @@ private Random rnd = new Random();
 
 public void OnStartup()
 {
+    // Initialize shared storage for cooperation with odm.cs script
+    IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
+    storage.SetItem("TITAN_PLAYERS", ""); // Initialize with empty string
+    
     // Set up update callback to detect strength boost pickups and falls
     Events.UpdateCallback.Start(OnUpdate, 50); // Check every 50ms
 }
@@ -195,6 +199,9 @@ private void TransformToTitan(IPlayer player)
     
     // Mark as titan
     titanPlayers[playerId] = true;
+    
+    // Update shared storage to notify odm.cs script
+    UpdateTitanPlayersStorage();
     
     // Show transformation message
     Game.ShowChatMessage(player.Name + " has transformed into a TITAN!", Color.Red);
@@ -422,6 +429,26 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
             grabData.NextDamageTime = currentTime + GRAB_DAMAGE_INTERVAL;
         }
     }
+}
+
+private void UpdateTitanPlayersStorage()
+{
+    // Create a comma-separated list of titan player IDs
+    List<string> titanIds = new List<string>();
+    
+    foreach (var kvp in titanPlayers)
+    {
+        if (kvp.Value) // If player is marked as titan
+        {
+            titanIds.Add(kvp.Key.ToString());
+        }
+    }
+    
+    string titanPlayerList = string.Join(",", titanIds.ToArray());
+    
+    // Update shared storage
+    IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
+    storage.SetItem("TITAN_PLAYERS", titanPlayerList);
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)
