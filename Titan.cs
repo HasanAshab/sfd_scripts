@@ -7,6 +7,17 @@ private const float TITAN_HP_BONUS = 0.15f; // 15% HP increase
 private const float TITAN_MELEE_DAMAGE_BONUS = 0.10f; // 10% melee damage increase
 private const float FALL_IMPACT_RADIUS = 23f;
 
+// Titan size range
+private const float TITAN_MIN_SIZE = 0.8f;
+private const float TITAN_MAX_SIZE = 1.25f;
+
+// Size-based stat scaling (0.3% per 0.01 size above 0.8)
+private const float SIZE_STAT_BONUS_PER_0_01 = 0.003f; // 0.3% = 0.003
+
+// Grab damage constants
+private const float GRAB_DAMAGE_BASE = 7f;
+private const float GRAB_DAMAGE_INTERVAL = 1000f; // 1 second in milliseconds
+
 // Track titan players
 private Dictionary<int, bool> titanPlayers = new Dictionary<int, bool>();
 private Dictionary<int, IProfile> originalProfiles = new Dictionary<int, IProfile>();
@@ -26,6 +37,23 @@ private Dictionary<int, float> titanExhaustionRecoverTime = new Dictionary<int, 
 
 // Exhaustion duration constant
 private const float TITAN_EXHAUSTION_DURATION = 6000f; // 6 seconds in milliseconds
+
+// Track titan sizes for stat calculations
+private Dictionary<int, float> titanSizes = new Dictionary<int, float>();
+
+// Track grab damage for titans
+private Dictionary<int, GrabDamageData> titanGrabDamage = new Dictionary<int, GrabDamageData>();
+
+// Helper class for grab damage tracking
+private class GrabDamageData
+{
+    public IPlayer Victim;
+    public float NextDamageTime;
+    public float TitanMeleeDamage;
+}
+
+// Random generator
+private Random rnd = new Random();
 
 public void OnStartup()
 {
@@ -100,10 +128,19 @@ private void TransformToTitan(IPlayer player)
     // Set bot behavior to ZombieA
     player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.ZombieA));
     
-    // Disable item searching
+    // Disable item searching and configure melee behavior
     BotBehaviorSet bS = player.GetBotBehaviorSet();
     bS.SearchItems = 0;
     bS.MeleeStunImmunity = 1;
+    
+    // Configure bot melee actions: 20% attack, 60% grab, 20% wait
+    // Using weighted system where total is 100
+    BotMeleeActions meleeActions = new BotMeleeActions();
+    meleeActions.Attack = 20;
+    meleeActions.Grab = 60;
+    meleeActions.Wait = 20;
+    bS.MeleeActions = meleeActions;
+    
     player.SetBotBehaviorSet(bS);
     
     // Clear all items from player
@@ -112,6 +149,27 @@ private void TransformToTitan(IPlayer player)
     player.RemoveWeaponItemType(WeaponItemType.Melee);
     player.RemoveWeaponItemType(WeaponItemType.Thrown);
     player.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
+    // Generate random size and apply size-based stat scaling
+    float titanSize = TITAN_MIN_SIZE + (float)(rnd.NextDouble() * (TITAN_MAX_SIZE - TITAN_MIN_SIZE));
+    
+    // Calculate stat multiplier based on size: 1 + ((size - 0.8) / 0.01) * 0.003
+    float sizeSteps = (titanSize - TITAN_MIN_SIZE) / 0.01f;
+    float statMultiplier = 1f + (sizeSteps * SIZE_STAT_BONUS_PER_0_01);
+    
+    // Apply size
+    mods.SizeModifier = titanSize;
+    
+    // Apply size-based stat bonuses to HP and melee damage
+    mods.MaxHealth = (int)(mods.MaxHealth * statMultiplier);
+    mods.CurrentHealth = (int)(mods.CurrentHealth * statMultiplier);
+    mods.MeleeDamageDealtModifier *= statMultiplier;
+    mods.MeleeForceModifier *= statMultiplier;
+    
+    player.SetModifiers(mods);
+    
+    // Store titan size
+    titanSizes[playerId] = titanSize;
     
     // Mark as titan
     titanPlayers[playerId] = true;
@@ -183,6 +241,7 @@ public void OnUpdate(float elapsed)
         if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId])
         {
             CheckTitanExhaustion(player, playerId);
+            CheckTitanGrabDamage(player, playerId);
         }
         
         // Check titan falling state for impact effect
@@ -247,6 +306,85 @@ private void CheckTitanExhaustion(IPlayer titan, int titanId)
         titan.SetModifiers(mods);
         
         titanExhausted[titanId] = false;
+    }
+}
+
+private void CheckTitanGrabDamage(IPlayer titan, int titanId)
+{
+    if (titan == null || titan.IsDead) return;
+    
+    float currentTime = Game.TotalElapsedGameTime;
+    
+    // Check all players to find who the titan is grabbing
+    IPlayer[] allPlayers = Game.GetPlayers();
+    IPlayer currentVictim = null;
+    
+    foreach (IPlayer player in allPlayers)
+    {
+        if (player == null || player.IsDead || player.UniqueID == titanId) continue;
+        
+        // Check if this player is caught by the titan's grab
+        if (player.IsCaughtByPlayerInGrab)
+        {
+            currentVictim = player;
+            break;
+        }
+    }
+    
+    // Initialize or update grab damage tracking
+    if (!titanGrabDamage.ContainsKey(titanId))
+    {
+        if (currentVictim == null) return; // No victim, no tracking needed
+        
+        // Get titan's melee damage modifier
+        PlayerModifiers titanMods = titan.GetModifiers();
+        float titanMeleeDamage = titanMods.MeleeDamageDealtModifier;
+        
+        // Initialize grab damage data
+        titanGrabDamage[titanId] = new GrabDamageData()
+        {
+            Victim = currentVictim,
+            NextDamageTime = currentTime + GRAB_DAMAGE_INTERVAL,
+            TitanMeleeDamage = titanMeleeDamage
+        };
+    }
+    else
+    {
+        GrabDamageData grabData = titanGrabDamage[titanId];
+        
+        // Check if victim changed or grab ended
+        if (currentVictim == null || currentVictim.UniqueID != grabData.Victim?.UniqueID)
+        {
+            // Grab ended or victim changed, reset tracking
+            if (currentVictim != null)
+            {
+                // New victim
+                PlayerModifiers titanMods = titan.GetModifiers();
+                grabData.Victim = currentVictim;
+                grabData.NextDamageTime = currentTime + GRAB_DAMAGE_INTERVAL;
+                grabData.TitanMeleeDamage = titanMods.MeleeDamageDealtModifier;
+            }
+            else
+            {
+                // No victim, remove tracking
+                titanGrabDamage.Remove(titanId);
+            }
+            return;
+        }
+        
+        // Apply damage if it's time
+        if (currentTime >= grabData.NextDamageTime)
+        {
+            // Calculate damage: 7 * titanMeleeDamage * 3 per second
+            float damagePerSecond = GRAB_DAMAGE_BASE * grabData.TitanMeleeDamage * 3f;
+            float damagePerInterval = damagePerSecond * (GRAB_DAMAGE_INTERVAL / 1000f);
+            
+            // Deal damage
+            grabData.Victim.DealDamage(damagePerInterval);
+            
+            // Update next damage time
+            grabData.NextDamageTime = currentTime + GRAB_DAMAGE_INTERVAL;
+        }
     }
 }
 
