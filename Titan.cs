@@ -269,10 +269,12 @@ public void OnUpdate(float elapsed)
         
         playerHadStrengthBoost[playerId] = hasStrengthBoost;
         
-        // Check titan energy exhaustion
+        // Check titan energy exhaustion and grab damage
         if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId])
         {
             CheckTitanExhaustion(player, playerId);
+            
+            // Only check grab damage if this player is actually a titan
             CheckTitanGrabDamage(player, playerId);
         }
         
@@ -345,8 +347,11 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
 {
     if (titan == null || titan.IsDead) return;
     
-    // Only apply grab damage if the titan is a bot
-    if (!titan.IsBot) return;
+    // Verify this player is actually a titan before applying grab damage
+    if (!titanPlayers.ContainsKey(titanId) || !titanPlayers[titanId])
+    {
+        return; // Not a titan, don't apply grab damage
+    }
     
     float currentTime = Game.TotalElapsedGameTime;
     
@@ -371,8 +376,11 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
     {
         if (currentVictim == null) return; // No victim, no tracking needed
         
-        // Disable titan's (attacker's) input when grabbing
-        DisableTitanInput(titan);
+        // Disable titan's (attacker's) input when grabbing (only for bots)
+        if (titan.IsBot)
+        {
+            DisableTitanInput(titan);
+        }
         
         // Get titan's melee damage modifier
         PlayerModifiers titanMods = titan.GetModifiers();
@@ -393,14 +401,20 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
         // Check if victim changed or grab ended
         if (currentVictim == null || currentVictim.UniqueID != grabData.Victim?.UniqueID)
         {
-            // Re-enable titan's (attacker's) input when grab ends
-            EnableTitanInput(titan);
+            // Re-enable titan's (attacker's) input when grab ends (only for bots)
+            if (titan.IsBot)
+            {
+                EnableTitanInput(titan);
+            }
             
             // Grab ended or victim changed, reset tracking
             if (currentVictim != null)
             {
-                // New victim - start damaging immediately and disable titan's input again
-                DisableTitanInput(titan);
+                // New victim - start damaging immediately and disable titan's input again (only for bots)
+                if (titan.IsBot)
+                {
+                    DisableTitanInput(titan);
+                }
                 
                 PlayerModifiers titanMods = titan.GetModifiers();
                 grabData.Victim = currentVictim;
@@ -433,11 +447,14 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
             Vector2 victimPos = grabData.Victim.GetWorldPosition();
             Game.PlayEffect(EffectName.Blood, victimPos);
             
-            // If victim died from grab damage, gib them and re-enable titan's input
+            // If victim died from grab damage, gib them and re-enable titan's input (only for bots)
             if (willDie && grabData.Victim.IsDead)
             {
                 grabData.Victim.Gib();
-                EnableTitanInput(titan);
+                if (titan.IsBot)
+                {
+                    EnableTitanInput(titan);
+                }
             }
             
             // Update next damage time
