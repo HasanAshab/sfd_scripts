@@ -170,6 +170,9 @@ public void OnStartup()
     // Set up melee action callback for Attack Titan hardening and Jaw Titan abilities
     Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
     
+    // Set up player death callback for Pure Titan power extract ability
+    Events.PlayerDeathCallback.Start(OnPlayerDeath);
+    
     // Distribute titan powers after 1 second delay (wait for match to start)
     IObjectTimerTrigger distributionTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
     distributionTimer.SetIntervalTime(1000); // 1 second delay
@@ -1181,6 +1184,196 @@ private void HandleJawTitanClawAttack(IPlayer jawTitan, int jawTitanId, IPlayer 
     {
         victim.Gib();
     }
+}
+
+public void OnPlayerDeath(IPlayer deadPlayer)
+{
+    if (deadPlayer == null) return;
+    
+    int deadPlayerId = deadPlayer.UniqueID;
+    
+    // Check if the dead player was a humanoid titan (Attack or Jaw)
+    if (!assignedTitanPowers.ContainsKey(deadPlayerId)) return;
+    
+    TitanType deadPlayerTitanType = assignedTitanPowers[deadPlayerId];
+    if (deadPlayerTitanType == TitanType.Pure) return; // Pure titans don't trigger power extract
+    
+    // Find the killer - check who dealt the last damage
+    // We need to find if this was a gib kill by a Pure Titan
+    IPlayer killer = null;
+    int killerId = -1;
+    
+    // Search for a Pure Titan that recently damaged this player
+    // This is done by checking grab damage data
+    foreach (var kvp in titanGrabDamage)
+    {
+        if (kvp.Value.Victim != null && kvp.Value.Victim.UniqueID == deadPlayerId)
+        {
+            killerId = kvp.Key;
+            killer = Game.GetPlayer(killerId);
+            break;
+        }
+    }
+    
+    // Also check if killer can be found through any recent titan interaction
+    // For simplicity, we check all Pure Titans for proximity
+    if (killer == null)
+    {
+        IPlayer[] allPlayers = Game.GetPlayers();
+        Vector2 deadPlayerPos = deadPlayer.GetWorldPosition();
+        
+        foreach (IPlayer player in allPlayers)
+        {
+            if (player == null || player.UniqueID == deadPlayerId) continue;
+            
+            // Check if this is a Pure Titan
+            if (titanPlayers.ContainsKey(player.UniqueID) && titanPlayers[player.UniqueID] == TitanType.Pure)
+            {
+                // Check if close enough (within 50 units)
+                Vector2 titanPos = player.GetWorldPosition();
+                float distance = Vector2.Distance(deadPlayerPos, titanPos);
+                
+                if (distance <= 50f)
+                {
+                    killer = player;
+                    killerId = player.UniqueID;
+                    break;
+                }
+            }
+        }
+    }
+    
+    // If we found a Pure Titan killer, extract the power
+    if (killer != null && killerId != -1)
+    {
+        // Verify the killer is a Pure Titan
+        if (titanPlayers.ContainsKey(killerId) && titanPlayers[killerId] == TitanType.Pure)
+        {
+            ExtractTitanPower(killer, killerId, deadPlayer, deadPlayerId, deadPlayerTitanType);
+        }
+    }
+}
+
+private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victim, int victimId, TitanType extractedPower)
+{
+    Vector2 pureTitanPos = pureTitan.GetWorldPosition();
+    
+    // 1. Detransform Pure Titan with smoke effect
+    Game.PlayEffect(EffectName.Steam, pureTitanPos);
+    Game.PlayEffect(EffectName.Steam, pureTitanPos);
+    Game.PlaySound("BarrelDestroyed", pureTitanPos);
+    
+    // Restore original profile and modifiers
+    if (originalProfiles.ContainsKey(pureTitanId))
+    {
+        pureTitan.SetProfile(originalProfiles[pureTitanId]);
+        originalProfiles.Remove(pureTitanId);
+    }
+    
+    if (originalModifiers.ContainsKey(pureTitanId))
+    {
+        pureTitan.SetModifiers(originalModifiers[pureTitanId]);
+        originalModifiers.Remove(pureTitanId);
+    }
+    
+    // Make Pure Titan fall (simulate weakness after detransformation)
+    pureTitan.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
+    
+    // Remove from titan players list
+    titanPlayers.Remove(pureTitanId);
+    
+    // Clean up titan-specific data
+    titanSizes.Remove(pureTitanId);
+    titanGrabDamage.Remove(pureTitanId);
+    titanInputDisabled.Remove(pureTitanId);
+    titanExhausted.Remove(pureTitanId);
+    titanExhaustionRecoverTime.Remove(pureTitanId);
+    
+    // 2. Swap powers: Pure Titan becomes the humanoid titan, victim becomes Pure Titan
+    TitanType tempPureTitanPower = assignedTitanPowers[pureTitanId];
+    assignedTitanPowers[pureTitanId] = extractedPower; // Pure Titan gets humanoid power
+    assignedTitanPowers[victimId] = tempPureTitanPower; // Victim gets Pure Titan power
+    
+    // 3. Update labels
+    UpdateLabelsAfterPowerSwap(pureTitanId, victimId);
+    
+    // Update shared storage
+    UpdateTitanPlayersStorage();
+    
+    // Show message
+    string powerName = extractedPower == TitanType.Attack ? "ATTACK TITAN" : "JAW TITAN";
+    Game.ShowChatMessage(pureTitan.Name + " extracted the " + powerName + " power from " + victim.Name + "!", Color.Yellow);
+}
+
+private void UpdateLabelsAfterPowerSwap(int player1Id, int player2Id)
+{
+    // Remove old labels
+    if (titanTypeLabels.ContainsKey(player1Id))
+    {
+        IObjectText label = titanTypeLabels[player1Id];
+        if (label != null && !label.IsRemoved)
+        {
+            label.Remove();
+        }
+        titanTypeLabels.Remove(player1Id);
+    }
+    
+    if (titanTypeLabels.ContainsKey(player2Id))
+    {
+        IObjectText label = titanTypeLabels[player2Id];
+        if (label != null && !label.IsRemoved)
+        {
+            label.Remove();
+        }
+        titanTypeLabels.Remove(player2Id);
+    }
+    
+    // Create new labels based on new powers
+    IPlayer player1 = Game.GetPlayer(player1Id);
+    IPlayer player2 = Game.GetPlayer(player2Id);
+    
+    if (player1 != null && !player1.IsRemoved && assignedTitanPowers.ContainsKey(player1Id))
+    {
+        CreateLabelForPlayer(player1, player1Id, assignedTitanPowers[player1Id]);
+    }
+    
+    if (player2 != null && !player2.IsRemoved && assignedTitanPowers.ContainsKey(player2Id))
+    {
+        CreateLabelForPlayer(player2, player2Id, assignedTitanPowers[player2Id]);
+    }
+}
+
+private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanType)
+{
+    // Only create labels for humanoid titans (Attack and Jaw)
+    if (titanType == TitanType.Pure) return;
+    
+    string labelText = "";
+    Color labelColor = Color.White;
+    
+    if (titanType == TitanType.Attack)
+    {
+        labelText = "[ATK]";
+        labelColor = new Color(255, 100, 100); // Red
+    }
+    else if (titanType == TitanType.Jaw)
+    {
+        labelText = "[JAW]";
+        labelColor = new Color(100, 255, 100); // Green
+    }
+    
+    // Create text label above player's head
+    Vector2 playerPos = player.GetWorldPosition();
+    IObjectText label = (IObjectText)Game.CreateObject("Text", 
+        new Vector2(playerPos.X, playerPos.Y + 20f)); // 20 units above head
+    
+    label.SetText(labelText);
+    label.SetTextAlignment(TextAlignment.Middle);
+    label.SetTextScale(0.233f); // Decreased by 3x from 0.7f
+    label.SetTextColor(labelColor);
+    
+    // Store the label reference
+    titanTypeLabels[playerId] = label;
 }
 
 private void MakeNearbyPlayersFall(Vector2 explosionPos, float radius, int titanPlayerId)
