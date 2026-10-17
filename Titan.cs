@@ -1294,8 +1294,16 @@ public void OnPlayerDeath(IPlayer deadPlayer)
     
     int deadPlayerId = deadPlayer.UniqueID;
     
+    Game.ShowChatMessage("OnPlayerDeath called for: " + deadPlayer.Name, Color.Cyan);
+    
     // Check if this player was gibbed by a Pure Titan during grab
-    if (!gibbedByPureTitan.ContainsKey(deadPlayerId)) return;
+    if (!gibbedByPureTitan.ContainsKey(deadPlayerId))
+    {
+        Game.ShowChatMessage("Not in gibbedByPureTitan dictionary", Color.Red);
+        return;
+    }
+    
+    Game.ShowChatMessage("Found in gibbedByPureTitan!", Color.Green);
     
     int pureTitanId = gibbedByPureTitan[deadPlayerId];
     IPlayer pureTitan = Game.GetPlayer(pureTitanId);
@@ -1303,6 +1311,7 @@ public void OnPlayerDeath(IPlayer deadPlayer)
     // Verify Pure Titan still exists and is still a Pure Titan
     if (pureTitan == null || !titanPlayers.ContainsKey(pureTitanId) || titanPlayers[pureTitanId] != TitanType.Pure)
     {
+        Game.ShowChatMessage("Pure Titan check failed", Color.Red);
         gibbedByPureTitan.Remove(deadPlayerId);
         return;
     }
@@ -1310,6 +1319,7 @@ public void OnPlayerDeath(IPlayer deadPlayer)
     // Check if victim had a humanoid titan power
     if (!assignedTitanPowers.ContainsKey(deadPlayerId)) 
     {
+        Game.ShowChatMessage("Victim has no assigned power", Color.Red);
         gibbedByPureTitan.Remove(deadPlayerId);
         return;
     }
@@ -1317,9 +1327,12 @@ public void OnPlayerDeath(IPlayer deadPlayer)
     TitanType extractedPower = assignedTitanPowers[deadPlayerId];
     if (extractedPower == TitanType.Pure)
     {
+        Game.ShowChatMessage("Victim was Pure Titan", Color.Red);
         gibbedByPureTitan.Remove(deadPlayerId);
         return; // Pure titans don't trigger power extract
     }
+    
+    Game.ShowChatMessage("Extracting power!", Color.Green);
     
     // Extract the power!
     ExtractTitanPower(pureTitan, pureTitanId, deadPlayer, deadPlayerId, extractedPower);
@@ -2061,19 +2074,20 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
             // If victim died from grab damage, gib them and re-enable titan's input (only for bots)
             if (willDie && grabData.Victim.IsDead)
             {
-                grabData.Victim.Gib();
-                
                 // Track this gib for power extraction (only if victim has humanoid titan power)
                 int victimId = grabData.Victim.UniqueID;
                 if (assignedTitanPowers.ContainsKey(victimId))
                 {
                     TitanType victimPower = assignedTitanPowers[victimId];
-                    // Only track if victim had humanoid power and killer is Pure Titan
+                    // Only track if victim had humanoid power and killer is Pure Titan (currently transformed)
                     if (victimPower != TitanType.Pure && titanPlayers.ContainsKey(titanId) && titanPlayers[titanId] == TitanType.Pure)
                     {
                         gibbedByPureTitan[victimId] = titanId;
+                        Game.ShowChatMessage("Pure Titan grab gib detected! Victim: " + grabData.Victim.Name, Color.Yellow);
                     }
                 }
+                
+                grabData.Victim.Gib();
                 
                 if (titan.IsBot)
                 {
