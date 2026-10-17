@@ -137,6 +137,9 @@ private Dictionary<int, float> jawHuntVictimReenableTime = new Dictionary<int, f
 // Track player facing directions for Jaw Titan backstab detection
 private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
 
+// Track assigned titan powers (does not mean transformed, just assigned power)
+private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, TitanType>();
+
 // Helper class for grab damage tracking
 private class GrabDamageData
 {
@@ -155,6 +158,9 @@ public void OnStartup()
     IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
     storage.SetItem("TITAN_PLAYERS", ""); // Initialize with empty string
     
+    // Distribute titan powers to players at startup
+    DistributeTitanPowers();
+    
     // Set up update callback to detect strength boost pickups and falls
     Events.UpdateCallback.Start(OnUpdate, 50); // Check every 50ms
     
@@ -163,6 +169,124 @@ public void OnStartup()
     
     // Set up melee action callback for Attack Titan hardening and Jaw Titan abilities
     Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
+}
+
+private void DistributeTitanPowers()
+{
+    IPlayer[] allPlayers = Game.GetPlayers();
+    
+    // Need at least 3 players to have one of each type
+    if (allPlayers.Length < 3)
+    {
+        Game.ShowChatMessage("Not enough players for titan distribution! Need at least 3 players.", Color.Red);
+        return;
+    }
+    
+    bool hasAttackTitan = false;
+    bool hasJawTitan = false;
+    
+    // First pass: Assign powers randomly
+    foreach (IPlayer player in allPlayers)
+    {
+        if (player == null) continue;
+        
+        int playerId = player.UniqueID;
+        TitanType assignedType;
+        
+        // 50% chance to get Pure Titan
+        if (rnd.Next(0, 2) == 0)
+        {
+            assignedType = TitanType.Pure;
+        }
+        else
+        {
+            // 50% chance for Attack or Jaw (but only one Jaw and one Attack total)
+            if (!hasJawTitan && (rnd.Next(0, 2) == 0 || hasAttackTitan))
+            {
+                assignedType = TitanType.Jaw;
+                hasJawTitan = true;
+            }
+            else if (!hasAttackTitan)
+            {
+                assignedType = TitanType.Attack;
+                hasAttackTitan = true;
+            }
+            else
+            {
+                // Both special titans assigned, this player gets Pure
+                assignedType = TitanType.Pure;
+            }
+        }
+        
+        assignedTitanPowers[playerId] = assignedType;
+    }
+    
+    // Second pass: Ensure we have at least one of each type
+    if (!hasAttackTitan || !hasJawTitan)
+    {
+        // Find Pure Titan players to convert
+        List<int> pureTitanPlayers = new List<int>();
+        foreach (var kvp in assignedTitanPowers)
+        {
+            if (kvp.Value == TitanType.Pure)
+            {
+                pureTitanPlayers.Add(kvp.Key);
+            }
+        }
+        
+        // Randomly assign missing types from Pure players
+        if (pureTitanPlayers.Count > 0)
+        {
+            int index = 0;
+            if (!hasAttackTitan && index < pureTitanPlayers.Count)
+            {
+                assignedTitanPowers[pureTitanPlayers[index]] = TitanType.Attack;
+                hasAttackTitan = true;
+                index++;
+            }
+            if (!hasJawTitan && index < pureTitanPlayers.Count)
+            {
+                assignedTitanPowers[pureTitanPlayers[index]] = TitanType.Jaw;
+                hasJawTitan = true;
+            }
+        }
+    }
+    
+    // Update player names with their titan type
+    foreach (IPlayer player in allPlayers)
+    {
+        if (player == null) continue;
+        
+        int playerId = player.UniqueID;
+        if (assignedTitanPowers.ContainsKey(playerId))
+        {
+            TitanType titanType = assignedTitanPowers[playerId];
+            IProfile profile = player.GetProfile();
+            string originalName = profile.Name;
+            
+            if (originalName == null || originalName == "")
+            {
+                originalName = "Player";
+            }
+            
+            // Add titan tag to name
+            string newName = originalName;
+            if (titanType == TitanType.Attack)
+            {
+                newName = originalName + " [ATK]";
+            }
+            else if (titanType == TitanType.Jaw)
+            {
+                newName = originalName + " [JAW]";
+            }
+            // Pure Titan has no tag
+            
+            profile.Name = newName;
+            player.SetProfile(profile);
+        }
+    }
+    
+    Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
 }
 
 private void TransformToTitan(IPlayer player)
@@ -175,20 +299,11 @@ private void TransformToTitan(IPlayer player)
         return;
     }
     
-    // Randomly choose titan type (33% Pure, 33% Attack, 33% Jaw)
-    int randomChoice = rnd.Next(0, 3);
-    TitanType titanType;
-    if (randomChoice == 0)
+    // Get the assigned titan type for this player
+    TitanType titanType = TitanType.Pure; // Default to Pure if not assigned
+    if (assignedTitanPowers.ContainsKey(playerId))
     {
-        titanType = TitanType.Pure;
-    }
-    else if (randomChoice == 1)
-    {
-        titanType = TitanType.Attack;
-    }
-    else
-    {
-        titanType = TitanType.Jaw;
+        titanType = assignedTitanPowers[playerId];
     }
     
     Vector2 playerPos = player.GetWorldPosition();
