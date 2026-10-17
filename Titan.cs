@@ -251,11 +251,11 @@ private void TransformToAttackTitan(IPlayer player, int playerId)
     // Set Attack Titan profile
     IProfile titanProfile = new IProfile()
     {
-        Gender = Gender.Male,
-        Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingDarkGray"),
-        Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGreen"),
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("Normal_fem", "Skin2", "ClothingLightOrange"),
+        Head = new IProfileClothingItem("AviatorHat2_fem", "ClothingDarkGray", "ClothingLightGreen"),
         Accesory = new IProfileClothingItem("Glasses", "ClothingGreen", "ClothingGreen"),
-    };
+    }
     player.SetProfile(titanProfile);
     
     // Remove strength boost after transformation
@@ -578,10 +578,10 @@ private void ApplyAttackTitanHardening(IPlayer player, int playerId, HardeningMo
         // Set offensive profile
         player.SetProfile(new IProfile()
         {
-            Gender = Gender.Male,
-            Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingDarkGray"),
-            Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGreen"),
-            Hands = new IProfileClothingItem("SafetyGloves", "ClothingLightGray"),
+            Gender = Gender.Female,
+            Skin = new IProfileClothingItem("Normal_fem", "Skin2", "ClothingLightOrange"),
+            Head = new IProfileClothingItem("AviatorHat2_fem", "ClothingDarkGray", "ClothingLightGreen"),
+            Hands = new IProfileClothingItem("SafetyGloves_fem", "ClothingLightGray"),
             Accesory = new IProfileClothingItem("Glasses", "ClothingGreen", "ClothingGreen"),
         });
     }
@@ -596,10 +596,10 @@ private void ApplyAttackTitanHardening(IPlayer player, int playerId, HardeningMo
         // Set defensive profile
         player.SetProfile(new IProfile()
         {
-            Gender = Gender.Male,
-            Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingDarkGray"),
-            Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGreen"),
-            ChestUnder = new IProfileClothingItem("SleevelessShirt", "ClothingLightGray"),
+            Gender = Gender.Female,
+            Skin = new IProfileClothingItem("Normal_fem", "Skin2", "ClothingLightOrange"),
+            Head = new IProfileClothingItem("AviatorHat2_fem", "ClothingDarkGray", "ClothingLightGreen"),
+            ChestUnder = new IProfileClothingItem("ShirtWithTie_fem", "ClothingLightGray", "ClothingLightGray"),
             Accesory = new IProfileClothingItem("Glasses", "ClothingGreen", "ClothingGreen"),
         });
     }
