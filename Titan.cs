@@ -187,6 +187,18 @@ public void OnStartup()
         distributionTimer.SetScriptMethod("DistributeTitanPowers");
         distributionTimer.Trigger();
     }
+    else
+    {
+        // Powers already distributed, restore from storage
+        RestoreAssignedPowersFromStorage();
+        
+        // Recreate labels after 1 second (wait for players to spawn)
+        IObjectTimerTrigger labelTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+        labelTimer.SetIntervalTime(1000);
+        labelTimer.SetRepeatCount(1);
+        labelTimer.SetScriptMethod("RecreateLabelsAfterMatchStart");
+        labelTimer.Trigger();
+    }
 
     // strength boost
     const float OTHERS_SCALE = 0.5f; // 1.0 = unchanged, 0.2 = others are 5x rarer
@@ -236,6 +248,9 @@ public void DistributeTitanPowers(TriggerArgs args)
     // Create text labels above players' heads with their titan type
     CreateTitanTypeLabels(allPlayers);
     
+    // Save assigned powers to shared storage (persists across matches)
+    SaveAssignedPowersToStorage();
+    
     // Mark powers as distributed in shared storage (persists across matches)
     IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
     storage.SetItem("POWERS_DISTRIBUTED", "true");
@@ -243,6 +258,54 @@ public void DistributeTitanPowers(TriggerArgs args)
     Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
 }
 
+private void SaveAssignedPowersToStorage()
+{
+    IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
+    
+    // Serialize assignedTitanPowers dictionary to a string format: "playerID:titanType,playerID:titanType,..."
+    List<string> powerEntries = new List<string>();
+    foreach (var kvp in assignedTitanPowers)
+    {
+        int playerId = kvp.Key;
+        int titanTypeInt = (int)kvp.Value; // 0=Pure, 1=Attack, 2=Jaw
+        powerEntries.Add(playerId.ToString() + ":" + titanTypeInt.ToString());
+    }
+    
+    string serialized = string.Join(",", powerEntries.ToArray());
+    storage.SetItem("ASSIGNED_POWERS", serialized);
+}
+
+private void RestoreAssignedPowersFromStorage()
+{
+    IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
+    string serialized = (string)storage.GetItem("ASSIGNED_POWERS");
+    
+    if (string.IsNullOrEmpty(serialized)) return;
+    
+    // Deserialize: "playerID:titanType,playerID:titanType,..."
+    assignedTitanPowers.Clear();
+    
+    string[] powerEntries = serialized.Split(',');
+    foreach (string entry in powerEntries)
+    {
+        if (string.IsNullOrEmpty(entry)) continue;
+        
+        string[] parts = entry.Split(':');
+        if (parts.Length != 2) continue;
+        
+        int playerId = int.Parse(parts[0]);
+        int titanTypeInt = int.Parse(parts[1]);
+        TitanType titanType = (TitanType)titanTypeInt;
+        
+        assignedTitanPowers[playerId] = titanType;
+    }
+}
+
+public void RecreateLabelsAfterMatchStart(TriggerArgs args)
+{
+    IPlayer[] allPlayers = Game.GetPlayers();
+    CreateTitanTypeLabels(allPlayers);
+}
 private void DistributeWithOriginalAlgorithm(IPlayer[] allPlayers)
 {
     bool hasAttackTitan = false;
@@ -1348,6 +1411,9 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
     
     // 3. Update labels
     UpdateLabelsAfterPowerSwap(pureTitanId, victimId);
+    
+    // Save updated powers to shared storage (persist across matches)
+    SaveAssignedPowersToStorage();
     
     // Update shared storage
     UpdateTitanPlayersStorage();
