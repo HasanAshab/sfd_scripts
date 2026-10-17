@@ -143,6 +143,9 @@ private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, Tit
 // Track titan type labels above players' heads
 private Dictionary<int, IObjectText> titanTypeLabels = new Dictionary<int, IObjectText>();
 
+// Track if titan powers have been distributed (only once per script activation)
+private bool powersDistributed = false;
+
 // Helper class for grab damage tracking
 private class GrabDamageData
 {
@@ -173,13 +176,16 @@ public void OnStartup()
     // Set up player death callback for Pure Titan power extract ability
     Events.PlayerDeathCallback.Start(OnPlayerDeath);
     
-    // Distribute titan powers after 1 second delay (wait for match to start)
-    IObjectTimerTrigger distributionTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-    distributionTimer.SetIntervalTime(1000); // 1 second delay
-    distributionTimer.SetRepeatCount(1); // Run once
-    distributionTimer.SetScriptMethod("DistributeTitanPowers");
-    distributionTimer.Trigger();
-
+    // Distribute titan powers only once per script activation (not every match)
+    if (!powersDistributed)
+    {
+        // Distribute titan powers after 1 second delay (wait for match to start)
+        IObjectTimerTrigger distributionTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+        distributionTimer.SetIntervalTime(1000); // 1 second delay
+        distributionTimer.SetRepeatCount(1); // Run once
+        distributionTimer.SetScriptMethod("DistributeTitanPowers");
+        distributionTimer.Trigger();
+    }
 
     // strength boost
     const float OTHERS_SCALE = 0.5f; // 1.0 = unchanged, 0.2 = others are 5x rarer
@@ -228,6 +234,9 @@ public void DistributeTitanPowers(TriggerArgs args)
     
     // Create text labels above players' heads with their titan type
     CreateTitanTypeLabels(allPlayers);
+    
+    // Mark powers as distributed (only happens once per script activation)
+    powersDistributed = true;
     
     Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
 }
