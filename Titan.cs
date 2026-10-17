@@ -140,6 +140,9 @@ private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>()
 // Track assigned titan powers (does not mean transformed, just assigned power)
 private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, TitanType>();
 
+// Track titan type labels above players' heads
+private Dictionary<int, IObjectText> titanTypeLabels = new Dictionary<int, IObjectText>();
+
 // Helper class for grab damage tracking
 private class GrabDamageData
 {
@@ -201,8 +204,8 @@ public void DistributeTitanPowers(TriggerArgs args)
         DistributeWithHalfSplit(allPlayers);
     }
     
-    // Update player names with their titan type
-    UpdatePlayerNamesWithTitanTags(allPlayers);
+    // Create text labels above players' heads with their titan type
+    CreateTitanTypeLabels(allPlayers);
     
     Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
 }
@@ -342,9 +345,8 @@ private void DistributeWithHalfSplit(IPlayer[] allPlayers)
     }
 }
 
-private void UpdatePlayerNamesWithTitanTags(IPlayer[] allPlayers)
+private void CreateTitanTypeLabels(IPlayer[] allPlayers)
 {
-    // Update player names with their titan type
     foreach (IPlayer player in allPlayers)
     {
         if (player == null) continue;
@@ -353,28 +355,64 @@ private void UpdatePlayerNamesWithTitanTags(IPlayer[] allPlayers)
         if (assignedTitanPowers.ContainsKey(playerId))
         {
             TitanType titanType = assignedTitanPowers[playerId];
-            IProfile profile = player.GetProfile();
-            string originalName = profile.Name;
             
-            if (originalName == null || originalName == "")
-            {
-                originalName = "Player";
-            }
+            // Only create labels for humanoid titans (Attack and Jaw)
+            string labelText = "";
+            Color labelColor = Color.White;
             
-            // Add titan tag to name
-            string newName = originalName;
             if (titanType == TitanType.Attack)
             {
-                newName = originalName + " [ATK]";
+                labelText = "[ATK]";
+                labelColor = new Color(255, 100, 100); // Red
             }
             else if (titanType == TitanType.Jaw)
             {
-                newName = originalName + " [JAW]";
+                labelText = "[JAW]";
+                labelColor = new Color(100, 255, 100); // Green
             }
-            // Pure Titan has no tag
+            else
+            {
+                // Pure Titan - no label
+                continue;
+            }
             
-            profile.Name = newName;
-            player.SetProfile(profile);
+            // Create text label above player's head
+            Vector2 playerPos = player.GetWorldPosition();
+            IObjectText label = (IObjectText)Game.CreateObject("Text", 
+                new Vector2(playerPos.X, playerPos.Y + 20f)); // 20 units above head
+            
+            label.SetText(labelText);
+            label.SetTextAlignment(TextAlignment.Middle);
+            label.SetTextScale(0.7f);
+            label.SetTextColor(labelColor);
+            
+            // Store the label reference
+            titanTypeLabels[playerId] = label;
+        }
+    }
+}
+
+private void UpdateTitanTypeLabels()
+{
+    // Update label positions to follow players
+    foreach (var kvp in titanTypeLabels)
+    {
+        int playerId = kvp.Key;
+        IObjectText label = kvp.Value;
+        
+        if (label != null && !label.IsRemoved)
+        {
+            IPlayer player = Game.GetPlayer(playerId);
+            if (player != null && !player.IsRemoved)
+            {
+                Vector2 playerPos = player.GetWorldPosition();
+                label.SetWorldPosition(new Vector2(playerPos.X, playerPos.Y + 20f));
+            }
+            else
+            {
+                // Player removed, remove label
+                label.Remove();
+            }
         }
     }
 }
@@ -1175,6 +1213,9 @@ public void OnUpdate(float elapsed)
 {
     IPlayer[] allPlayers = Game.GetPlayers();
     float currentTime = Game.TotalElapsedRealTime;
+    
+    // Update titan type labels to follow players
+    UpdateTitanTypeLabels();
     
     foreach (IPlayer player in allPlayers)
     {
