@@ -425,10 +425,9 @@ private void TransformToJawTitan(IPlayer player, int playerId)
     
     // Configure bot melee actions for Jaw Titan: Jump 60, Grab 30, with dive behavior
     BotMeleeActions meleeActions = new BotMeleeActions();
-    meleeActions.Jump = 60;
+    meleeActions.Jump = 50;
     meleeActions.Grab = 30;
-    meleeActions.Attack = 0;
-    meleeActions.Wait = 10; // Remaining percentage
+    meleeActions.Attack = 20;
     bS.SetMeleeActionsAll(meleeActions);
     
     // Set dive and sprint levels for offensive behavior
