@@ -179,6 +179,25 @@ public void OnStartup()
     distributionTimer.SetRepeatCount(1); // Run once
     distributionTimer.SetScriptMethod("DistributeTitanPowers");
     distributionTimer.Trigger();
+
+
+    // strength boost
+    const float OTHERS_SCALE = 0.2f; // 1.0 = unchanged, 0.2 = others are 5x rarer
+    short boost = (short)WeaponItem.STRENGTHBOOST;
+
+    Dictionary<short, int> current = Game.GetWeaponSpawnChances();
+    Dictionary<short, int> chances = new Dictionary<short, int>();
+
+    foreach (KeyValuePair<short, int> kv in current)
+    {
+        if (kv.Key == boost || kv.Value <= 0) continue; // skip boost and disabled items
+        int scaled = (int)Math.Round(kv.Value * OTHERS_SCALE);
+        chances.Add(kv.Key, Math.Max(1, scaled)); // keep at least 1 so nothing disappears
+    }
+
+    chances.Add(boost, 100);
+    Game.UpdateWeaponSpawnChances(chances);
+
 }
 
 public void DistributeTitanPowers(TriggerArgs args)
