@@ -1052,8 +1052,8 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
     {
         if (potentialVictim == null || potentialVictim.IsDead || potentialVictim.UniqueID == jawTitanId) continue;
         
-        // Check if victim is caught in dive and is being held by the Jaw Titan
-        if (potentialVictim.IsCaughtInDive)
+        // Check if victim is caught in dive by this Jaw Titan
+        if (potentialVictim.CaughtByPlayerInDiveID == jawTitanId)
         {
             // Start tracking this victim if not already tracked
             if (!jawTitanHuntVictim.ContainsKey(jawTitanId))
@@ -1082,7 +1082,7 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
     }
     
     // Check if Jaw Titan is still diving/catching the victim
-    if (!victim.IsCaughtInDive)
+    if (victim.CaughtByPlayerInDiveID != jawTitanId)
     {
         // Hunt ended - disable victim's input for 2 seconds
         victim.SetInputEnabled(false);
