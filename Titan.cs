@@ -176,12 +176,8 @@ public void OnStartup()
     Events.PlayerDeathCallback.Start(OnPlayerDeath);
     
     // Distribute titan powers only once per script activation (not every match)
-    // Use session storage to track if distribution has happened (persists across matches)
-    IScriptStorage sessionStorage = Game.GetSessionStorage();
-    object distributionFlagObj = sessionStorage.GetItem("POWERS_DISTRIBUTED");
-    string distributionFlag = distributionFlagObj as string; // Safe cast, returns null if not string
-    
-    if (distributionFlag != "true")
+    // Use shared storage to track if distribution has happened (persists across matches but cleared on script disable)
+    if (!storage.ContainsKey("POWERS_DISTRIBUTED"))
     {
         // Distribute titan powers after 1 second delay (wait for match to start)
         IObjectTimerTrigger distributionTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -251,19 +247,19 @@ public void DistributeTitanPowers(TriggerArgs args)
     // Create text labels above players' heads with their titan type
     CreateTitanTypeLabels(allPlayers);
     
-    // Save assigned powers to session storage (persists across matches)
+    // Save assigned powers to shared storage (persists across matches)
     SaveAssignedPowersToStorage();
     
-    // Mark powers as distributed in session storage (persists across matches)
-    IScriptStorage sessionStorage = Game.GetSessionStorage();
-    sessionStorage.SetItem("POWERS_DISTRIBUTED", "true");
+    // Mark powers as distributed in shared storage (persists across matches)
+    IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
+    storage.SetItem("POWERS_DISTRIBUTED", "true");
     
     Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
 }
 
 private void SaveAssignedPowersToStorage()
 {
-    IScriptStorage sessionStorage = Game.GetSessionStorage();
+    IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
     
     // Serialize assignedTitanPowers dictionary to a string format: "playerID:titanType,playerID:titanType,..."
     List<string> powerEntries = new List<string>();
@@ -275,13 +271,13 @@ private void SaveAssignedPowersToStorage()
     }
     
     string serialized = string.Join(",", powerEntries.ToArray());
-    sessionStorage.SetItem("ASSIGNED_POWERS", serialized);
+    storage.SetItem("ASSIGNED_POWERS", serialized);
 }
 
 private void RestoreAssignedPowersFromStorage()
 {
-    IScriptStorage sessionStorage = Game.GetSessionStorage();
-    string serialized = (string)sessionStorage.GetItem("ASSIGNED_POWERS");
+    IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
+    string serialized = (string)storage.GetItem("ASSIGNED_POWERS");
     
     if (string.IsNullOrEmpty(serialized)) return;
     
