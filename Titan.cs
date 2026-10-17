@@ -255,7 +255,7 @@ private void TransformToAttackTitan(IPlayer player, int playerId)
         Skin = new IProfileClothingItem("Normal_fem", "Skin2", "ClothingLightOrange"),
         Head = new IProfileClothingItem("AviatorHat2_fem", "ClothingDarkGray", "ClothingLightGreen"),
         Accesory = new IProfileClothingItem("Glasses", "ClothingGreen", "ClothingGreen"),
-    }
+    };
     player.SetProfile(titanProfile);
     
     // Remove strength boost after transformation
