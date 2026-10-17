@@ -159,9 +159,6 @@ public void OnStartup()
     
     // Set up melee action callback for Attack Titan hardening and Jaw Titan abilities
     Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
-    
-    // Set up dive action callback for Jaw Titan hunt ability
-    Events.PlayerDiveCallback.Start(OnPlayerDive);
 }
 
 private void TransformToTitan(IPlayer player)
@@ -927,29 +924,6 @@ private void HandleJawTitanClawAttack(IPlayer jawTitan, int jawTitanId, IPlayer 
     }
 }
 
-public void OnPlayerDive(IPlayer player, PlayerDiveInfo diveInfo)
-{
-    if (player == null || player.IsDead) return;
-    
-    int playerId = player.UniqueID;
-    
-    // Check if player is a Jaw Titan
-    if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] != TitanType.Jaw)
-    {
-        return;
-    }
-    
-    // Check if Jaw Titan caught someone in dive
-    if (diveInfo.IsCaughtDive && diveInfo.HitPlayer != null && !diveInfo.HitPlayer.IsDead)
-    {
-        IPlayer victim = diveInfo.HitPlayer;
-        
-        // Start hunt ability - track victim
-        jawTitanHuntVictim[playerId] = victim;
-        jawTitanHuntDamageTime[playerId] = Game.TotalElapsedRealTime;
-    }
-}
-
 private void MakeNearbyPlayersFall(Vector2 explosionPos, float radius, int titanPlayerId)
 {
     IPlayer[] allPlayers = Game.GetPlayers();
@@ -1070,6 +1044,27 @@ public void OnUpdate(float elapsed)
 
 private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float currentTime)
 {
+    // Check for new dive catches
+    IPlayer[] allPlayers = Game.GetPlayers();
+    
+    // Look for victims caught in dive by this Jaw Titan
+    foreach (IPlayer potentialVictim in allPlayers)
+    {
+        if (potentialVictim == null || potentialVictim.IsDead || potentialVictim.UniqueID == jawTitanId) continue;
+        
+        // Check if victim is caught in dive and is being held by the Jaw Titan
+        if (potentialVictim.IsCaughtInDive)
+        {
+            // Start tracking this victim if not already tracked
+            if (!jawTitanHuntVictim.ContainsKey(jawTitanId))
+            {
+                jawTitanHuntVictim[jawTitanId] = potentialVictim;
+                jawTitanHuntDamageTime[jawTitanId] = currentTime;
+            }
+            break;
+        }
+    }
+    
     // Check if Jaw Titan has a hunt victim
     if (!jawTitanHuntVictim.ContainsKey(jawTitanId))
     {
