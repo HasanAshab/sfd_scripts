@@ -802,10 +802,14 @@ private void CheckAttackTitanHardeningEnergy(IPlayer player, int playerId, float
     if (mods.CurrentEnergy <= 0)
     {
         mods.CurrentEnergy = 0;
-        ApplyAttackTitanHardening(player, playerId, HardeningMode.Neutral);
+        player.SetModifiers(mods); // Set energy to 0 first
+        ApplyAttackTitanHardening(player, playerId, HardeningMode.Neutral); // Then switch mode (will handle modifiers properly)
     }
-    
-    player.SetModifiers(mods);
+    else
+    {
+        // Only set modifiers if we're not switching modes
+        player.SetModifiers(mods);
+    }
 }
 
 private void CheckAttackTitanBotHardening(IPlayer player, int playerId, float currentTime)
