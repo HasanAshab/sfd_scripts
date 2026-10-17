@@ -158,9 +158,6 @@ public void OnStartup()
     IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
     storage.SetItem("TITAN_PLAYERS", ""); // Initialize with empty string
     
-    // Distribute titan powers to players at startup
-    DistributeTitanPowers();
-    
     // Set up update callback to detect strength boost pickups and falls
     Events.UpdateCallback.Start(OnUpdate, 50); // Check every 50ms
     
@@ -169,19 +166,49 @@ public void OnStartup()
     
     // Set up melee action callback for Attack Titan hardening and Jaw Titan abilities
     Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
+    
+    // Distribute titan powers after 1 second delay (wait for match to start)
+    IObjectTimerTrigger distributionTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    distributionTimer.SetIntervalTime(1000); // 1 second delay
+    distributionTimer.SetRepeatCount(1); // Run once
+    distributionTimer.SetScriptMethod("DistributeTitanPowers");
+    distributionTimer.Trigger();
 }
 
-private void DistributeTitanPowers()
+public void DistributeTitanPowers(TriggerArgs args)
 {
     IPlayer[] allPlayers = Game.GetPlayers();
+    int totalPlayers = allPlayers.Length;
     
-    // Need at least 3 players to have one of each type
-    if (allPlayers.Length < 3)
+    // Humanoid titans: Attack and Jaw (currently 2 types)
+    const int HUMANOID_TITAN_COUNT = 2;
+    
+    if (totalPlayers == 0)
     {
-        Game.ShowChatMessage("Not enough players for titan distribution! Need at least 3 players.", Color.Red);
+        Game.ShowChatMessage("No players found for titan distribution!", Color.Red);
         return;
     }
     
+    // Determine which scenario to use
+    if (totalPlayers > HUMANOID_TITAN_COUNT)
+    {
+        // Scenario 1: More players than humanoid titans - use original algorithm
+        DistributeWithOriginalAlgorithm(allPlayers);
+    }
+    else
+    {
+        // Scenario 2: Players <= humanoid titans - split half humanoid, half pure
+        DistributeWithHalfSplit(allPlayers);
+    }
+    
+    // Update player names with their titan type
+    UpdatePlayerNamesWithTitanTags(allPlayers);
+    
+    Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
+}
+
+private void DistributeWithOriginalAlgorithm(IPlayer[] allPlayers)
+{
     bool hasAttackTitan = false;
     bool hasJawTitan = false;
     
@@ -251,7 +278,72 @@ private void DistributeTitanPowers()
             }
         }
     }
+}
+
+private void DistributeWithHalfSplit(IPlayer[] allPlayers)
+{
+    int totalPlayers = allPlayers.Length;
+    int humanoidCount = totalPlayers / 2; // Half will be humanoid
+    int pureCount = totalPlayers - humanoidCount; // Rest will be pure
     
+    // Create a shuffled list of players
+    List<IPlayer> shuffledPlayers = new List<IPlayer>(allPlayers);
+    
+    // Shuffle the player list
+    for (int i = shuffledPlayers.Count - 1; i > 0; i--)
+    {
+        int j = rnd.Next(0, i + 1);
+        IPlayer temp = shuffledPlayers[i];
+        shuffledPlayers[i] = shuffledPlayers[j];
+        shuffledPlayers[j] = temp;
+    }
+    
+    // Assign humanoid titans (Attack and Jaw) to first half
+    List<TitanType> humanoidTypes = new List<TitanType>();
+    
+    // Fill humanoid types list with equal distribution of Attack and Jaw
+    for (int i = 0; i < humanoidCount; i++)
+    {
+        if (i % 2 == 0)
+        {
+            humanoidTypes.Add(TitanType.Attack);
+        }
+        else
+        {
+            humanoidTypes.Add(TitanType.Jaw);
+        }
+    }
+    
+    // Shuffle humanoid types for random assignment
+    for (int i = humanoidTypes.Count - 1; i > 0; i--)
+    {
+        int j = rnd.Next(0, i + 1);
+        TitanType temp = humanoidTypes[i];
+        humanoidTypes[i] = humanoidTypes[j];
+        humanoidTypes[j] = temp;
+    }
+    
+    // Assign humanoid titans to first half of players
+    for (int i = 0; i < humanoidCount; i++)
+    {
+        if (shuffledPlayers[i] != null)
+        {
+            assignedTitanPowers[shuffledPlayers[i].UniqueID] = humanoidTypes[i];
+        }
+    }
+    
+    // Assign Pure Titan to remaining players
+    for (int i = humanoidCount; i < shuffledPlayers.Count; i++)
+    {
+        if (shuffledPlayers[i] != null)
+        {
+            assignedTitanPowers[shuffledPlayers[i].UniqueID] = TitanType.Pure;
+        }
+    }
+}
+
+private void UpdatePlayerNamesWithTitanTags(IPlayer[] allPlayers)
+{
     // Update player names with their titan type
     foreach (IPlayer player in allPlayers)
     {
@@ -285,8 +377,6 @@ private void DistributeTitanPowers()
             player.SetProfile(profile);
         }
     }
-    
-    Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
 }
 
 private void TransformToTitan(IPlayer player)
