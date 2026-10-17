@@ -88,6 +88,7 @@ private const float SIZE_SPEED_PENALTY_PER_0_01 = 0.02f; // 2% = 0.02
 private const float GRAB_DAMAGE_BASE = 7f;
 private const float GRAB_DAMAGE_INTERVAL = 50f; // 50ms in milliseconds
 private const float GRAB_DAMAGE_MULTIPLIER = 0.15f; // Damage multiplier
+private const float GRAB_BLOOD_EFFECT_INTERVAL = 1000f; // Blood effect every 1 second
 
 // Track titan players
 private Dictionary<int, TitanType> titanPlayers = new Dictionary<int, TitanType>();
@@ -130,6 +131,7 @@ private Dictionary<int, int> jawTitanPunchCount = new Dictionary<int, int>(); //
 private Dictionary<int, float> jawTitanLastPunchTime = new Dictionary<int, float>(); // Track last punch time
 private Dictionary<int, IPlayer> jawTitanHuntVictim = new Dictionary<int, IPlayer>(); // Track hunt victims (dive catches)
 private Dictionary<int, float> jawTitanHuntDamageTime = new Dictionary<int, float>(); // Track hunt damage timing
+private Dictionary<int, float> jawTitanHuntBloodEffectTime = new Dictionary<int, float>(); // Track hunt blood effect timing
 private Dictionary<int, float> jawHuntVictimReenableTime = new Dictionary<int, float>(); // Track when to re-enable victim input
 
 // Track player facing directions for Jaw Titan backstab detection
@@ -141,6 +143,7 @@ private class GrabDamageData
     public IPlayer Victim;
     public float NextDamageTime;
     public float TitanMeleeDamage;
+    public float NextBloodEffectTime; // Track blood effect timing separately
 }
 
 // Random generator
@@ -281,8 +284,8 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     
     player.SetModifiers(mods);
     
-    // Set bot behavior to ZombieA
-    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.ZombieA));
+    // Set bot behavior to BotD
+    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
     
     // Configure bot behavior
     BotBehaviorSet bS = player.GetBotBehaviorSet();
@@ -293,7 +296,7 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     meleeActions.Attack = 20;
     meleeActions.Grab = 60;
     meleeActions.Wait = 20;
-    bS.MeleeActions = meleeActions;
+    bS.SetMeleeActionsAll(meleeActions);
     
     player.SetBotBehaviorSet(bS);
     
@@ -413,12 +416,22 @@ private void TransformToJawTitan(IPlayer player, int playerId)
     
     player.SetModifiers(mods);
     
-    // Set bot behavior to BotA (better AI)
-    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
+    // Set bot behavior to BotD
+    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
     
     // Configure bot behavior
     BotBehaviorSet bS = player.GetBotBehaviorSet();
     bS.SearchItems = 0;
+    
+    // Configure bot melee actions for Jaw Titan: Jump 60, Dive 10, Grab 30, rest 0
+    BotMeleeActions meleeActions = new BotMeleeActions();
+    meleeActions.Jump = 60;
+    meleeActions.Dive = 10;
+    meleeActions.Grab = 30;
+    meleeActions.Attack = 0;
+    meleeActions.Wait = 0;
+    bS.SetMeleeActionsAll(meleeActions);
+    
     player.SetBotBehaviorSet(bS);
     
     // Clear all items
@@ -1112,6 +1125,7 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
     if (!jawTitanHuntDamageTime.ContainsKey(jawTitanId))
     {
         jawTitanHuntDamageTime[jawTitanId] = currentTime;
+        jawTitanHuntBloodEffectTime[jawTitanId] = currentTime; // Initialize blood effect timer
     }
     
     if (currentTime >= jawTitanHuntDamageTime[jawTitanId])
@@ -1127,9 +1141,13 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
         // Deal damage
         victim.DealDamage(damagePerInterval);
         
-        // Play blood effect on victim
-        Vector2 victimPos = victim.GetWorldPosition();
-        Game.PlayEffect(EffectName.Blood, victimPos);
+        // Play blood effect on victim (only once per second)
+        if (currentTime >= jawTitanHuntBloodEffectTime[jawTitanId])
+        {
+            Vector2 victimPos = victim.GetWorldPosition();
+            Game.PlayEffect(EffectName.Blood, victimPos);
+            jawTitanHuntBloodEffectTime[jawTitanId] = currentTime + GRAB_BLOOD_EFFECT_INTERVAL;
+        }
         
         // If victim died from hunt damage, gib them
         if (willDie && victim.IsDead)
@@ -1442,6 +1460,7 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
         {
             Victim = currentVictim,
             NextDamageTime = currentTime, // Start damage immediately
+            NextBloodEffectTime = currentTime, // Initialize blood effect timer
             TitanMeleeDamage = titanMeleeDamage
         };
     }
@@ -1470,6 +1489,7 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
                 PlayerModifiers titanMods = titan.GetModifiers();
                 grabData.Victim = currentVictim;
                 grabData.NextDamageTime = currentTime; // Start damage immediately
+                grabData.NextBloodEffectTime = currentTime; // Initialize blood effect timer
                 grabData.TitanMeleeDamage = titanMods.MeleeDamageDealtModifier;
             }
             else
@@ -1493,9 +1513,13 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
             // Deal damage
             grabData.Victim.DealDamage(damagePerInterval);
             
-            // Play blood effect on victim
-            Vector2 victimPos = grabData.Victim.GetWorldPosition();
-            Game.PlayEffect(EffectName.Blood, victimPos);
+            // Play blood effect on victim (only once per second)
+            if (currentTime >= grabData.NextBloodEffectTime)
+            {
+                Vector2 victimPos = grabData.Victim.GetWorldPosition();
+                Game.PlayEffect(EffectName.Blood, victimPos);
+                grabData.NextBloodEffectTime = currentTime + GRAB_BLOOD_EFFECT_INTERVAL;
+            }
             
             // If victim died from grab damage, gib them and re-enable titan's input (only for bots)
             if (willDie && grabData.Victim.IsDead)
