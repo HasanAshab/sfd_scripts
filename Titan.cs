@@ -608,9 +608,9 @@ private void ApplyAttackTitanHardening(IPlayer player, int playerId, HardeningMo
         // Neutral mode - set default Attack Titan profile
         player.SetProfile(new IProfile()
         {
-            Gender = Gender.Male,
-            Skin = new IProfileClothingItem("Normal", "Skin2", "ClothingDarkGray"),
-            Head = new IProfileClothingItem("AviatorHat2", "ClothingDarkGray", "ClothingLightGreen"),
+            Gender = Gender.Female,
+            Skin = new IProfileClothingItem("Normal_fem", "Skin2", "ClothingLightOrange"),
+            Head = new IProfileClothingItem("AviatorHat2_fem", "ClothingDarkGray", "ClothingLightGreen"),
             Accesory = new IProfileClothingItem("Glasses", "ClothingGreen", "ClothingGreen"),
         });
     }
