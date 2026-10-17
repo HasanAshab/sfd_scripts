@@ -177,7 +177,7 @@ public void OnStartup()
     
     // Distribute titan powers only once per script activation (not every match)
     // Use shared storage to track if distribution has happened
-    string distributionFlag = storage.GetItem("POWERS_DISTRIBUTED");
+    string distributionFlag = (string)storage.GetItem("POWERS_DISTRIBUTED");
     if (distributionFlag != "true")
     {
         // Distribute titan powers after 1 second delay (wait for match to start)
