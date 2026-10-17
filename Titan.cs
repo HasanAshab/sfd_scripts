@@ -6,7 +6,8 @@
 private enum TitanType
 {
     Pure,
-    Attack
+    Attack,
+    Jaw
 }
 
 // Attack Titan hardening mode enum
@@ -51,6 +52,27 @@ private const float AIM_DETECTION_RANGE = 800f; // Range for raycast aim detecti
 // Attack Titan slowmo ability
 private const float SLOWMO_ENERGY_COST = 0.30f; // 30% of max energy
 private const float SLOWMO_ACTIVATION_DELAY = 1000f; // 1 seconds before ending slowmo
+
+// Jaw Titan stats
+private const float JAW_TITAN_HP_BONUS = 0.0f; // 0% HP increase
+private const float JAW_TITAN_MELEE_DAMAGE_BONUS = 0.25f; // 25% melee damage increase
+private const float JAW_TITAN_MELEE_FORCE_BONUS = 0.0f; // 0% melee force increase
+private const float JAW_TITAN_SPEED_PENALTY = 0.0f; // 0% speed reduction
+private const float JAW_TITAN_ENERGY_BONUS = 0.25f; // 25% energy increase
+private const float JAW_TITAN_SIZE = 0.880f; // Fixed size
+
+// Jaw Titan claw ability
+private const float JAW_CLAW_BASE_DAMAGE = 7f;
+private const float JAW_CLAW_FRONT_MULTIPLIER = 2f; // Front attack multiplier
+private const float JAW_CLAW_BACK_MULTIPLIER = 4f; // Backstab multiplier
+private const float JAW_CLAW_GIB_THRESHOLD = 0.30f; // 30% overkill = gib
+
+// Jaw Titan hunt ability
+private const float JAW_HUNT_VICTIM_STUN_DURATION = 2000f; // 2 seconds input disable after hunt
+
+// Jaw Titan sharp claw ability
+private const int JAW_SHARP_CLAW_PUNCH_COUNT = 3; // 3rd punch breaks objects
+private const int JAW_SHARP_CLAW_PUNCH_WINDOW = 600; // 600ms window between punches
 
 // Titan size range
 private const float TITAN_MIN_SIZE = 0.8f;
@@ -103,6 +125,15 @@ private Dictionary<int, GrabDamageData> titanGrabDamage = new Dictionary<int, Gr
 // Track titans being grabbed (to manage input disable/enable for attackers)
 private Dictionary<int, bool> titanInputDisabled = new Dictionary<int, bool>();
 
+// Track Jaw Titan specific data
+private Dictionary<int, int> jawTitanPunchCount = new Dictionary<int, int>(); // Track punch count for sharp claw
+private Dictionary<int, float> jawTitanLastPunchTime = new Dictionary<int, float>(); // Track last punch time
+private Dictionary<int, IPlayer> jawTitanHuntVictim = new Dictionary<int, IPlayer>(); // Track hunt victims (dive catches)
+private Dictionary<int, float> jawTitanHuntDamageTime = new Dictionary<int, float>(); // Track hunt damage timing
+
+// Track player facing directions for Jaw Titan backstab detection
+private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
+
 // Helper class for grab damage tracking
 private class GrabDamageData
 {
@@ -126,8 +157,11 @@ public void OnStartup()
     // Set up key input callback for Attack Titan abilities
     Events.PlayerKeyInputCallback.Start(OnPlayerKeyInput);
     
-    // Set up melee action callback for Attack Titan hardening
+    // Set up melee action callback for Attack Titan hardening and Jaw Titan abilities
     Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
+    
+    // Set up dive action callback for Jaw Titan hunt ability
+    Events.PlayerDiveCallback.Start(OnPlayerDive);
 }
 
 private void TransformToTitan(IPlayer player)
@@ -140,8 +174,21 @@ private void TransformToTitan(IPlayer player)
         return;
     }
     
-    // Randomly choose titan type (50% Pure, 50% Attack)
-    TitanType titanType = rnd.Next(0, 2) == 0 ? TitanType.Pure : TitanType.Attack;
+    // Randomly choose titan type (33% Pure, 33% Attack, 33% Jaw)
+    int randomChoice = rnd.Next(0, 3);
+    TitanType titanType;
+    if (randomChoice == 0)
+    {
+        titanType = TitanType.Pure;
+    }
+    else if (randomChoice == 1)
+    {
+        titanType = TitanType.Attack;
+    }
+    else
+    {
+        titanType = TitanType.Jaw;
+    }
     
     Vector2 playerPos = player.GetWorldPosition();
     
@@ -167,9 +214,13 @@ private void TransformToTitan(IPlayer player)
     {
         TransformToPureTitan(player, playerId);
     }
-    else
+    else if (titanType == TitanType.Attack)
     {
         TransformToAttackTitan(player, playerId);
+    }
+    else
+    {
+        TransformToJawTitan(player, playerId);
     }
     
     // Mark as titan
@@ -179,7 +230,19 @@ private void TransformToTitan(IPlayer player)
     UpdateTitanPlayersStorage();
     
     // Show transformation message
-    string titanTypeName = titanType == TitanType.Pure ? "PURE TITAN" : "ATTACK TITAN";
+    string titanTypeName = "";
+    if (titanType == TitanType.Pure)
+    {
+        titanTypeName = "PURE TITAN";
+    }
+    else if (titanType == TitanType.Attack)
+    {
+        titanTypeName = "ATTACK TITAN";
+    }
+    else
+    {
+        titanTypeName = "JAW TITAN";
+    }
     Game.ShowChatMessage(player.Name + " has transformed into a " + titanTypeName + "!", Color.Red);
 }
 
@@ -304,6 +367,74 @@ private void TransformToAttackTitan(IPlayer player, int playerId)
     
     // Apply height-based scaling (different from Pure Titan's random size)
     ApplyAttackTitanHeightScaling(player, playerId, mods);
+}
+
+private void TransformToJawTitan(IPlayer player, int playerId)
+{
+    // Set Jaw Titan profile
+    IProfile titanProfile = new IProfile()
+    {
+        Name = "jawT",
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("Zombie_fem", ""),
+        Accesory = new IProfileClothingItem("GoalieMask", ""),
+    };
+    player.SetProfile(titanProfile);
+    
+    // Remove strength boost after transformation
+    player.SetStrengthBoostTime(0);
+    
+    // Get modifiers
+    PlayerModifiers mods = player.GetModifiers();
+    
+    // Apply Jaw Titan stats
+    int newMaxHealth = (int)(mods.MaxHealth * (1f + JAW_TITAN_HP_BONUS));
+    int healthIncrease = newMaxHealth - mods.MaxHealth;
+    mods.MaxHealth = newMaxHealth;
+    mods.CurrentHealth = mods.CurrentHealth + healthIncrease;
+    
+    mods.MeleeDamageDealtModifier *= (1f + JAW_TITAN_MELEE_DAMAGE_BONUS);
+    mods.MeleeForceModifier *= (1f + JAW_TITAN_MELEE_FORCE_BONUS);
+    mods.RunSpeedModifier *= (1f - JAW_TITAN_SPEED_PENALTY);
+    mods.SprintSpeedModifier *= (1f - JAW_TITAN_SPEED_PENALTY);
+    
+    // Jaw Titan has increased energy
+    mods.MaxEnergy = (int)(mods.MaxEnergy * (1f + JAW_TITAN_ENERGY_BONUS));
+    mods.CurrentEnergy = (int)(mods.CurrentEnergy * (1f + JAW_TITAN_ENERGY_BONUS));
+    
+    // Set fixed size
+    mods.SizeModifier = JAW_TITAN_SIZE;
+    
+    // Set melee stun immunity
+    mods.MeleeStunImmunity = 1;
+    
+    mods.ItemDropMode = 1;
+    
+    // Set health to full
+    mods.CurrentHealth = mods.MaxHealth;
+    
+    player.SetModifiers(mods);
+    
+    // Set bot behavior to BotA (better AI)
+    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
+    
+    // Configure bot behavior
+    BotBehaviorSet bS = player.GetBotBehaviorSet();
+    bS.SearchItems = 0;
+    player.SetBotBehaviorSet(bS);
+    
+    // Clear all items
+    player.RemoveWeaponItemType(WeaponItemType.Rifle);
+    player.RemoveWeaponItemType(WeaponItemType.Handgun);
+    player.RemoveWeaponItemType(WeaponItemType.Melee);
+    player.RemoveWeaponItemType(WeaponItemType.Thrown);
+    player.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
+    // Initialize Jaw Titan punch count
+    jawTitanPunchCount[playerId] = 0;
+    
+    // Store titan size
+    titanSizes[playerId] = JAW_TITAN_SIZE;
 }
 
 private void ApplySizeScaling(IPlayer player, int playerId, PlayerModifiers mods)
@@ -627,41 +758,195 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
     if (player == null || player.IsDead) return;
     
     int playerId = player.UniqueID;
-    
-    // Check if player is an Attack Titan
-    if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] != TitanType.Attack)
-    {
-        return;
-    }
-    
-    // Update last melee time for offensive mode timeout
     float currentTime = Game.TotalElapsedRealTime;
-    attackTitanLastMeleeTime[playerId] = currentTime;
     
-    // Check for offensive hardening stagger chance
-    HardeningMode mode = HardeningMode.Neutral;
-    if (attackTitanHardeningMode.ContainsKey(playerId))
+    // Handle Attack Titan melee
+    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Attack)
     {
-        mode = attackTitanHardeningMode[playerId];
-    }
-    
-    if (mode == HardeningMode.Offensive && args.Length > 0)
-    {
-        // 20% chance to stagger hit players
-        foreach (PlayerMeleeHitArg hitArg in args)
+        // Update last melee time for offensive mode timeout
+        attackTitanLastMeleeTime[playerId] = currentTime;
+        
+        // Check for offensive hardening stagger chance
+        HardeningMode mode = HardeningMode.Neutral;
+        if (attackTitanHardeningMode.ContainsKey(playerId))
         {
-            if (hitArg.HitObject != null && hitArg.IsPlayer)
+            mode = attackTitanHardeningMode[playerId];
+        }
+        
+        if (mode == HardeningMode.Offensive && args.Length > 0)
+        {
+            // 70% chance to stagger hit players
+            foreach (PlayerMeleeHitArg hitArg in args)
             {
-                if (rnd.NextDouble() < HARDENING_OFFENSIVE_STAGGER_CHANCE)
+                if (hitArg.HitObject != null && hitArg.IsPlayer)
                 {
-                    IPlayer hitPlayer = Game.GetPlayer(hitArg.HitObject.UniqueID);
-                    if (hitPlayer != null && !hitPlayer.IsDead)
+                    if (rnd.NextDouble() < HARDENING_OFFENSIVE_STAGGER_CHANCE)
                     {
-                        QuickCommand(hitPlayer, new PlayerCommand(PlayerCommandType.Stagger));
+                        IPlayer hitPlayer = Game.GetPlayer(hitArg.HitObject.UniqueID);
+                        if (hitPlayer != null && !hitPlayer.IsDead)
+                        {
+                            QuickCommand(hitPlayer, new PlayerCommand(PlayerCommandType.Stagger));
+                        }
                     }
                 }
             }
         }
+        return;
+    }
+    
+    // Handle Jaw Titan melee
+    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Jaw)
+    {
+        HandleJawTitanMelee(player, playerId, args, currentTime);
+        return;
+    }
+    
+    // Update facing direction for all players (for backstab detection)
+    if (!playerFacingDirections.ContainsKey(playerId))
+    {
+        playerFacingDirections[playerId] = player.FacingDirection;
+    }
+    else
+    {
+        playerFacingDirections[playerId] = player.FacingDirection;
+    }
+}
+
+private void HandleJawTitanMelee(IPlayer jawTitan, int jawTitanId, PlayerMeleeHitArg[] args, float currentTime)
+{
+    // Update punch count and timing
+    if (!jawTitanLastPunchTime.ContainsKey(jawTitanId))
+    {
+        jawTitanPunchCount[jawTitanId] = 1;
+        jawTitanLastPunchTime[jawTitanId] = currentTime;
+    }
+    else
+    {
+        float timeSinceLastPunch = currentTime - jawTitanLastPunchTime[jawTitanId];
+        if (timeSinceLastPunch <= JAW_SHARP_CLAW_PUNCH_WINDOW)
+        {
+            // Within window, increment punch count
+            jawTitanPunchCount[jawTitanId]++;
+        }
+        else
+        {
+            // Outside window, reset to 1
+            jawTitanPunchCount[jawTitanId] = 1;
+        }
+        jawTitanLastPunchTime[jawTitanId] = currentTime;
+    }
+    
+    int currentPunchCount = jawTitanPunchCount[jawTitanId];
+    bool isJumpAttack = jawTitan.IsInMidAir;
+    
+    foreach (PlayerMeleeHitArg hitArg in args)
+    {
+        if (hitArg.HitObject == null) continue;
+        
+        // Handle player hits
+        if (hitArg.IsPlayer)
+        {
+            IPlayer victim = hitArg.HitObject as IPlayer;
+            if (victim == null || victim.IsDead) continue;
+            
+            // Claw ability: extra damage on jump attacks
+            if (isJumpAttack)
+            {
+                HandleJawTitanClawAttack(jawTitan, jawTitanId, victim);
+            }
+        }
+        else
+        {
+            // Handle object hits - Sharp Claw: 3rd punch breaks objects
+            if (currentPunchCount >= JAW_SHARP_CLAW_PUNCH_COUNT)
+            {
+                IObject hitObject = hitArg.HitObject;
+                
+                // Destroy the object
+                hitObject.Destroy();
+                
+                // Visual feedback
+                Game.PlayEffect(EffectName.DestroyMetal, hitObject.GetWorldPosition());
+                Game.PlaySound("DestroyMetal", hitObject.GetWorldPosition());
+            }
+        }
+    }
+    
+    // Reset punch count after 3rd punch
+    if (currentPunchCount >= JAW_SHARP_CLAW_PUNCH_COUNT)
+    {
+        jawTitanPunchCount[jawTitanId] = 0;
+    }
+}
+
+private void HandleJawTitanClawAttack(IPlayer jawTitan, int jawTitanId, IPlayer victim)
+{
+    int victimId = victim.UniqueID;
+    
+    // Get victim's facing direction (stored before hit to prevent instant turn-around exploitation)
+    int victimFacing = playerFacingDirections.ContainsKey(victimId) ? 
+                      playerFacingDirections[victimId] : 
+                      victim.FacingDirection;
+    
+    int attackerFacing = jawTitan.FacingDirection;
+    
+    // Determine if this is a backstab (same facing direction = attacking from behind)
+    bool isBackstab = (attackerFacing == victimFacing);
+    
+    // Calculate damage
+    PlayerModifiers jawMods = jawTitan.GetModifiers();
+    float baseDamage = JAW_CLAW_BASE_DAMAGE * jawMods.MeleeDamageDealtModifier;
+    float damageMultiplier = isBackstab ? JAW_CLAW_BACK_MULTIPLIER : JAW_CLAW_FRONT_MULTIPLIER;
+    float totalDamage = baseDamage * damageMultiplier;
+    
+    // Get victim's health before damage
+    PlayerModifiers victimMods = victim.GetModifiers();
+    float healthBeforeDamage = victimMods.CurrentHealth;
+    
+    // Deal damage
+    victim.DealDamage(totalDamage);
+    
+    // Play sound based on attack type
+    Vector2 victimPos = victim.GetWorldPosition();
+    if (isBackstab)
+    {
+        Game.PlaySound("KatanaDraw", victimPos);
+    }
+    else
+    {
+        Game.PlaySound("MacheteDraw", victimPos);
+    }
+    
+    // Check if victim should be gibbed (took more than 30% extra damage beyond max HP)
+    float overkillDamage = totalDamage - healthBeforeDamage;
+    float overkillThreshold = victimMods.MaxHealth * JAW_CLAW_GIB_THRESHOLD;
+    
+    if (victim.IsDead && overkillDamage > overkillThreshold)
+    {
+        victim.Gib();
+    }
+}
+
+public void OnPlayerDive(IPlayer player, PlayerDiveInfo diveInfo)
+{
+    if (player == null || player.IsDead) return;
+    
+    int playerId = player.UniqueID;
+    
+    // Check if player is a Jaw Titan
+    if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] != TitanType.Jaw)
+    {
+        return;
+    }
+    
+    // Check if Jaw Titan caught someone in dive
+    if (diveInfo.IsCaughtDive && diveInfo.HitPlayer != null && !diveInfo.HitPlayer.IsDead)
+    {
+        IPlayer victim = diveInfo.HitPlayer;
+        
+        // Start hunt ability - track victim
+        jawTitanHuntVictim[playerId] = victim;
+        jawTitanHuntDamageTime[playerId] = Game.TotalElapsedRealTime;
     }
 }
 
@@ -760,7 +1045,106 @@ public void OnUpdate(float elapsed)
                     OnTitanFalling(player);
                 }
             }
+            else if (titanType == TitanType.Jaw)
+            {
+                // Jaw Titan updates
+                CheckJawTitanHuntDamage(player, playerId, currentTime);
+                CheckTitanGrabDamage(player, playerId); // Jaw Titan also has grab damage
+                
+                // Jaw Titan also has exhaustion
+                CheckTitanExhaustion(player, playerId);
+                
+                // Check titan falling state for impact effect
+                bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
+                if (isFalling)
+                {
+                    OnTitanFalling(player);
+                }
+            }
         }
+        
+        // Update facing direction for all players (every update tick for accurate backstab detection)
+        playerFacingDirections[playerId] = player.FacingDirection;
+    }
+}
+
+private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float currentTime)
+{
+    // Check if Jaw Titan has a hunt victim
+    if (!jawTitanHuntVictim.ContainsKey(jawTitanId))
+    {
+        return;
+    }
+    
+    IPlayer victim = jawTitanHuntVictim[jawTitanId];
+    
+    // Check if victim is still valid
+    if (victim == null || victim.IsDead || victim.IsRemoved)
+    {
+        jawTitanHuntVictim.Remove(jawTitanId);
+        jawTitanHuntDamageTime.Remove(jawTitanId);
+        return;
+    }
+    
+    // Check if Jaw Titan is still diving/catching the victim
+    if (!victim.IsCaughtInDive)
+    {
+        // Hunt ended - disable victim's input for 2 seconds
+        victim.SetInputEnabled(false);
+        
+        // Schedule re-enable after 2 seconds
+        float reenableTime = currentTime + JAW_HUNT_VICTIM_STUN_DURATION;
+        
+        Events.UpdateCallback.Start((float elapsed) =>
+        {
+            if (Game.TotalElapsedRealTime >= reenableTime)
+            {
+                if (victim != null && !victim.IsRemoved)
+                {
+                    victim.SetInputEnabled(true);
+                }
+                return true; // Stop callback
+            }
+            return false; // Continue callback
+        }, 50);
+        
+        // Clean up hunt tracking
+        jawTitanHuntVictim.Remove(jawTitanId);
+        jawTitanHuntDamageTime.Remove(jawTitanId);
+        return;
+    }
+    
+    // Apply damage every 50ms (same as grab damage)
+    if (!jawTitanHuntDamageTime.ContainsKey(jawTitanId))
+    {
+        jawTitanHuntDamageTime[jawTitanId] = currentTime;
+    }
+    
+    if (currentTime >= jawTitanHuntDamageTime[jawTitanId])
+    {
+        // Calculate damage (same as grab damage)
+        PlayerModifiers jawMods = jawTitan.GetModifiers();
+        float damagePerInterval = GRAB_DAMAGE_BASE * jawMods.MeleeDamageDealtModifier * GRAB_DAMAGE_MULTIPLIER;
+        
+        // Check victim health before dealing damage
+        PlayerModifiers victimMods = victim.GetModifiers();
+        bool willDie = victimMods.CurrentHealth <= damagePerInterval;
+        
+        // Deal damage
+        victim.DealDamage(damagePerInterval);
+        
+        // Play blood effect on victim
+        Vector2 victimPos = victim.GetWorldPosition();
+        Game.PlayEffect(EffectName.Blood, victimPos);
+        
+        // If victim died from hunt damage, gib them
+        if (willDie && victim.IsDead)
+        {
+            victim.Gib();
+        }
+        
+        // Update next damage time
+        jawTitanHuntDamageTime[jawTitanId] = currentTime + GRAB_DAMAGE_INTERVAL;
     }
 }
 
@@ -1013,9 +1397,15 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
 {
     if (titan == null || titan.IsDead) return;
     
-    // Verify this player is actually a Pure Titan before applying grab damage
+    // Verify this player is actually a Pure Titan or Jaw Titan before applying grab damage
     // Attack Titans don't have grab damage ability
-    if (!titanPlayers.ContainsKey(titanId) || titanPlayers[titanId] != TitanType.Pure)
+    if (!titanPlayers.ContainsKey(titanId))
+    {
+        return;
+    }
+    
+    TitanType titanType = titanPlayers[titanId];
+    if (titanType != TitanType.Pure && titanType != TitanType.Jaw)
     {
         return;
     }
