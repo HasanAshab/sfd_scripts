@@ -423,14 +423,17 @@ private void TransformToJawTitan(IPlayer player, int playerId)
     BotBehaviorSet bS = player.GetBotBehaviorSet();
     bS.SearchItems = 0;
     
-    // Configure bot melee actions for Jaw Titan: Jump 60, Dive 10, Grab 30, rest 0
+    // Configure bot melee actions for Jaw Titan: Jump 60, Grab 30, with dive behavior
     BotMeleeActions meleeActions = new BotMeleeActions();
     meleeActions.Jump = 60;
-    meleeActions.Dive = 10;
     meleeActions.Grab = 30;
     meleeActions.Attack = 0;
-    meleeActions.Wait = 0;
+    meleeActions.Wait = 10; // Remaining percentage
     bS.SetMeleeActionsAll(meleeActions);
+    
+    // Set dive and sprint levels for offensive behavior
+    bS.OffensiveDiveLevel = 0.2f; // 20% dive tendency
+    bS.OffensiveSprintLevel = 0.7f; // 70% sprint tendency
     
     player.SetBotBehaviorSet(bS);
     
@@ -1084,6 +1087,7 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
             {
                 jawTitanHuntVictim[jawTitanId] = potentialVictim;
                 jawTitanHuntDamageTime[jawTitanId] = currentTime;
+                jawTitanHuntBloodEffectTime[jawTitanId] = currentTime; // Initialize blood effect timer
             }
             break;
         }
@@ -1102,6 +1106,7 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
     {
         jawTitanHuntVictim.Remove(jawTitanId);
         jawTitanHuntDamageTime.Remove(jawTitanId);
+        jawTitanHuntBloodEffectTime.Remove(jawTitanId);
         return;
     }
     
@@ -1118,6 +1123,7 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
         // Clean up hunt tracking
         jawTitanHuntVictim.Remove(jawTitanId);
         jawTitanHuntDamageTime.Remove(jawTitanId);
+        jawTitanHuntBloodEffectTime.Remove(jawTitanId);
         return;
     }
     
