@@ -383,7 +383,7 @@ private void CreateTitanTypeLabels(IPlayer[] allPlayers)
             
             label.SetText(labelText);
             label.SetTextAlignment(TextAlignment.Middle);
-            label.SetTextScale(0.7f);
+            label.SetTextScale(0.233f); // Decreased by 3x from 0.7f
             label.SetTextColor(labelColor);
             
             // Store the label reference
@@ -403,14 +403,14 @@ private void UpdateTitanTypeLabels()
         if (label != null && !label.IsRemoved)
         {
             IPlayer player = Game.GetPlayer(playerId);
-            if (player != null && !player.IsRemoved)
+            if (player != null && !player.IsRemoved && !player.IsDead)
             {
                 Vector2 playerPos = player.GetWorldPosition();
                 label.SetWorldPosition(new Vector2(playerPos.X, playerPos.Y + 20f));
             }
             else
             {
-                // Player removed, remove label
+                // Player removed or died, remove label
                 label.Remove();
             }
         }
