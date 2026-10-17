@@ -30,7 +30,7 @@ private const float PURE_TITAN_SPEED_PENALTY = 0.30f; // 30% speed reduction (0.
 // Attack Titan stats
 private const float ATTACK_TITAN_HP_BONUS = 0.40f; // 40% HP increase
 private const float ATTACK_TITAN_MELEE_DAMAGE_BONUS = 0.32f; // 32% melee damage increase
-private const float ATTACK_TITAN_MELEE_FORCE_BONUS = 0.25f; // 25% melee force increase
+private const float ATTACK_TITAN_MELEE_FORCE_BONUS = 0.01f; // 1% melee force increase
 private const float ATTACK_TITAN_SPEED_PENALTY = 0.20f; // 20% speed reduction
 private const float ATTACK_TITAN_ENERGY_BONUS = 0.30f; // 30% energy increase
 
