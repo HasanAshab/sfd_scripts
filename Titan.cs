@@ -1277,7 +1277,7 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
     }
     
     // Make Pure Titan fall (simulate weakness after detransformation)
-    pureTitan.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
+    QuickCommand(pureTitan, new PlayerCommand(PlayerCommandType.Fall));
     
     // Remove from titan players list
     titanPlayers.Remove(pureTitanId);
@@ -1369,7 +1369,7 @@ private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanT
     
     label.SetText(labelText);
     label.SetTextAlignment(TextAlignment.Middle);
-    label.SetTextScale(0.233f); // Decreased by 3x from 0.7f
+    label.SetTextScale(0.4f);
     label.SetTextColor(labelColor);
     
     // Store the label reference
