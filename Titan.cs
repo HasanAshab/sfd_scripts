@@ -64,7 +64,8 @@ private const float SIZE_SPEED_PENALTY_PER_0_01 = 0.02f; // 2% = 0.02
 
 // Grab damage constants
 private const float GRAB_DAMAGE_BASE = 7f;
-private const float GRAB_DAMAGE_INTERVAL = 1000f; // 1 second in milliseconds
+private const float GRAB_DAMAGE_INTERVAL = 50f; // 50ms in milliseconds
+private const float GRAB_DAMAGE_MULTIPLIER = 0.15f; // Damage multiplier
 
 // Track titan players
 private Dictionary<int, TitanType> titanPlayers = new Dictionary<int, TitanType>();
@@ -1098,9 +1099,8 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
         // Apply damage if it's time
         if (currentTime >= grabData.NextDamageTime)
         {
-            // Calculate damage: 7 * titanMeleeDamage * 3 per second
-            float damagePerSecond = GRAB_DAMAGE_BASE * grabData.TitanMeleeDamage * 3f;
-            float damagePerInterval = damagePerSecond * (GRAB_DAMAGE_INTERVAL / 1000f);
+            // Calculate damage: 7 * titanMeleeDamage * 0.15 per 50ms
+            float damagePerInterval = GRAB_DAMAGE_BASE * grabData.TitanMeleeDamage * GRAB_DAMAGE_MULTIPLIER;
             
             // Check victim health before dealing damage
             PlayerModifiers victimMods = grabData.Victim.GetModifiers();

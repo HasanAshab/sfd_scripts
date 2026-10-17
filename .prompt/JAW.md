@@ -1,7 +1,7 @@
 ## Now lets add "Jaw Titan"
 
 - Stats:
-Health +10%
+Health +0%
 Melee damage +25%
 Force +0%
 Speed -0%
@@ -27,3 +27,7 @@ ply.SetProfile(
         - when jaw titan attacked on victims back:
             - damage = 7 * Melee dam dealth mod * 4
             - play KatanaDraw sound.
+        - read Milita.cs script, assasin troops backstab for ref only if you cant
+        - if victim got more than 30% of extra damage (e.g Victim max hp is 100 and current 10, Jaw claw caused 40 damage, then gib)
+    - Hunt: When catch victims on dive:
+        - 
