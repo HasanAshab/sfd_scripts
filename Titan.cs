@@ -128,6 +128,9 @@ private Dictionary<int, GrabDamageData> titanGrabDamage = new Dictionary<int, Gr
 // Track titans being grabbed (to manage input disable/enable for attackers)
 private Dictionary<int, bool> titanInputDisabled = new Dictionary<int, bool>();
 
+// Track victims gibbed by Pure Titan grab (for power extraction)
+private Dictionary<int, int> gibbedByPureTitan = new Dictionary<int, int>(); // victimId -> pureTitanId
+
 // Track Jaw Titan specific data
 private Dictionary<int, int> jawTitanPunchCount = new Dictionary<int, int>(); // Track punch count for sharp claw
 private Dictionary<int, float> jawTitanLastPunchTime = new Dictionary<int, float>(); // Track last punch time
@@ -1291,66 +1294,38 @@ public void OnPlayerDeath(IPlayer deadPlayer)
     
     int deadPlayerId = deadPlayer.UniqueID;
     
-    // Check if the dead player was a humanoid titan (Attack or Jaw)
-    if (!assignedTitanPowers.ContainsKey(deadPlayerId)) return;
+    // Check if this player was gibbed by a Pure Titan during grab
+    if (!gibbedByPureTitan.ContainsKey(deadPlayerId)) return;
     
-    TitanType deadPlayerTitanType = assignedTitanPowers[deadPlayerId];
-    if (deadPlayerTitanType == TitanType.Pure) return; // Pure titans don't trigger power extract
+    int pureTitanId = gibbedByPureTitan[deadPlayerId];
+    IPlayer pureTitan = Game.GetPlayer(pureTitanId);
     
-    // Find the killer - check who dealt the last damage
-    // We need to find if this was a gib kill by a Pure Titan
-    IPlayer killer = null;
-    int killerId = -1;
-    
-    // Search for a Pure Titan that recently damaged this player
-    // This is done by checking grab damage data
-    foreach (var kvp in titanGrabDamage)
+    // Verify Pure Titan still exists and is still a Pure Titan
+    if (pureTitan == null || !titanPlayers.ContainsKey(pureTitanId) || titanPlayers[pureTitanId] != TitanType.Pure)
     {
-        if (kvp.Value.Victim != null && kvp.Value.Victim.UniqueID == deadPlayerId)
-        {
-            killerId = kvp.Key;
-            killer = Game.GetPlayer(killerId);
-            break;
-        }
+        gibbedByPureTitan.Remove(deadPlayerId);
+        return;
     }
     
-    // Also check if killer can be found through any recent titan interaction
-    // For simplicity, we check all Pure Titans for proximity
-    if (killer == null)
+    // Check if victim had a humanoid titan power
+    if (!assignedTitanPowers.ContainsKey(deadPlayerId)) 
     {
-        IPlayer[] allPlayers = Game.GetPlayers();
-        Vector2 deadPlayerPos = deadPlayer.GetWorldPosition();
-        
-        foreach (IPlayer player in allPlayers)
-        {
-            if (player == null || player.UniqueID == deadPlayerId) continue;
-            
-            // Check if this is a Pure Titan
-            if (titanPlayers.ContainsKey(player.UniqueID) && titanPlayers[player.UniqueID] == TitanType.Pure)
-            {
-                // Check if close enough (within 50 units)
-                Vector2 titanPos = player.GetWorldPosition();
-                float distance = Vector2.Distance(deadPlayerPos, titanPos);
-                
-                if (distance <= 50f)
-                {
-                    killer = player;
-                    killerId = player.UniqueID;
-                    break;
-                }
-            }
-        }
+        gibbedByPureTitan.Remove(deadPlayerId);
+        return;
     }
     
-    // If we found a Pure Titan killer, extract the power
-    if (killer != null && killerId != -1)
+    TitanType extractedPower = assignedTitanPowers[deadPlayerId];
+    if (extractedPower == TitanType.Pure)
     {
-        // Verify the killer is a Pure Titan
-        if (titanPlayers.ContainsKey(killerId) && titanPlayers[killerId] == TitanType.Pure)
-        {
-            ExtractTitanPower(killer, killerId, deadPlayer, deadPlayerId, deadPlayerTitanType);
-        }
+        gibbedByPureTitan.Remove(deadPlayerId);
+        return; // Pure titans don't trigger power extract
     }
+    
+    // Extract the power!
+    ExtractTitanPower(pureTitan, pureTitanId, deadPlayer, deadPlayerId, extractedPower);
+    
+    // Clean up tracking
+    gibbedByPureTitan.Remove(deadPlayerId);
 }
 
 private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victim, int victimId, TitanType extractedPower)
@@ -2087,6 +2062,19 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
             if (willDie && grabData.Victim.IsDead)
             {
                 grabData.Victim.Gib();
+                
+                // Track this gib for power extraction (only if victim has humanoid titan power)
+                int victimId = grabData.Victim.UniqueID;
+                if (assignedTitanPowers.ContainsKey(victimId))
+                {
+                    TitanType victimPower = assignedTitanPowers[victimId];
+                    // Only track if victim had humanoid power and killer is Pure Titan
+                    if (victimPower != TitanType.Pure && titanPlayers.ContainsKey(titanId) && titanPlayers[titanId] == TitanType.Pure)
+                    {
+                        gibbedByPureTitan[victimId] = titanId;
+                    }
+                }
+                
                 if (titan.IsBot)
                 {
                     EnableTitanInput(titan);
