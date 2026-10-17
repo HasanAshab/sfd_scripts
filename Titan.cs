@@ -130,7 +130,7 @@ private Dictionary<int, int> jawTitanPunchCount = new Dictionary<int, int>(); //
 private Dictionary<int, float> jawTitanLastPunchTime = new Dictionary<int, float>(); // Track last punch time
 private Dictionary<int, IPlayer> jawTitanHuntVictim = new Dictionary<int, IPlayer>(); // Track hunt victims (dive catches)
 private Dictionary<int, float> jawTitanHuntDamageTime = new Dictionary<int, float>(); // Track hunt damage timing
-private Dictionary<int, IPlayer> jawHuntVictimsToReenable = new Dictionary<int, IPlayer>(); // Track victims waiting for input re-enable
+private Dictionary<int, float> jawHuntVictimReenableTime = new Dictionary<int, float>(); // Track when to re-enable victim input
 
 // Track player facing directions for Jaw Titan backstab detection
 private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
@@ -1040,6 +1040,16 @@ public void OnUpdate(float elapsed)
         
         // Update facing direction for all players (every update tick for accurate backstab detection)
         playerFacingDirections[playerId] = player.FacingDirection;
+        
+        // Check if this player needs input re-enabled after Jaw Titan hunt
+        if (jawHuntVictimReenableTime.ContainsKey(playerId))
+        {
+            if (currentTime >= jawHuntVictimReenableTime[playerId])
+            {
+                player.SetInputEnabled(true);
+                jawHuntVictimReenableTime.Remove(playerId);
+            }
+        }
     }
 }
 
@@ -1088,19 +1098,9 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
         // Hunt ended - disable victim's input for 2 seconds
         victim.SetInputEnabled(false);
         
-        // Use timer trigger to re-enable input after 2 seconds
-        IObjectTimerTrigger reenableTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-        reenableTimer.SetIntervalTime((int)JAW_HUNT_VICTIM_STUN_DURATION);
-        reenableTimer.SetRepeatCount(1);
-        reenableTimer.SetScriptMethod("ReenableJawHuntVictimInput");
-        
-        // Store victim reference for re-enable (use a temporary dictionary)
-        if (!jawHuntVictimsToReenable.ContainsKey(reenableTimer.UniqueID))
-        {
-            jawHuntVictimsToReenable[reenableTimer.UniqueID] = victim;
-        }
-        
-        reenableTimer.Trigger();
+        // Track when to re-enable (will be checked in OnUpdate)
+        float reenableTime = currentTime + JAW_HUNT_VICTIM_STUN_DURATION;
+        jawHuntVictimReenableTime[victim.UniqueID] = reenableTime;
         
         // Clean up hunt tracking
         jawTitanHuntVictim.Remove(jawTitanId);
@@ -1605,28 +1605,6 @@ private IPlayer GetAimedPlayer(IPlayer shooter)
     }
     
     return null;
-}
-
-public void ReenableJawHuntVictimInput(TriggerArgs args)
-{
-    // Get the timer that triggered this
-    int timerID = args.Trigger.UniqueID;
-    
-    if (jawHuntVictimsToReenable.ContainsKey(timerID))
-    {
-        IPlayer victim = jawHuntVictimsToReenable[timerID];
-        
-        if (victim != null && !victim.IsRemoved)
-        {
-            victim.SetInputEnabled(true);
-        }
-        
-        // Clean up
-        jawHuntVictimsToReenable.Remove(timerID);
-    }
-    
-    // Destroy the timer
-    args.Trigger.Remove();
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)
