@@ -94,6 +94,8 @@ private const float GRAB_BLOOD_EFFECT_INTERVAL = 1000f; // Blood effect every 1 
 private Dictionary<int, TitanType> titanPlayers = new Dictionary<int, TitanType>();
 private Dictionary<int, IProfile> originalProfiles = new Dictionary<int, IProfile>();
 private Dictionary<int, PlayerModifiers> originalModifiers = new Dictionary<int, PlayerModifiers>();
+private Dictionary<int, BotBehavior> originalBotBehaviors = new Dictionary<int, BotBehavior>();
+private Dictionary<int, BotBehaviorSet> originalBotBehaviorSets = new Dictionary<int, BotBehaviorSet>();
 
 // Track Attack Titan specific data
 private Dictionary<int, HardeningMode> attackTitanHardeningMode = new Dictionary<int, HardeningMode>();
@@ -143,9 +145,6 @@ private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, Tit
 // Track titan type labels above players' heads
 private Dictionary<int, IObjectText> titanTypeLabels = new Dictionary<int, IObjectText>();
 
-// Track if titan powers have been distributed (only once per script activation)
-private bool powersDistributed = false;
-
 // Helper class for grab damage tracking
 private class GrabDamageData
 {
@@ -177,7 +176,9 @@ public void OnStartup()
     Events.PlayerDeathCallback.Start(OnPlayerDeath);
     
     // Distribute titan powers only once per script activation (not every match)
-    if (!powersDistributed)
+    // Use shared storage to track if distribution has happened
+    string distributionFlag = storage.GetItem("POWERS_DISTRIBUTED");
+    if (distributionFlag != "true")
     {
         // Distribute titan powers after 1 second delay (wait for match to start)
         IObjectTimerTrigger distributionTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -235,8 +236,9 @@ public void DistributeTitanPowers(TriggerArgs args)
     // Create text labels above players' heads with their titan type
     CreateTitanTypeLabels(allPlayers);
     
-    // Mark powers as distributed (only happens once per script activation)
-    powersDistributed = true;
+    // Mark powers as distributed in shared storage (persists across matches)
+    IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
+    storage.SetItem("POWERS_DISTRIBUTED", "true");
     
     Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
 }
@@ -480,9 +482,15 @@ private void TransformToTitan(IPlayer player)
     // 2. Remove strength boost powerup
     player.RemoveWeaponItemType(WeaponItemType.Powerup);
     
-    // Store original profile and modifiers
+    // Store original profile, modifiers, and bot behaviors (if bot)
     originalProfiles[playerId] = player.GetProfile();
     originalModifiers[playerId] = player.GetModifiers();
+    
+    if (player.IsBot)
+    {
+        originalBotBehaviors[playerId] = player.GetBotBehavior();
+        originalBotBehaviorSets[playerId] = player.GetBotBehaviorSet();
+    }
     
     // 3. Transform based on titan type
     if (titanType == TitanType.Pure)
@@ -1302,6 +1310,22 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
     {
         pureTitan.SetModifiers(originalModifiers[pureTitanId]);
         originalModifiers.Remove(pureTitanId);
+    }
+    
+    // Restore original bot behavior and behavior set if bot
+    if (pureTitan.IsBot)
+    {
+        if (originalBotBehaviors.ContainsKey(pureTitanId))
+        {
+            pureTitan.SetBotBehavior(originalBotBehaviors[pureTitanId]);
+            originalBotBehaviors.Remove(pureTitanId);
+        }
+        
+        if (originalBotBehaviorSets.ContainsKey(pureTitanId))
+        {
+            pureTitan.SetBotBehaviorSet(originalBotBehaviorSets[pureTitanId]);
+            originalBotBehaviorSets.Remove(pureTitanId);
+        }
     }
     
     // Make Pure Titan fall (simulate weakness after detransformation)
