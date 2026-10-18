@@ -597,6 +597,13 @@ private void TransformToTitan(IPlayer player)
 
 private void TransformToPureTitan(IPlayer player, int playerId)
 {
+    // Clear all items FIRST before profile change
+    player.RemoveWeaponItemType(WeaponItemType.Rifle);
+    player.RemoveWeaponItemType(WeaponItemType.Handgun);
+    player.RemoveWeaponItemType(WeaponItemType.Melee);
+    player.RemoveWeaponItemType(WeaponItemType.Thrown);
+    player.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
     // Set Pure Titan profile while keeping player trademarks
     IProfile currentProfile = player.GetProfile();
     IProfile titanProfile = new IProfile()
@@ -648,19 +655,19 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     
     player.SetBotBehaviorSet(bS);
     
-    // Clear all items
-    player.RemoveWeaponItemType(WeaponItemType.Rifle);
-    player.RemoveWeaponItemType(WeaponItemType.Handgun);
-    player.RemoveWeaponItemType(WeaponItemType.Melee);
-    player.RemoveWeaponItemType(WeaponItemType.Thrown);
-    player.RemoveWeaponItemType(WeaponItemType.Powerup);
-    
     // Apply size-based scaling
     ApplySizeScaling(player, playerId, mods);
 }
 
 private void TransformToAttackTitan(IPlayer player, int playerId)
 {
+    // Clear all items FIRST before profile change
+    player.RemoveWeaponItemType(WeaponItemType.Rifle);
+    player.RemoveWeaponItemType(WeaponItemType.Handgun);
+    player.RemoveWeaponItemType(WeaponItemType.Melee);
+    player.RemoveWeaponItemType(WeaponItemType.Thrown);
+    player.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
     // Set Attack Titan profile
     IProfile titanProfile = new IProfile()
     {
@@ -704,13 +711,6 @@ private void TransformToAttackTitan(IPlayer player, int playerId)
     bS.SearchItems = 0;
     player.SetBotBehaviorSet(bS);
     
-    // Clear all items
-    player.RemoveWeaponItemType(WeaponItemType.Rifle);
-    player.RemoveWeaponItemType(WeaponItemType.Handgun);
-    player.RemoveWeaponItemType(WeaponItemType.Melee);
-    player.RemoveWeaponItemType(WeaponItemType.Thrown);
-    player.RemoveWeaponItemType(WeaponItemType.Powerup);
-    
     // Initialize Attack Titan hardening mode to Neutral
     attackTitanHardeningMode[playerId] = HardeningMode.Neutral;
     
@@ -720,6 +720,13 @@ private void TransformToAttackTitan(IPlayer player, int playerId)
 
 private void TransformToJawTitan(IPlayer player, int playerId)
 {
+    // Clear all items FIRST before profile change
+    player.RemoveWeaponItemType(WeaponItemType.Rifle);
+    player.RemoveWeaponItemType(WeaponItemType.Handgun);
+    player.RemoveWeaponItemType(WeaponItemType.Melee);
+    player.RemoveWeaponItemType(WeaponItemType.Thrown);
+    player.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
     // Set Jaw Titan profile
     IProfile titanProfile = new IProfile()
     {
@@ -783,13 +790,6 @@ private void TransformToJawTitan(IPlayer player, int playerId)
     bS.OffensiveSprintLevel = 0.7f; // 70% sprint tendency
     
     player.SetBotBehaviorSet(bS);
-    
-    // Clear all items
-    player.RemoveWeaponItemType(WeaponItemType.Rifle);
-    player.RemoveWeaponItemType(WeaponItemType.Handgun);
-    player.RemoveWeaponItemType(WeaponItemType.Melee);
-    player.RemoveWeaponItemType(WeaponItemType.Thrown);
-    player.RemoveWeaponItemType(WeaponItemType.Powerup);
     
     // Initialize Jaw Titan punch count
     jawTitanPunchCount[playerId] = 0;
@@ -1556,12 +1556,12 @@ public void OnUpdate(float elapsed)
                 CheckTitanExhaustion(player, playerId);
                 CheckTitanGrabDamage(player, playerId);
                 
-                // Check titan falling state for impact effect
-                bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
-                if (isFalling)
-                {
-                    OnTitanFalling(player);
-                }
+                // TEMPORARILY DISABLED: Check titan falling state for impact effect
+                // bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
+                // if (isFalling)
+                // {
+                //     OnTitanFalling(player);
+                // }
             }
             else if (titanType == TitanType.Attack)
             {
@@ -1573,11 +1573,12 @@ public void OnUpdate(float elapsed)
                 // Attack Titan also has exhaustion
                 CheckTitanExhaustion(player, playerId);
                 
-                // Check titan falling state for impact effect
-                bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
-                if (isFalling)
-                {
-                    OnTitanFalling(player);
+                // TEMPORARILY DISABLED: Check titan falling state for impact effect
+                // bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
+                // if (isFalling)
+                // {
+                //     OnTitanFalling(player);
+                // }
                 }
             }
             else if (titanType == TitanType.Jaw)
