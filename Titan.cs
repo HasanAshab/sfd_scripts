@@ -68,7 +68,7 @@ private const float JAW_CLAW_BACK_MULTIPLIER = 4f; // Backstab multiplier
 private const float JAW_CLAW_GIB_THRESHOLD = 0.30f; // 30% overkill = gib
 
 // Jaw Titan hunt ability
-private const float JAW_HUNT_VICTIM_STUN_DURATION = 2000f; // 2 seconds input disable after hunt
+private const float JAW_HUNT_VICTIM_STUN_DURATION = 1000f; // 1 seconds input disable after hunt
 
 // Jaw Titan sharp claw ability
 private const int JAW_SHARP_CLAW_PUNCH_COUNT = 3; // 3rd punch breaks objects
