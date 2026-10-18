@@ -178,12 +178,19 @@ public void OnStartup()
     // Set up player death callback for Pure Titan power extract ability
     Events.PlayerDeathCallback.Start(OnPlayerDeath);
     
-    // Distribute titan powers only once per script activation (not every match)
-    // Use session storage to track if distribution has happened (persists across matches but cleared on map change)
-    IScriptStorage sessionStorage = Game.SessionStorage;
-    if (!sessionStorage.ContainsKey("POWERS_DISTRIBUTED"))
+    // Distribute titan powers once per day using LocalStorage
+    IScriptStorage localStorage = Game.LocalStorage;
+    string today = GetTodayDateString();
+    string lastDistributionDate = "";
+    
+    if (localStorage.ContainsKey("LAST_DISTRIBUTION_DATE"))
     {
-        // Distribute titan powers after 1 second delay (wait for match to start)
+        lastDistributionDate = (string)localStorage.GetItem("LAST_DISTRIBUTION_DATE");
+    }
+    
+    if (lastDistributionDate != today)
+    {
+        // New day - distribute powers after 1 second delay (wait for match to start)
         IObjectTimerTrigger distributionTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
         distributionTimer.SetIntervalTime(1000); // 1 second delay
         distributionTimer.SetRepeatCount(1); // Run once
@@ -192,7 +199,7 @@ public void OnStartup()
     }
     else
     {
-        // Powers already distributed, restore from storage
+        // Same day - restore from storage
         RestoreAssignedPowersFromStorage();
         
         // Recreate labels after 1 second (wait for players to spawn)
@@ -219,7 +226,15 @@ public void OnStartup()
 
     chances.Add(boost, 100);
     Game.UpdateWeaponSpawnChances(chances);
+}
 
+// Helper method to get today's date as a string (YYYY-MM-DD format)
+private string GetTodayDateString()
+{
+    DateTime now = DateTime.Now;
+    return now.Year.ToString() + "-" + 
+           now.Month.ToString("00") + "-" + 
+           now.Day.ToString("00");
 }
 
 public void DistributeTitanPowers(TriggerArgs args)
@@ -251,19 +266,19 @@ public void DistributeTitanPowers(TriggerArgs args)
     // Create text labels above players' heads with their titan type
     CreateTitanTypeLabels(allPlayers);
     
-    // Save assigned powers to session storage (persists across matches)
+    // Save assigned powers to LocalStorage (persists permanently)
     SaveAssignedPowersToStorage();
     
-    // Mark powers as distributed in session storage (persists across matches)
-    IScriptStorage sessionStorage = Game.SessionStorage;
-    sessionStorage.SetItem("POWERS_DISTRIBUTED", "true");
+    // Save distribution date to LocalStorage
+    IScriptStorage localStorage = Game.LocalStorage;
+    localStorage.SetItem("LAST_DISTRIBUTION_DATE", GetTodayDateString());
     
     Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
 }
 
 private void SaveAssignedPowersToStorage()
 {
-    IScriptStorage sessionStorage = Game.SessionStorage;
+    IScriptStorage localStorage = Game.LocalStorage;
     
     // Serialize assignedTitanPowers dictionary to a string format: "playerID:titanType,playerID:titanType,..."
     List<string> powerEntries = new List<string>();
@@ -275,13 +290,19 @@ private void SaveAssignedPowersToStorage()
     }
     
     string serialized = string.Join(",", powerEntries.ToArray());
-    sessionStorage.SetItem("ASSIGNED_POWERS", serialized);
+    localStorage.SetItem("ASSIGNED_POWERS", serialized);
 }
 
 private void RestoreAssignedPowersFromStorage()
 {
-    IScriptStorage sessionStorage = Game.SessionStorage;
-    string serialized = (string)sessionStorage.GetItem("ASSIGNED_POWERS");
+    IScriptStorage localStorage = Game.LocalStorage;
+    
+    if (!localStorage.ContainsKey("ASSIGNED_POWERS"))
+    {
+        return;
+    }
+    
+    string serialized = (string)localStorage.GetItem("ASSIGNED_POWERS");
     
     if (string.IsNullOrEmpty(serialized)) return;
     
@@ -1400,7 +1421,7 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
     // 3. Update labels
     UpdateLabelsAfterPowerSwap(pureTitanId, victimId);
     
-    // Save updated powers to shared storage (persist across matches)
+    // Save updated powers to LocalStorage (permanent storage)
     SaveAssignedPowersToStorage();
     
     // Update shared storage
