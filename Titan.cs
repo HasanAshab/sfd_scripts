@@ -36,11 +36,11 @@ private const float ATTACK_TITAN_SPEED_PENALTY = 0.20f; // 20% speed reduction
 private const float ATTACK_TITAN_ENERGY_BONUS = 0.30f; // 30% energy increase
 
 // Attack Titan hardening costs and bonuses
-private const float HARDENING_ENERGY_COST_PER_SECOND = 0.30f; // 30% of max energy per second
+private const float HARDENING_ENERGY_COST_PER_SECOND = 0.14f; // 14% of max energy per second
 private const float HARDENING_OFFENSIVE_DAMAGE_BONUS = 0.25f; // 25% melee damage increase
 private const float HARDENING_OFFENSIVE_STAGGER_CHANCE = 0.70f; // 70% stagger chance
 private const float HARDENING_DEFENSIVE_SPEED_PENALTY = 0.20f; // 20% speed reduction
-private const float HARDENING_DEFENSIVE_DEFENSE_BONUS = 0.90f; // 90% damage reduction
+private const float HARDENING_DEFENSIVE_DEFENSE_BONUS = 0.75f; // 75% damage reduction
 private const float HARDENING_OFFENSIVE_TRIGGER_DISTANCE = 25f; // Distance to trigger offensive mode
 private const float HARDENING_DEFENSIVE_CHECK_INTERVAL = 2000f; // Check every 2 seconds
 private const float HARDENING_OFFENSIVE_MELEE_TIMEOUT = 2000f; // 2 seconds without melee = back to neutral
