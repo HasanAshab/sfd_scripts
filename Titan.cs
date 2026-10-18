@@ -1579,7 +1579,6 @@ public void OnUpdate(float elapsed)
                 // {
                 //     OnTitanFalling(player);
                 // }
-                }
             }
             else if (titanType == TitanType.Jaw)
             {
@@ -1590,12 +1589,12 @@ public void OnUpdate(float elapsed)
                 // Jaw Titan also has exhaustion
                 CheckTitanExhaustion(player, playerId);
                 
-                // Check titan falling state for impact effect
-                bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
-                if (isFalling)
-                {
-                    OnTitanFalling(player);
-                }
+                // TEMPORARILY DISABLED: Check titan falling state for impact effect
+                // bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
+                // if (isFalling)
+                // {
+                //     OnTitanFalling(player);
+                // }
             }
         }
         
