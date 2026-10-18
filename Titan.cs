@@ -145,6 +145,9 @@ private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>()
 // Track assigned titan powers (does not mean transformed, just assigned power)
 private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, TitanType>();
 
+// Track player name to ID mapping for storage/restoration
+private Dictionary<string, int> playerNameToId = new Dictionary<string, int>();
+
 // Track titan type labels above players' heads
 private Dictionary<int, IObjectText> titanTypeLabels = new Dictionary<int, IObjectText>();
 
@@ -178,14 +181,14 @@ public void OnStartup()
     // Set up player death callback for Pure Titan power extract ability
     Events.PlayerDeathCallback.Start(OnPlayerDeath);
     
-    // Distribute titan powers once per day using LocalStorage
-    IScriptStorage localStorage = Game.LocalStorage;
+    // Distribute titan powers once per day using SharedStorage
+    IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
     string today = GetTodayDateString();
     string lastDistributionDate = "";
     
-    if (localStorage.ContainsKey("LAST_DISTRIBUTION_DATE"))
+    if (persistentStorage.ContainsKey("LAST_DISTRIBUTION_DATE"))
     {
-        lastDistributionDate = (string)localStorage.GetItem("LAST_DISTRIBUTION_DATE");
+        lastDistributionDate = (string)persistentStorage.GetItem("LAST_DISTRIBUTION_DATE");
     }
     
     if (lastDistributionDate != today)
@@ -251,6 +254,16 @@ public void DistributeTitanPowers(TriggerArgs args)
         return;
     }
     
+    // Build player name to ID mapping
+    playerNameToId.Clear();
+    foreach (IPlayer player in allPlayers)
+    {
+        if (player != null)
+        {
+            playerNameToId[player.Name] = player.UniqueID;
+        }
+    }
+    
     // Determine which scenario to use
     if (totalPlayers > HUMANOID_TITAN_COUNT)
     {
@@ -266,50 +279,71 @@ public void DistributeTitanPowers(TriggerArgs args)
     // Create text labels above players' heads with their titan type
     CreateTitanTypeLabels(allPlayers);
     
-    // Save assigned powers to LocalStorage (persists permanently)
+    // Save assigned powers to SharedStorage (persists permanently)
     SaveAssignedPowersToStorage();
     
-    // Save distribution date to LocalStorage
-    IScriptStorage localStorage = Game.LocalStorage;
-    localStorage.SetItem("LAST_DISTRIBUTION_DATE", GetTodayDateString());
+    // Save distribution date to SharedStorage
+    IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
+    persistentStorage.SetItem("LAST_DISTRIBUTION_DATE", GetTodayDateString());
     
     Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
 }
 
 private void SaveAssignedPowersToStorage()
 {
-    IScriptStorage localStorage = Game.LocalStorage;
+    IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
     
-    // Serialize assignedTitanPowers dictionary to a string format: "playerID:titanType,playerID:titanType,..."
+    // Serialize assignedTitanPowers dictionary to a string format: "playerName:titanType;playerName:titanType;..."
+    // Skip players named "bot"
     List<string> powerEntries = new List<string>();
+    
     foreach (var kvp in assignedTitanPowers)
     {
         int playerId = kvp.Key;
+        IPlayer player = Game.GetPlayer(playerId);
+        
+        // Skip if player not found or player name is "bot"
+        if (player == null || player.Name.ToLower() == "bot")
+        {
+            continue;
+        }
+        
         int titanTypeInt = (int)kvp.Value; // 0=Pure, 1=Attack, 2=Jaw
-        powerEntries.Add(playerId.ToString() + ":" + titanTypeInt.ToString());
+        powerEntries.Add(player.Name + ":" + titanTypeInt.ToString());
     }
     
-    string serialized = string.Join(",", powerEntries.ToArray());
-    localStorage.SetItem("ASSIGNED_POWERS", serialized);
+    string serialized = string.Join(";", powerEntries.ToArray());
+    persistentStorage.SetItem("ASSIGNED_POWERS", serialized);
 }
 
 private void RestoreAssignedPowersFromStorage()
 {
-    IScriptStorage localStorage = Game.LocalStorage;
+    IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
     
-    if (!localStorage.ContainsKey("ASSIGNED_POWERS"))
+    if (!persistentStorage.ContainsKey("ASSIGNED_POWERS"))
     {
         return;
     }
     
-    string serialized = (string)localStorage.GetItem("ASSIGNED_POWERS");
+    string serialized = (string)persistentStorage.GetItem("ASSIGNED_POWERS");
     
     if (string.IsNullOrEmpty(serialized)) return;
     
-    // Deserialize: "playerID:titanType,playerID:titanType,..."
+    // Build player name to ID mapping first
+    IPlayer[] allPlayers = Game.GetPlayers();
+    playerNameToId.Clear();
+    foreach (IPlayer player in allPlayers)
+    {
+        if (player != null)
+        {
+            playerNameToId[player.Name] = player.UniqueID;
+        }
+    }
+    
+    // Deserialize: "playerName:titanType;playerName:titanType;..."
     assignedTitanPowers.Clear();
     
-    string[] powerEntries = serialized.Split(',');
+    string[] powerEntries = serialized.Split(';');
     foreach (string entry in powerEntries)
     {
         if (string.IsNullOrEmpty(entry)) continue;
@@ -317,11 +351,29 @@ private void RestoreAssignedPowersFromStorage()
         string[] parts = entry.Split(':');
         if (parts.Length != 2) continue;
         
-        int playerId = int.Parse(parts[0]);
+        string playerName = parts[0];
         int titanTypeInt = int.Parse(parts[1]);
         TitanType titanType = (TitanType)titanTypeInt;
         
-        assignedTitanPowers[playerId] = titanType;
+        // Find player by name and assign power
+        if (playerNameToId.ContainsKey(playerName))
+        {
+            int playerId = playerNameToId[playerName];
+            assignedTitanPowers[playerId] = titanType;
+        }
+    }
+    
+    // For players without stored powers (new players or bots), assign randomly
+    foreach (IPlayer player in allPlayers)
+    {
+        if (player == null) continue;
+        
+        int playerId = player.UniqueID;
+        if (!assignedTitanPowers.ContainsKey(playerId))
+        {
+            // Assign Pure Titan to new players/bots
+            assignedTitanPowers[playerId] = TitanType.Pure;
+        }
     }
 }
 
@@ -1421,7 +1473,7 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
     // 3. Update labels
     UpdateLabelsAfterPowerSwap(pureTitanId, victimId);
     
-    // Save updated powers to LocalStorage (permanent storage)
+    // Save updated powers to SharedStorage (permanent storage)
     SaveAssignedPowersToStorage();
     
     // Update shared storage
