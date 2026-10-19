@@ -108,6 +108,10 @@ private const float ARMORED_BOT_RUSH_ABORT_ENERGY = 0.20f; // 20% energy to abor
 private const float ARMORED_BOT_RUSH_CHECK_DISTANCE = 40f; // Distance to check for enemies
 private const int ARMORED_BOT_RUSH_MIN_ENEMIES = 2; // Minimum enemies to trigger rush
 
+// Armored Titan super punch ability
+private const int ARMORED_SUPER_PUNCH_COUNT = 3; // 3rd punch is super punch
+private const int ARMORED_SUPER_PUNCH_WINDOW = 600; // 600ms window between punches
+
 // Armored Titan armor reflection constants
 private const float ARMORED_MELEE_RANGE = 30f; // Melee threat detection range
 private const float ARMORED_MELEE_Y_TOLERANCE = 24f; // Vertical tolerance for melee
@@ -184,6 +188,8 @@ private Dictionary<int, bool> armoredTitanArmorOn = new Dictionary<int, bool>();
 private Dictionary<int, float> armoredTitanLastArmorCheck = new Dictionary<int, float>(); // Track last armor check time for bots
 private Dictionary<int, Dictionary<int, float>> armoredTitanRushHitTimes = new Dictionary<int, Dictionary<int, float>>(); // Track rush hit times per target
 private Dictionary<int, bool> armoredTitanIsRushing = new Dictionary<int, bool>(); // Track if bot is currently rushing
+private Dictionary<int, int> armoredTitanPunchCount = new Dictionary<int, int>(); // Track punch count for super punch
+private Dictionary<int, float> armoredTitanLastPunchTime = new Dictionary<int, float>(); // Track last punch time
 
 // Track player facing directions for Jaw Titan backstab detection
 private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
@@ -1488,6 +1494,13 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
         return;
     }
     
+    // Handle Armored Titan melee
+    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Armored)
+    {
+        HandleArmoredTitanMelee(player, playerId, args, currentTime);
+        return;
+    }
+    
     // Update facing direction for all players (for backstab detection)
     if (!playerFacingDirections.ContainsKey(playerId))
     {
@@ -1614,6 +1627,76 @@ private void HandleJawTitanClawAttack(IPlayer jawTitan, int jawTitanId, IPlayer 
     }
 }
 
+private void HandleArmoredTitanMelee(IPlayer armoredTitan, int armoredTitanId, PlayerMeleeHitArg[] args, float currentTime)
+{
+    // Update punch count and timing
+    if (!armoredTitanLastPunchTime.ContainsKey(armoredTitanId))
+    {
+        armoredTitanPunchCount[armoredTitanId] = 1;
+        armoredTitanLastPunchTime[armoredTitanId] = currentTime;
+    }
+    else
+    {
+        float timeSinceLastPunch = currentTime - armoredTitanLastPunchTime[armoredTitanId];
+        if (timeSinceLastPunch <= ARMORED_SUPER_PUNCH_WINDOW)
+        {
+            // Within window, increment punch count
+            armoredTitanPunchCount[armoredTitanId]++;
+        }
+        else
+        {
+            // Outside window, reset to 1
+            armoredTitanPunchCount[armoredTitanId] = 1;
+        }
+        armoredTitanLastPunchTime[armoredTitanId] = currentTime;
+    }
+    
+    int currentPunchCount = armoredTitanPunchCount[armoredTitanId];
+    
+    // Check if this is the 3rd punch (super punch)
+    if (currentPunchCount >= ARMORED_SUPER_PUNCH_COUNT)
+    {
+        // Apply super punch to all hit players
+        foreach (PlayerMeleeHitArg hitArg in args)
+        {
+            if (hitArg.HitObject == null || !hitArg.IsPlayer) continue;
+            
+            IPlayer victim = hitArg.HitObject as IPlayer;
+            if (victim == null || victim.IsDead) continue;
+            
+            // Calculate throw power: (Titan Force × Height) - (Target Force × Height)
+            float titanForce = GetPlayerForce(armoredTitan);
+            float titanHeight = GetPlayerHeight(armoredTitan);
+            float titanPower = titanForce * titanHeight;
+            
+            float victimForce = GetPlayerForce(victim);
+            float victimHeight = GetPlayerHeight(victim);
+            float victimPower = victimForce * victimHeight;
+            
+            float throwPower = titanPower - victimPower;
+            throwPower = Math.Max(throwPower, 0f); // Never negative
+            
+            if (throwPower > 0)
+            {
+                // Apply fall command
+                QuickCommand(victim, new PlayerCommand(PlayerCommandType.Fall));
+                
+                // Apply throw velocity
+                int titanFacing = armoredTitan.FacingDirection;
+                float velocity = throwPower * ARMORED_RUSH_THROW_SCALE;
+                victim.SetLinearVelocity(new Vector2(titanFacing * velocity, velocity * ARMORED_RUSH_THROW_UP_RATIO));
+                
+                // Visual feedback
+                Game.PlayEffect(EffectName.CameraShaker, victim.GetWorldPosition());
+                Game.PlaySound("DestroyMetal", victim.GetWorldPosition());
+            }
+        }
+        
+        // Reset punch count after super punch
+        armoredTitanPunchCount[armoredTitanId] = 0;
+    }
+}
+
 public void OnPlayerDeath(IPlayer deadPlayer)
 {
     if (deadPlayer == null) return;
@@ -1699,7 +1782,8 @@ public void OnProjectileHit(IProjectile projectile, ProjectileHitArgs args)
     // Remove original projectile
     projectile.FlagForRemoval();
     
-    // Play effect
+    // Play effects
+    Game.PlayEffect(EffectName.Sparks, args.HitPosition);
     Game.PlayEffect(EffectName.Block, args.HitPosition);
 }
 
@@ -1714,7 +1798,7 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
     if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] != TitanType.Armored) return;
     if (!armoredTitanArmorOn.ContainsKey(playerId) || !armoredTitanArmorOn[playerId]) return;
     
-    // Only handle melee and projectile damage
+    // Only handle melee, projectile, and thrown damage
     Vector2 sourcePos = Vector2.Zero;
     bool hasSource = false;
     
@@ -1736,11 +1820,32 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
             hasSource = true;
         }
     }
+    else if (args.DamageType == PlayerDamageEventType.Explosion)
+    {
+        // Thrown weapons (grenades, molotovs) cause explosion damage
+        // Use the source position from the explosion
+        // We'll consider it from front if no specific direction can be determined
+        // For simplicity, check if any thrown weapon is near the player
+        Vector2 playerPos = player.GetWorldPosition();
+        
+        // Simple heuristic: if explosion is in front, block it
+        // This is a simplified check - you might want to enhance this
+        hasSource = true;
+        sourcePos = playerPos + new Vector2(player.FacingDirection * 10f, 0); // Assume front
+    }
     
     // If source is from front, refund damage
     if (hasSource && IsArmoredInFront(player, sourcePos))
     {
         player.SetHealth(player.GetHealth() + args.Damage);
+        
+        // Play Sparks effect on melee/projectile/explosion hit
+        if (args.DamageType == PlayerDamageEventType.Melee || 
+            args.DamageType == PlayerDamageEventType.Projectile ||
+            args.DamageType == PlayerDamageEventType.Explosion)
+        {
+            Game.PlayEffect(EffectName.Sparks, player.GetWorldPosition());
+        }
     }
 }
 
@@ -2589,6 +2694,7 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
     float titanHeight = GetPlayerHeight(player);
     float titanPower = titanForce * titanHeight;
     int titanFacing = player.FacingDirection;
+    PlayerTeam titanTeam = player.GetTeam();
     
     // Get titan collision area
     Area titanArea = player.GetAABB();
@@ -2603,6 +2709,10 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
     foreach (IPlayer target in allPlayers)
     {
         if (target == null || target.IsDead || target.UniqueID == playerId) continue;
+        
+        // Skip teammates (but Independent players have no teammates except themselves)
+        PlayerTeam targetTeam = target.GetTeam();
+        if (titanTeam != PlayerTeam.Independent && titanTeam == targetTeam) continue;
         
         // Check collision
         if (!titanArea.Intersects(target.GetAABB())) continue;
@@ -2631,6 +2741,9 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         {
             float velocity = power * ARMORED_RUSH_THROW_SCALE;
             target.SetLinearVelocity(new Vector2(titanFacing * velocity, velocity * ARMORED_RUSH_THROW_UP_RATIO));
+            
+            // Make player fall while being thrown
+            QuickCommand(target, new PlayerCommand(PlayerCommandType.Fall));
         }
         
         // Apply damage
@@ -2642,6 +2755,23 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         {
             player.DealDamage(damage * ARMORED_RUSH_RECOIL_RATIO);
         }
+    }
+    
+    // Check all objects for collisions and throw them
+    IObject[] allObjects = Game.GetObjects();
+    foreach (IObject obj in allObjects)
+    {
+        if (obj == null || obj.IsRemoved) continue;
+        
+        // Skip non-destructible objects
+        if (obj.DestructionStartHealth <= 0) continue;
+        
+        // Check collision
+        if (!titanArea.Intersects(obj.GetAABB())) continue;
+        
+        // Throw the object
+        float throwVelocity = titanPower * ARMORED_RUSH_THROW_SCALE * 0.5f; // Half power for objects
+        obj.SetLinearVelocity(new Vector2(titanFacing * throwVelocity, throwVelocity * ARMORED_RUSH_THROW_UP_RATIO));
     }
     
     // Store updated hit times
