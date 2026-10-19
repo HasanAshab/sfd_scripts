@@ -215,6 +215,14 @@ private HashSet<int> givenStartupStrengthBoost = new HashSet<int>();
 private Dictionary<int, float> botLastStrengthBoostCheck = new Dictionary<int, float>();
 private const float BOT_STRENGTH_BOOST_CHECK_INTERVAL = 1000f; // 1 second check interval
 
+// Detach (detransform) tracking
+private Dictionary<int, float> botLastDetachCheck = new Dictionary<int, float>();
+private const float BOT_DETACH_CHECK_INTERVAL = 1000f; // 1 second check interval
+private const float BOT_DETACH_HP_HIGH = 0.15f; // 15% HP = 20% detach chance
+private const float BOT_DETACH_HP_LOW = 0.05f; // 5% HP = 90% detach chance
+private const float BOT_DETACH_CHANCE_MIN = 0.20f; // 20% chance at 15% HP
+private const float BOT_DETACH_CHANCE_MAX = 0.90f; // 90% chance at 5% HP
+
 // Helper class for grab damage tracking
 private class GrabDamageData
 {
@@ -1315,6 +1323,19 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
     
     int playerId = player.UniqueID;
     
+    // Detach: human players (non-bot) can detach by pressing Walk key (non-Pure titans only)
+    if (!player.IsBot && titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] != TitanType.Pure)
+    {
+        foreach (VirtualKeyInfo keyInfo in keyInfos)
+        {
+            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.WALKING)
+            {
+                DetachTitan(player, playerId);
+                return; // Player is being replaced, stop processing
+            }
+        }
+    }
+    
     // Check if player is an Attack Titan
     if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Attack)
     {
@@ -2287,6 +2308,12 @@ public void OnUpdate(float elapsed)
                 
                 // Armored Titan also has exhaustion
                 CheckTitanExhaustion(player, playerId);
+            }
+            
+            // Bot detach check: non-Pure bot titans may detach based on HP percentage
+            if (player.IsBot && titanType != TitanType.Pure)
+            {
+                CheckBotDetach(player, playerId, currentTime);
             }
         }
         
@@ -3398,6 +3425,209 @@ private bool IsArmoredFrontProjectileThreat(IPlayer armoredTitan, int armoredTit
     }
     
     return false;
+}
+
+private void CheckBotDetach(IPlayer player, int playerId, float currentTime)
+{
+    // Periodic check
+    if (botLastDetachCheck.ContainsKey(playerId) && currentTime - botLastDetachCheck[playerId] < BOT_DETACH_CHECK_INTERVAL)
+    {
+        return;
+    }
+    botLastDetachCheck[playerId] = currentTime;
+    
+    PlayerModifiers mods = player.GetModifiers();
+    float hpPercent = (mods.MaxHealth > 0) ? ((float)mods.CurrentHealth / mods.MaxHealth) : 1f;
+    hpPercent = Math.Max(0f, Math.Min(1f, hpPercent));
+    
+    // Only consider detach when HP is between 15% and 5%
+    if (hpPercent > BOT_DETACH_HP_HIGH || hpPercent <= 0f) return;
+    
+    // Calculate detach chance: linearly interpolate from 20% at 15% HP to 90% at 5% HP
+    float detachChance;
+    if (hpPercent <= BOT_DETACH_HP_LOW)
+    {
+        detachChance = BOT_DETACH_CHANCE_MAX; // 90% at 5% or below
+    }
+    else
+    {
+        // Interpolate: as HP goes from 15% down to 5%, chance goes from 20% up to 90%
+        float t = (BOT_DETACH_HP_HIGH - hpPercent) / (BOT_DETACH_HP_HIGH - BOT_DETACH_HP_LOW);
+        detachChance = BOT_DETACH_CHANCE_MIN + (BOT_DETACH_CHANCE_MAX - BOT_DETACH_CHANCE_MIN) * t;
+    }
+    
+    if (rnd.NextDouble() < detachChance)
+    {
+        DetachTitan(player, playerId);
+    }
+}
+
+private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
+{
+    // Prevent detach if not a titan or if Pure Titan
+    if (!titanPlayers.ContainsKey(titanPlayerId)) return;
+    if (titanPlayers[titanPlayerId] == TitanType.Pure) return;
+    
+    Vector2 titanPos = titanPlayer.GetWorldPosition();
+    int titanFacing = titanPlayer.FacingDirection;
+    PlayerTeam titanTeam = titanPlayer.GetTeam();
+    bool isBot = titanPlayer.IsBot;
+    string playerName = titanPlayer.Name;
+    
+    // Get original profile and modifiers (human form)
+    IProfile humanProfile = originalProfiles.ContainsKey(titanPlayerId) ? originalProfiles[titanPlayerId] : titanPlayer.GetProfile();
+    PlayerModifiers humanMods = originalModifiers.ContainsKey(titanPlayerId) ? originalModifiers[titanPlayerId] : new PlayerModifiers();
+    
+    // Get original bot behaviors
+    BotBehavior humanBotBehavior = originalBotBehaviors.ContainsKey(titanPlayerId) ? originalBotBehaviors[titanPlayerId] : new BotBehavior(true, PredefinedAIType.BotA);
+    BotBehaviorSet humanBotBehaviorSet = originalBotBehaviorSets.ContainsKey(titanPlayerId) ? originalBotBehaviorSets[titanPlayerId] : null;
+    
+    // Play detransformation effects at titan position
+    Game.PlayEffect(EffectName.Steam, titanPos);
+    Game.PlayEffect(EffectName.Steam, titanPos);
+    Game.PlaySound("BarrelDestroyed", titanPos);
+    
+    // Clean up all titan tracking data for this player BEFORE killing
+    CleanupTitanData(titanPlayerId);
+    
+    // Kill the titan player (do NOT remove from assignedTitanPowers - they keep their power assignment)
+    titanPlayer.Kill();
+    
+    // Create a new human player at the same position
+    IPlayer humanPlayer = Game.CreatePlayer(titanPos);
+    if (humanPlayer == null) return;
+    
+    int humanPlayerId = humanPlayer.UniqueID;
+    
+    // Set the human profile
+    humanPlayer.SetProfile(humanProfile);
+    
+    // Set full HP and full energy from original modifiers
+    humanMods.CurrentHealth = humanMods.MaxHealth;
+    humanMods.CurrentEnergy = humanMods.MaxEnergy;
+    humanPlayer.SetModifiers(humanMods);
+    
+    // Set team
+    humanPlayer.SetTeam(titanTeam);
+    
+    // Set facing direction
+    if (titanFacing < 0)
+    {
+        humanPlayer.AddCommand(new PlayerCommand(PlayerCommandType.FaceDirectionLeft));
+    }
+    
+    // Set bot behavior if bot
+    if (isBot)
+    {
+        humanPlayer.SetBotBehavior(humanBotBehavior);
+        if (humanBotBehaviorSet != null)
+        {
+            humanPlayer.SetBotBehaviorSet(humanBotBehaviorSet);
+        }
+    }
+    
+    // Transfer assigned power to the new player ID
+    if (assignedTitanPowers.ContainsKey(titanPlayerId))
+    {
+        TitanType power = assignedTitanPowers[titanPlayerId];
+        assignedTitanPowers.Remove(titanPlayerId);
+        assignedTitanPowers[humanPlayerId] = power;
+        
+        // Update label for the new player
+        CreateLabelForPlayer(humanPlayer, humanPlayerId, power);
+    }
+    
+    // Remove old label if exists
+    if (titanTypeLabels.ContainsKey(titanPlayerId))
+    {
+        IObjectText label = titanTypeLabels[titanPlayerId];
+        if (label != null && !label.IsRemoved)
+        {
+            label.Remove();
+        }
+        titanTypeLabels.Remove(titanPlayerId);
+    }
+    
+    // Clean up old original data references
+    originalProfiles.Remove(titanPlayerId);
+    originalModifiers.Remove(titanPlayerId);
+    originalBotBehaviors.Remove(titanPlayerId);
+    originalBotBehaviorSets.Remove(titanPlayerId);
+    
+    // Update name mapping
+    if (playerNameToId.ContainsKey(playerName))
+    {
+        playerNameToId[playerName] = humanPlayerId;
+    }
+    
+    // Ensure the new bot gets PowerupUsage disabled
+    if (isBot && !configuredBotPowerupUsage.Contains(humanPlayerId))
+    {
+        BotBehaviorSet bS = humanPlayer.GetBotBehaviorSet();
+        bS.PowerupUsage = false;
+        humanPlayer.SetBotBehaviorSet(bS);
+        configuredBotPowerupUsage.Add(humanPlayerId);
+    }
+    
+    // Update shared storage to notify odm.cs
+    UpdateTitanPlayersStorage();
+    
+    // Save updated powers
+    SaveAssignedPowersToStorage();
+    
+    // Make the human fall (weakness after detransformation)
+    QuickCommand(humanPlayer, new PlayerCommand(PlayerCommandType.Fall));
+    
+    // Show detach message
+    Game.ShowChatMessage(playerName + " has detached from their Titan form!", Color.Cyan);
+}
+
+private void CleanupTitanData(int titanPlayerId)
+{
+    // Remove from titan players list
+    titanPlayers.Remove(titanPlayerId);
+    
+    // Clean up common titan data
+    titanSizes.Remove(titanPlayerId);
+    titanGrabDamage.Remove(titanPlayerId);
+    titanInputDisabled.Remove(titanPlayerId);
+    titanExhausted.Remove(titanPlayerId);
+    titanExhaustionRecoverTime.Remove(titanPlayerId);
+    playerWasOnGround.Remove(titanPlayerId);
+    playerHadStrengthBoost.Remove(titanPlayerId);
+    
+    // Clean up Attack Titan data
+    attackTitanHardeningMode.Remove(titanPlayerId);
+    attackTitanHardeningEnergyCost.Remove(titanPlayerId);
+    attackTitanLastMeleeTime.Remove(titanPlayerId);
+    attackTitanLastDefensiveCheck.Remove(titanPlayerId);
+    attackTitanSlowmoEndTime.Remove(titanPlayerId);
+    
+    // Clean up Jaw Titan data
+    jawTitanPunchCount.Remove(titanPlayerId);
+    jawTitanLastPunchTime.Remove(titanPlayerId);
+    jawTitanHuntVictim.Remove(titanPlayerId);
+    jawTitanHuntDamageTime.Remove(titanPlayerId);
+    jawTitanHuntBloodEffectTime.Remove(titanPlayerId);
+    jawHuntVictimReenableTime.Remove(titanPlayerId);
+    
+    // Clean up Armored Titan data
+    armoredTitanArmorOn.Remove(titanPlayerId);
+    armoredTitanLastArmorCheck.Remove(titanPlayerId);
+    armoredTitanRushHitTimes.Remove(titanPlayerId);
+    armoredTitanIsRushing.Remove(titanPlayerId);
+    armoredTitanPunchCount.Remove(titanPlayerId);
+    armoredTitanLastPunchTime.Remove(titanPlayerId);
+    
+    // Clean up bot detach check
+    botLastDetachCheck.Remove(titanPlayerId);
+    botLastStrengthBoostCheck.Remove(titanPlayerId);
+    
+    // Clean up facing direction
+    playerFacingDirections.Remove(titanPlayerId);
+    
+    // Clean up strength boost tracking
+    givenStartupStrengthBoost.Remove(titanPlayerId);
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)
