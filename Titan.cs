@@ -3526,10 +3526,8 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     humanPlayer.SetModifiers(humanMods);
     
     // Set facing direction
-    if (titanFacing < 0)
-    {
-        humanPlayer.AddCommand(new PlayerCommand(PlayerCommandType.FaceDirectionLeft));
-    }
+    PlayerCommandFaceDirection faceDir = (titanFacing < 0) ? PlayerCommandFaceDirection.Left : PlayerCommandFaceDirection.Right;
+    humanPlayer.AddCommand(new PlayerCommand(PlayerCommandType.FaceAt, faceDir));
     
     // Set bot behavior and name if bot
     if (isBot)
