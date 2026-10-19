@@ -97,7 +97,8 @@ private const float ARMORED_ARMOR_ON_CHECK_INTERVAL = 1000f; // Check every 1 se
 // Armored Titan rush ability
 private const float ARMORED_RUSH_DAMAGE_BASE = 7f;
 private const float ARMORED_RUSH_RECOIL_RATIO = 0.5f; // 50% recoil damage
-private const float ARMORED_RUSH_TARGET_FORCE_WEIGHT = 1.4f; // Target force multiplier
+private const float ARMORED_RUSH_TARGET_FORCE_WEIGHT = 0.5f; // Target force multiplier
+private const float ARMORED_RUSH_BALANCER_MOD = 0.05f; // balance stab
 private const float ARMORED_RUSH_THROW_SCALE = 300f; // Velocity scaling
 private const float ARMORED_RUSH_THROW_UP_RATIO = 0.6f; // Upward component
 private const float ARMORED_RUSH_HIT_COOLDOWN = 800f; // Cooldown per target in ms
@@ -2733,7 +2734,7 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         float targetHeight = GetPlayerHeight(target);
         float targetPower = targetForce * targetHeight;
         
-        float power = titanPower - (targetPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT);
+        float power = (titanPower - (targetPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_RUSH_BALANCER_MOD;
         power = Math.Max(power, 0f);
         
         // Apply throw
