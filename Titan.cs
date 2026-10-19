@@ -3482,6 +3482,9 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     BotBehavior humanBotBehavior = originalBotBehaviors.ContainsKey(titanPlayerId) ? originalBotBehaviors[titanPlayerId] : new BotBehavior(true, PredefinedAIType.BotA);
     BotBehaviorSet humanBotBehaviorSet = originalBotBehaviorSets.ContainsKey(titanPlayerId) ? originalBotBehaviorSets[titanPlayerId] : null;
     
+    // Get user controller (for human players) before anything happens
+    IUser user = titanPlayer.GetUser();
+    
     // Play detransformation effects at titan position
     Game.PlayEffect(EffectName.Steam, titanPos);
     Game.PlayEffect(EffectName.Steam, titanPos);
@@ -3490,25 +3493,37 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     // Clean up all titan tracking data for this player BEFORE killing
     CleanupTitanData(titanPlayerId);
     
-    // Kill the titan player (do NOT remove from assignedTitanPowers - they keep their power assignment)
-    titanPlayer.Kill();
-    
     // Create a new human player at the same position
     IPlayer humanPlayer = Game.CreatePlayer(titanPos);
-    if (humanPlayer == null) return;
+    if (humanPlayer == null)
+    {
+        titanPlayer.Kill();
+        return;
+    }
     
     int humanPlayerId = humanPlayer.UniqueID;
+    
+    // Set team
+    humanPlayer.SetTeam(titanTeam);
     
     // Set the human profile
     humanPlayer.SetProfile(humanProfile);
     
+    // Re-attach user controller for human players
+    if (user != null)
+    {
+        humanPlayer.SetUser(user);
+    }
+    
+    // Kill the titan player (leaving the titan corpse on the ground to steam)
+    titanPlayer.Kill();
+    
     // Set full HP and full energy from original modifiers
+    if (humanMods.MaxHealth <= 0) humanMods.MaxHealth = 100;
+    if (humanMods.MaxEnergy <= 0) humanMods.MaxEnergy = 100;
     humanMods.CurrentHealth = humanMods.MaxHealth;
     humanMods.CurrentEnergy = humanMods.MaxEnergy;
     humanPlayer.SetModifiers(humanMods);
-    
-    // Set team
-    humanPlayer.SetTeam(titanTeam);
     
     // Set facing direction
     if (titanFacing < 0)
@@ -3516,15 +3531,19 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
         humanPlayer.AddCommand(new PlayerCommand(PlayerCommandType.FaceDirectionLeft));
     }
     
-    // Set bot behavior if bot
+    // Set bot behavior and name if bot
     if (isBot)
     {
+        humanPlayer.SetBotName(playerName);
         humanPlayer.SetBotBehavior(humanBotBehavior);
         if (humanBotBehaviorSet != null)
         {
             humanPlayer.SetBotBehaviorSet(humanBotBehaviorSet);
         }
     }
+    
+    // Mark as already given startup strength boost so they don't immediately get another one
+    givenStartupStrengthBoost.Add(humanPlayerId);
     
     // Transfer assigned power to the new player ID
     if (assignedTitanPowers.ContainsKey(titanPlayerId))
