@@ -2796,7 +2796,7 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         if (isPlayerObj) continue;
         
         // Throw the object
-        float throwVelocity = titanPower * ARMORED_RUSH_THROW_SCALE * 0.5f; // Half power for objects
+        float throwVelocity = titanPower * ARMORED_RUSH_THROW_SCALE * ARMORED_RUSH_BALANCER_MOD;
         obj.SetLinearVelocity(new Vector2(titanFacing * throwVelocity, throwVelocity * ARMORED_RUSH_THROW_UP_RATIO));
     }
     
