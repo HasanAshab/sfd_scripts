@@ -249,7 +249,7 @@ public void OnStartup()
     initTimer.Trigger();
 
     // strength boost
-    const float OTHERS_SCALE = 0.5f; // 1.0 = unchanged, 0.2 = others are 5x rarer
+    const float OTHERS_SCALE = 0.75f; // 1.0 = unchanged, 0.2 = others are 5x rarer
     short boost = (short)WeaponItem.STRENGTHBOOST;
 
     Dictionary<short, int> current = Game.GetWeaponSpawnChances();
