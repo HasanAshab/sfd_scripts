@@ -10,7 +10,8 @@ private enum TitanType
 {
     Pure,
     Attack,
-    Jaw
+    Jaw,
+    Armored
 }
 
 // Attack Titan hardening mode enum
@@ -77,6 +78,42 @@ private const float JAW_HUNT_VICTIM_STUN_DURATION = 1000f; // 1 seconds input di
 private const int JAW_SHARP_CLAW_PUNCH_COUNT = 3; // 3rd punch breaks objects
 private const int JAW_SHARP_CLAW_PUNCH_WINDOW = 600; // 600ms window between punches
 
+// Armored Titan stats
+private const float ARMORED_TITAN_HP_BONUS = 0.32f; // 32% HP increase
+private const float ARMORED_TITAN_MELEE_DAMAGE_BONUS = 0.25f; // 25% melee damage increase
+private const float ARMORED_TITAN_MELEE_FORCE_BONUS = 0.50f; // 50% melee force increase
+private const float ARMORED_TITAN_SPEED_PENALTY = 0.50f; // 50% speed reduction
+private const float ARMORED_TITAN_ENERGY_BONUS = 0.15f; // 15% energy increase
+private const float ARMORED_TITAN_SIZE = 1.300f; // Fixed size
+
+// Armored Titan armor mode bonuses (when OFF)
+private const float ARMORED_ARMOR_OFF_SPEED_BONUS = 0.30f; // 30% speed increase
+private const float ARMORED_ARMOR_OFF_ENERGY_REGEN_BONUS = 0.30f; // 30% energy regen increase
+
+// Armored Titan armor mode triggers for bots
+private const float ARMORED_ARMOR_ON_TRIGGER_DISTANCE = 35f; // Distance to trigger armor on
+private const float ARMORED_ARMOR_ON_CHECK_INTERVAL = 1000f; // Check every 1 second
+
+// Armored Titan rush ability
+private const float ARMORED_RUSH_DAMAGE_BASE = 7f;
+private const float ARMORED_RUSH_RECOIL_RATIO = 0.5f; // 50% recoil damage
+private const float ARMORED_RUSH_TARGET_FORCE_WEIGHT = 1.4f; // Target force multiplier
+private const float ARMORED_RUSH_THROW_SCALE = 300f; // Velocity scaling
+private const float ARMORED_RUSH_THROW_UP_RATIO = 0.6f; // Upward component
+private const float ARMORED_RUSH_HIT_COOLDOWN = 800f; // Cooldown per target in ms
+
+// Armored Titan bot rush triggers
+private const float ARMORED_BOT_RUSH_ENERGY_THRESHOLD = 0.80f; // 80% energy to trigger rush
+private const float ARMORED_BOT_RUSH_ABORT_ENERGY = 0.20f; // 20% energy to abort rush
+private const float ARMORED_BOT_RUSH_CHECK_DISTANCE = 40f; // Distance to check for enemies
+private const int ARMORED_BOT_RUSH_MIN_ENEMIES = 2; // Minimum enemies to trigger rush
+
+// Armored Titan armor reflection constants
+private const float ARMORED_MELEE_RANGE = 30f; // Melee threat detection range
+private const float ARMORED_MELEE_Y_TOLERANCE = 24f; // Vertical tolerance for melee
+private const float ARMORED_PROJ_LOOKAHEAD_SEC = 0.06f; // Projectile lookahead time
+private const float ARMORED_REFLECT_OFFSET = 6f; // Reflected projectile spawn offset
+
 // Titan size range
 private const float TITAN_MIN_SIZE = 0.8f;
 private const float TITAN_MAX_SIZE = 1.25f;
@@ -142,6 +179,12 @@ private Dictionary<int, float> jawTitanHuntDamageTime = new Dictionary<int, floa
 private Dictionary<int, float> jawTitanHuntBloodEffectTime = new Dictionary<int, float>(); // Track hunt blood effect timing
 private Dictionary<int, float> jawHuntVictimReenableTime = new Dictionary<int, float>(); // Track when to re-enable victim input
 
+// Track Armored Titan specific data
+private Dictionary<int, bool> armoredTitanArmorOn = new Dictionary<int, bool>(); // Track armor state (true = on, false = off)
+private Dictionary<int, float> armoredTitanLastArmorCheck = new Dictionary<int, float>(); // Track last armor check time for bots
+private Dictionary<int, Dictionary<int, float>> armoredTitanRushHitTimes = new Dictionary<int, Dictionary<int, float>>(); // Track rush hit times per target
+private Dictionary<int, bool> armoredTitanIsRushing = new Dictionary<int, bool>(); // Track if bot is currently rushing
+
 // Track player facing directions for Jaw Titan backstab detection
 private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
 
@@ -183,6 +226,12 @@ public void OnStartup()
     
     // Set up player death callback for Pure Titan power extract ability
     Events.PlayerDeathCallback.Start(OnPlayerDeath);
+    
+    // Set up projectile hit callback for Armored Titan reflection
+    Events.ProjectileHitCallback.Start(OnProjectileHit);
+    
+    // Set up player damage callback for Armored Titan safety net
+    Events.PlayerDamageCallback.Start(OnPlayerDamage);
     
     // Delay initialization until all players are spawned (500ms wait for other scripts)
     IObjectTimerTrigger initTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -295,8 +344,8 @@ public void DistributeTitanPowers(TriggerArgs args)
     IPlayer[] allPlayers = Game.GetPlayers();
     int totalPlayers = allPlayers.Length;
     
-    // Humanoid titans: Attack and Jaw (currently 2 types)
-    const int HUMANOID_TITAN_COUNT = 2;
+    // Humanoid titans: Attack, Jaw, and Armored (currently 3 types)
+    const int HUMANOID_TITAN_COUNT = 3;
     
     if (totalPlayers == 0)
     {
@@ -440,6 +489,7 @@ private void DistributeWithOriginalAlgorithm(IPlayer[] allPlayers)
 {
     bool hasAttackTitan = false;
     bool hasJawTitan = false;
+    bool hasArmoredTitan = false;
     
     // First pass: Assign powers randomly
     foreach (IPlayer player in allPlayers)
@@ -456,21 +506,47 @@ private void DistributeWithOriginalAlgorithm(IPlayer[] allPlayers)
         }
         else
         {
-            // 50% chance for Attack or Jaw (but only one Jaw and one Attack total)
-            if (!hasJawTitan && (rnd.Next(0, 2) == 0 || hasAttackTitan))
-            {
-                assignedType = TitanType.Jaw;
-                hasJawTitan = true;
-            }
-            else if (!hasAttackTitan)
+            // 50% chance for Attack, Jaw, or Armored (but only one of each total)
+            int roll = rnd.Next(0, 3); // 0=Attack, 1=Jaw, 2=Armored
+            
+            if (roll == 0 && !hasAttackTitan)
             {
                 assignedType = TitanType.Attack;
                 hasAttackTitan = true;
             }
+            else if (roll == 1 && !hasJawTitan)
+            {
+                assignedType = TitanType.Jaw;
+                hasJawTitan = true;
+            }
+            else if (roll == 2 && !hasArmoredTitan)
+            {
+                assignedType = TitanType.Armored;
+                hasArmoredTitan = true;
+            }
             else
             {
-                // Both special titans assigned, this player gets Pure
-                assignedType = TitanType.Pure;
+                // All special titans assigned or this roll was taken, try others
+                if (!hasAttackTitan)
+                {
+                    assignedType = TitanType.Attack;
+                    hasAttackTitan = true;
+                }
+                else if (!hasJawTitan)
+                {
+                    assignedType = TitanType.Jaw;
+                    hasJawTitan = true;
+                }
+                else if (!hasArmoredTitan)
+                {
+                    assignedType = TitanType.Armored;
+                    hasArmoredTitan = true;
+                }
+                else
+                {
+                    // All special titans assigned, this player gets Pure
+                    assignedType = TitanType.Pure;
+                }
             }
         }
         
@@ -478,7 +554,7 @@ private void DistributeWithOriginalAlgorithm(IPlayer[] allPlayers)
     }
     
     // Second pass: Ensure we have at least one of each type
-    if (!hasAttackTitan || !hasJawTitan)
+    if (!hasAttackTitan || !hasJawTitan || !hasArmoredTitan)
     {
         // Find Pure Titan players to convert
         List<int> pureTitanPlayers = new List<int>();
@@ -504,6 +580,12 @@ private void DistributeWithOriginalAlgorithm(IPlayer[] allPlayers)
             {
                 assignedTitanPowers[pureTitanPlayers[index]] = TitanType.Jaw;
                 hasJawTitan = true;
+                index++;
+            }
+            if (!hasArmoredTitan && index < pureTitanPlayers.Count)
+            {
+                assignedTitanPowers[pureTitanPlayers[index]] = TitanType.Armored;
+                hasArmoredTitan = true;
             }
         }
     }
@@ -527,19 +609,23 @@ private void DistributeWithHalfSplit(IPlayer[] allPlayers)
         shuffledPlayers[j] = temp;
     }
     
-    // Assign humanoid titans (Attack and Jaw) to first half
+    // Assign humanoid titans (Attack, Jaw, and Armored) to first half
     List<TitanType> humanoidTypes = new List<TitanType>();
     
-    // Fill humanoid types list with equal distribution of Attack and Jaw
+    // Fill humanoid types list with equal distribution of Attack, Jaw, and Armored
     for (int i = 0; i < humanoidCount; i++)
     {
-        if (i % 2 == 0)
+        if (i % 3 == 0)
         {
             humanoidTypes.Add(TitanType.Attack);
         }
-        else
+        else if (i % 3 == 1)
         {
             humanoidTypes.Add(TitanType.Jaw);
+        }
+        else
+        {
+            humanoidTypes.Add(TitanType.Armored);
         }
     }
     
@@ -582,7 +668,7 @@ private void CreateTitanTypeLabels(IPlayer[] allPlayers)
         {
             TitanType titanType = assignedTitanPowers[playerId];
             
-            // Only create labels for humanoid titans (Attack and Jaw)
+            // Only create labels for humanoid titans (Attack, Jaw, and Armored)
             string labelText = "";
             Color labelColor = Color.White;
             
@@ -595,6 +681,11 @@ private void CreateTitanTypeLabels(IPlayer[] allPlayers)
             {
                 labelText = "[JAW]";
                 labelColor = new Color(100, 255, 100); // Green
+            }
+            else if (titanType == TitanType.Armored)
+            {
+                labelText = "[ARM]";
+                labelColor = new Color(100, 100, 255); // Blue
             }
             else
             {
@@ -694,9 +785,13 @@ private void TransformToTitan(IPlayer player)
     {
         TransformToAttackTitan(player, playerId);
     }
-    else
+    else if (titanType == TitanType.Jaw)
     {
         TransformToJawTitan(player, playerId);
+    }
+    else
+    {
+        TransformToArmoredTitan(player, playerId);
     }
     
     // Mark as titan
@@ -715,9 +810,13 @@ private void TransformToTitan(IPlayer player)
     {
         titanTypeName = "ATTACK TITAN";
     }
-    else
+    else if (titanType == TitanType.Jaw)
     {
         titanTypeName = "JAW TITAN";
+    }
+    else
+    {
+        titanTypeName = "ARMORED TITAN";
     }
     Game.ShowChatMessage(player.Name + " has transformed into a " + titanTypeName + "!", Color.Red);
 }
@@ -925,6 +1024,91 @@ private void TransformToJawTitan(IPlayer player, int playerId)
     titanSizes[playerId] = JAW_TITAN_SIZE;
 }
 
+private void TransformToArmoredTitan(IPlayer player, int playerId)
+{
+    // Clear all items FIRST before profile change
+    player.RemoveWeaponItemType(WeaponItemType.Rifle);
+    player.RemoveWeaponItemType(WeaponItemType.Handgun);
+    player.RemoveWeaponItemType(WeaponItemType.Melee);
+    player.RemoveWeaponItemType(WeaponItemType.Thrown);
+    player.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
+    // Set Armored Titan profile (armor ON by default)
+    IProfile titanProfile = new IProfile()
+    {
+        Gender = Gender.Male,
+        Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGreen"),
+        Head = new IProfileClothingItem("Buzzcut", "ClothingLightGray"),
+        ChestUnder = new IProfileClothingItem("BodyArmor", "ClothingLightGray"),
+        Hands = new IProfileClothingItem("Gloves", "ClothingLightGray"),
+        Legs = new IProfileClothingItem("Pants", "ClothingLightGray"),
+        Feet = new IProfileClothingItem("Boots", "ClothingLightGray"),
+        Accesory = new IProfileClothingItem("ClownMakeup", "ClothingLightGray"),
+    };
+    player.SetProfile(titanProfile);
+    
+    // Remove strength boost after transformation
+    player.SetStrengthBoostTime(0);
+    
+    // Get modifiers
+    PlayerModifiers mods = player.GetModifiers();
+    
+    // Apply Armored Titan stats
+    int newMaxHealth = (int)(mods.MaxHealth * (1f + ARMORED_TITAN_HP_BONUS));
+    int healthIncrease = newMaxHealth - mods.MaxHealth;
+    mods.MaxHealth = newMaxHealth;
+    mods.CurrentHealth = mods.CurrentHealth + healthIncrease;
+    
+    mods.MeleeDamageDealtModifier *= (1f + ARMORED_TITAN_MELEE_DAMAGE_BONUS);
+    mods.MeleeForceModifier *= (1f + ARMORED_TITAN_MELEE_FORCE_BONUS);
+    mods.RunSpeedModifier *= (1f - ARMORED_TITAN_SPEED_PENALTY);
+    mods.SprintSpeedModifier *= (1f - ARMORED_TITAN_SPEED_PENALTY);
+    
+    // Armored Titan has increased energy
+    mods.MaxEnergy = (int)(mods.MaxEnergy * (1f + ARMORED_TITAN_ENERGY_BONUS));
+    mods.CurrentEnergy = (int)(mods.CurrentEnergy * (1f + ARMORED_TITAN_ENERGY_BONUS));
+    
+    // Set fixed size
+    mods.SizeModifier = ARMORED_TITAN_SIZE;
+    
+    // Set melee stun immunity
+    mods.MeleeStunImmunity = 1;
+    
+    mods.ItemDropMode = 1;
+    
+    // Set health to full
+    mods.CurrentHealth = mods.MaxHealth;
+    
+    player.SetModifiers(mods);
+    
+    // Set bot behavior to BotA (tactical AI)
+    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
+    
+    // Configure bot behavior
+    BotBehaviorSet bS = player.GetBotBehaviorSet();
+    bS.SearchItems = 0;
+    
+    // Configure bot melee actions for Armored Titan
+    BotMeleeActions meleeActions = new BotMeleeActions();
+    meleeActions.Attack = 23;
+    meleeActions.AttackCombo = 23;
+    meleeActions.Block = 23;
+    meleeActions.Grab = 23;
+    meleeActions.Wait = 8;
+    bS.SetMeleeActionsAll(meleeActions);
+    
+    player.SetBotBehaviorSet(bS);
+    
+    // Initialize Armored Titan armor state to ON
+    armoredTitanArmorOn[playerId] = true;
+    
+    // Initialize rush hit tracking
+    armoredTitanRushHitTimes[playerId] = new Dictionary<int, float>();
+    
+    // Store titan size
+    titanSizes[playerId] = ARMORED_TITAN_SIZE;
+}
+
 private void ApplySizeScaling(IPlayer player, int playerId, PlayerModifiers mods)
 {
     // Generate random size for Pure Titan
@@ -1076,26 +1260,41 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
     int playerId = player.UniqueID;
     
     // Check if player is an Attack Titan
-    if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] != TitanType.Attack)
+    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Attack)
     {
+        // Only allow human players to use abilities
+        if (player.IsBot) return;
+        
+        foreach (VirtualKeyInfo keyInfo in keyInfos)
+        {
+            // ACTIVATE key: Slowmo ability
+            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.ACTIVATE)
+            {
+                ActivateAttackTitanSlowmo(player, playerId);
+            }
+            
+            // SHEATHE key: Toggle hardening mode
+            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.SHEATHE)
+            {
+                ToggleAttackTitanHardening(player, playerId);
+            }
+        }
         return;
     }
     
-    // Only allow human players to use abilities
-    if (player.IsBot) return;
-    
-    foreach (VirtualKeyInfo keyInfo in keyInfos)
+    // Check if player is an Armored Titan
+    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Armored)
     {
-        // ACTIVATE key: Slowmo ability
-        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.ACTIVATE)
-        {
-            ActivateAttackTitanSlowmo(player, playerId);
-        }
+        // Only allow human players to use abilities
+        if (player.IsBot) return;
         
-        // SHEATHE key: Toggle hardening mode
-        if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.SHEATHE)
+        foreach (VirtualKeyInfo keyInfo in keyInfos)
         {
-            ToggleAttackTitanHardening(player, playerId);
+            // SHEATHE key: Toggle armor
+            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.SHEATHE)
+            {
+                ToggleArmoredTitanArmor(player, playerId);
+            }
         }
     }
 }
@@ -1466,6 +1665,85 @@ public void OnPlayerDeath(IPlayer deadPlayer)
     ExtractTitanPower(pureTitan, pureTitanId, deadPlayer, deadPlayerId, extractedPower);
 }
 
+public void OnProjectileHit(IProjectile projectile, ProjectileHitArgs args)
+{
+    // Check if hit an Armored Titan
+    if (!args.IsPlayer) return;
+    
+    IPlayer hitPlayer = Game.GetPlayer(args.HitObjectID);
+    if (hitPlayer == null) return;
+    
+    int hitPlayerId = hitPlayer.UniqueID;
+    
+    // Check if Armored Titan with armor ON
+    if (!titanPlayers.ContainsKey(hitPlayerId) || titanPlayers[hitPlayerId] != TitanType.Armored) return;
+    if (!armoredTitanArmorOn.ContainsKey(hitPlayerId) || !armoredTitanArmorOn[hitPlayerId]) return;
+    
+    // Check if hit from front
+    if (!IsArmoredInFront(hitPlayer, args.HitPosition)) return;
+    
+    // Reflect the projectile
+    Vector2 projDir = projectile.Direction;
+    Vector2 reflected = new Vector2(-projDir.X, projDir.Y); // Mirror reflection (flip X)
+    
+    // Spawn reflected projectile
+    Vector2 spawnPos = args.HitPosition + reflected * ARMORED_REFLECT_OFFSET;
+    IProjectile newProj = Game.SpawnProjectile(projectile.ProjectileItem, spawnPos, reflected);
+    
+    if (newProj != null)
+    {
+        newProj.DamageDealtModifier = projectile.DamageDealtModifier;
+        newProj.InitialOwnerPlayerID = hitPlayerId; // Armored Titan owns the reflected projectile
+    }
+    
+    // Remove original projectile
+    projectile.FlagForRemoval();
+    
+    // Play effect
+    Game.PlayEffect(EffectName.Block, args.HitPosition);
+}
+
+public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
+{
+    // Safety net: refund damage that slipped through armor
+    if (player == null || args.DamageType == PlayerDamageEventType.Overkill) return;
+    
+    int playerId = player.UniqueID;
+    
+    // Check if Armored Titan with armor ON
+    if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] != TitanType.Armored) return;
+    if (!armoredTitanArmorOn.ContainsKey(playerId) || !armoredTitanArmorOn[playerId]) return;
+    
+    // Only handle melee and projectile damage
+    Vector2 sourcePos = Vector2.Zero;
+    bool hasSource = false;
+    
+    if (args.DamageType == PlayerDamageEventType.Projectile)
+    {
+        IProjectile proj = Game.GetProjectile(args.SourceID);
+        if (proj != null)
+        {
+            sourcePos = proj.Position;
+            hasSource = true;
+        }
+    }
+    else if (args.DamageType == PlayerDamageEventType.Melee)
+    {
+        IPlayer attacker = Game.GetPlayer(args.SourceID);
+        if (attacker != null)
+        {
+            sourcePos = attacker.GetWorldPosition();
+            hasSource = true;
+        }
+    }
+    
+    // If source is from front, refund damage
+    if (hasSource && IsArmoredInFront(player, sourcePos))
+    {
+        player.SetHealth(player.GetHealth() + args.Damage);
+    }
+}
+
 private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victim, int victimId, TitanType extractedPower)
 {
     Vector2 pureTitanPos = pureTitan.GetWorldPosition();
@@ -1553,7 +1831,19 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
             UpdateTitanPlayersStorage();
             
             // Show message
-            string powerName = extractedPower == TitanType.Attack ? "ATTACK TITAN" : "JAW TITAN";
+            string powerName = "UNKNOWN";
+            if (extractedPower == TitanType.Attack)
+            {
+                powerName = "ATTACK TITAN";
+            }
+            else if (extractedPower == TitanType.Jaw)
+            {
+                powerName = "JAW TITAN";
+            }
+            else if (extractedPower == TitanType.Armored)
+            {
+                powerName = "ARMORED TITAN";
+            }
             Game.ShowChatMessage(pureTitan.Name + " extracted the " + powerName + " power and transferred it to " + randomTeammatePureTitan.Name + "!", Color.Yellow);
         }
         else
@@ -1586,7 +1876,19 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
         UpdateTitanPlayersStorage();
         
         // Show message
-        string powerName = extractedPower == TitanType.Attack ? "ATTACK TITAN" : "JAW TITAN";
+        string powerName = "UNKNOWN";
+        if (extractedPower == TitanType.Attack)
+        {
+            powerName = "ATTACK TITAN";
+        }
+        else if (extractedPower == TitanType.Jaw)
+        {
+            powerName = "JAW TITAN";
+        }
+        else if (extractedPower == TitanType.Armored)
+        {
+            powerName = "ARMORED TITAN";
+        }
         Game.ShowChatMessage(pureTitan.Name + " extracted the " + powerName + " power from " + victim.Name + "!", Color.Yellow);
     }
 }
@@ -1671,7 +1973,7 @@ private IPlayer GetRandomPureTitanTeammate(IPlayer player)
 
 private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanType)
 {
-    // Only create labels for humanoid titans (Attack and Jaw)
+    // Only create labels for humanoid titans (Attack, Jaw, and Armored)
     if (titanType == TitanType.Pure) return;
     
     string labelText = "";
@@ -1686,6 +1988,11 @@ private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanT
     {
         labelText = "[JAW]";
         labelColor = new Color(100, 255, 100); // Green
+    }
+    else if (titanType == TitanType.Armored)
+    {
+        labelText = "[ARM]";
+        labelColor = new Color(100, 100, 255); // Blue
     }
     
     // Create text label above player's head
@@ -1775,13 +2082,6 @@ public void OnUpdate(float elapsed)
                 // Pure Titan updates
                 CheckTitanExhaustion(player, playerId);
                 CheckTitanGrabDamage(player, playerId);
-                
-                // TEMPORARILY DISABLED: Check titan falling state for impact effect
-                // bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
-                // if (isFalling)
-                // {
-                //     OnTitanFalling(player);
-                // }
             }
             else if (titanType == TitanType.Attack)
             {
@@ -1792,13 +2092,6 @@ public void OnUpdate(float elapsed)
                 
                 // Attack Titan also has exhaustion
                 CheckTitanExhaustion(player, playerId);
-                
-                // TEMPORARILY DISABLED: Check titan falling state for impact effect
-                // bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
-                // if (isFalling)
-                // {
-                //     OnTitanFalling(player);
-                // }
             }
             else if (titanType == TitanType.Jaw)
             {
@@ -1808,13 +2101,17 @@ public void OnUpdate(float elapsed)
                 
                 // Jaw Titan also has exhaustion
                 CheckTitanExhaustion(player, playerId);
+            }
+            else if (titanType == TitanType.Armored)
+            {
+                // Armored Titan updates
+                CheckArmoredTitanArmor(player, playerId, currentTime);
+                CheckArmoredTitanBotArmor(player, playerId, currentTime);
+                CheckArmoredTitanRush(player, playerId, currentTime);
+                CheckArmoredTitanBotRush(player, playerId, currentTime);
                 
-                // TEMPORARILY DISABLED: Check titan falling state for impact effect
-                // bool isFalling = player.IsInMidAir && player.GetLinearVelocity().Y < -5;
-                // if (isFalling)
-                // {
-                //     OnTitanFalling(player);
-                // }
+                // Armored Titan also has exhaustion
+                CheckTitanExhaustion(player, playerId);
             }
         }
         
@@ -2124,6 +2421,298 @@ private void CheckAttackTitanBotHardening(IPlayer player, int playerId, float cu
     }
 }
 
+private void ToggleArmoredTitanArmor(IPlayer player, int playerId)
+{
+    // Get current armor state
+    bool armorOn = true;
+    if (armoredTitanArmorOn.ContainsKey(playerId))
+    {
+        armorOn = armoredTitanArmorOn[playerId];
+    }
+    
+    // Toggle armor
+    ApplyArmoredTitanArmor(player, playerId, !armorOn);
+}
+
+private void ApplyArmoredTitanArmor(IPlayer player, int playerId, bool armorOn)
+{
+    bool oldArmorState = armoredTitanArmorOn.ContainsKey(playerId) ? armoredTitanArmorOn[playerId] : true;
+    
+    // Get modifiers
+    PlayerModifiers mods = player.GetModifiers();
+    
+    // Remove old armor state effects
+    if (!oldArmorState)
+    {
+        // Was OFF: remove speed and energy regen bonuses
+        mods.RunSpeedModifier /= (1f + ARMORED_ARMOR_OFF_SPEED_BONUS);
+        mods.SprintSpeedModifier /= (1f + ARMORED_ARMOR_OFF_SPEED_BONUS);
+        mods.EnergyRechargeModifier /= (1f + ARMORED_ARMOR_OFF_ENERGY_REGEN_BONUS);
+    }
+    
+    // Apply new armor state effects
+    if (!armorOn)
+    {
+        // Turning OFF: add speed and energy regen bonuses
+        mods.RunSpeedModifier *= (1f + ARMORED_ARMOR_OFF_SPEED_BONUS);
+        mods.SprintSpeedModifier *= (1f + ARMORED_ARMOR_OFF_SPEED_BONUS);
+        mods.EnergyRechargeModifier *= (1f + ARMORED_ARMOR_OFF_ENERGY_REGEN_BONUS);
+        
+        // Set armor OFF profile
+        player.SetProfile(new IProfile()
+        {
+            Gender = Gender.Male,
+            Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGreen"),
+            Head = new IProfileClothingItem("Buzzcut", "ClothingLightGray"),
+            Hands = new IProfileClothingItem("Gloves", "ClothingLightGray"),
+            Legs = new IProfileClothingItem("Pants", "ClothingLightGray"),
+            Feet = new IProfileClothingItem("Boots", "ClothingLightGray"),
+            Accesory = new IProfileClothingItem("ClownMakeup", "ClothingLightGray"),
+        });
+    }
+    else
+    {
+        // Turning ON: set armor ON profile
+        player.SetProfile(new IProfile()
+        {
+            Gender = Gender.Male,
+            Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGreen"),
+            Head = new IProfileClothingItem("Buzzcut", "ClothingLightGray"),
+            ChestUnder = new IProfileClothingItem("BodyArmor", "ClothingLightGray"),
+            Hands = new IProfileClothingItem("Gloves", "ClothingLightGray"),
+            Legs = new IProfileClothingItem("Pants", "ClothingLightGray"),
+            Feet = new IProfileClothingItem("Boots", "ClothingLightGray"),
+            Accesory = new IProfileClothingItem("ClownMakeup", "ClothingLightGray"),
+        });
+    }
+    
+    player.SetModifiers(mods);
+    
+    // Update armor state
+    armoredTitanArmorOn[playerId] = armorOn;
+}
+
+private void CheckArmoredTitanArmor(IPlayer player, int playerId, float currentTime)
+{
+    // Only process if armor is ON
+    if (!armoredTitanArmorOn.ContainsKey(playerId) || !armoredTitanArmorOn[playerId])
+    {
+        return;
+    }
+    
+    // Check for front melee and projectile threats to apply damage immunity
+    bool meleeThreat = IsArmoredFrontMeleeThreat(player, playerId);
+    bool projThreat = IsArmoredFrontProjectileThreat(player, playerId);
+    
+    PlayerModifiers mods = player.GetModifiers();
+    bool modsChanged = false;
+    
+    // Set damage modifiers based on threats
+    float newMeleeDamageTaken = meleeThreat ? 0f : -2f; // 0 = immune, -2 = reset to default
+    float newProjDamageTaken = projThreat ? 0f : -2f;
+    
+    if (mods.MeleeDamageTakenModifier != newMeleeDamageTaken)
+    {
+        mods.MeleeDamageTakenModifier = newMeleeDamageTaken;
+        modsChanged = true;
+    }
+    
+    if (mods.ProjectileDamageTakenModifier != newProjDamageTaken)
+    {
+        mods.ProjectileDamageTakenModifier = newProjDamageTaken;
+        modsChanged = true;
+    }
+    
+    if (modsChanged)
+    {
+        player.SetModifiers(mods);
+    }
+}
+
+private void CheckArmoredTitanBotArmor(IPlayer player, int playerId, float currentTime)
+{
+    // Only for bots
+    if (!player.IsBot) return;
+    
+    // Check armor state periodically
+    if (!armoredTitanLastArmorCheck.ContainsKey(playerId) || 
+        currentTime - armoredTitanLastArmorCheck[playerId] >= ARMORED_ARMOR_ON_CHECK_INTERVAL)
+    {
+        armoredTitanLastArmorCheck[playerId] = currentTime;
+        
+        bool shouldArmorOn = false;
+        
+        // Check if target is close
+        IObject target = player.GetBotTarget();
+        if (target != null && !target.IsRemoved)
+        {
+            Vector2 playerPos = player.GetWorldPosition();
+            Vector2 targetPos = target.GetWorldPosition();
+            float distance = Vector2.Distance(playerPos, targetPos);
+            
+            if (distance <= ARMORED_ARMOR_ON_TRIGGER_DISTANCE)
+            {
+                shouldArmorOn = true;
+            }
+        }
+        
+        // Check if any enemy is aiming at this bot
+        if (!shouldArmorOn)
+        {
+            IPlayer aimedBy = GetPlayerAimingAtBot(player, playerId);
+            if (aimedBy != null)
+            {
+                shouldArmorOn = true;
+            }
+        }
+        
+        // Apply armor state if it needs to change
+        bool currentArmorOn = armoredTitanArmorOn.ContainsKey(playerId) ? armoredTitanArmorOn[playerId] : true;
+        if (currentArmorOn != shouldArmorOn)
+        {
+            ApplyArmoredTitanArmor(player, playerId, shouldArmorOn);
+        }
+    }
+}
+
+private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTime)
+{
+    // Only process if player is sprinting
+    if (!player.IsSprinting) return;
+    
+    // Check if armor is on (no recoil if armor is on)
+    bool armorOn = armoredTitanArmorOn.ContainsKey(playerId) ? armoredTitanArmorOn[playerId] : true;
+    
+    // Get titan stats
+    PlayerModifiers titanMods = player.GetModifiers();
+    float titanForce = GetPlayerForce(player);
+    float titanHeight = GetPlayerHeight(player);
+    float titanPower = titanForce * titanHeight;
+    int titanFacing = player.FacingDirection;
+    
+    // Get titan collision area
+    Area titanArea = player.GetAABB();
+    
+    // Get hit tracking for this titan
+    Dictionary<int, float> hitTimes = armoredTitanRushHitTimes.ContainsKey(playerId) ? 
+                                      armoredTitanRushHitTimes[playerId] : 
+                                      new Dictionary<int, float>();
+    
+    // Check all players for collisions
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer target in allPlayers)
+    {
+        if (target == null || target.IsDead || target.UniqueID == playerId) continue;
+        
+        // Check collision
+        if (!titanArea.Intersects(target.GetAABB())) continue;
+        
+        int targetId = target.UniqueID;
+        
+        // Check cooldown
+        if (hitTimes.ContainsKey(targetId) && currentTime - hitTimes[targetId] < ARMORED_RUSH_HIT_COOLDOWN)
+        {
+            continue;
+        }
+        
+        // Record hit time
+        hitTimes[targetId] = currentTime;
+        
+        // Calculate throw power
+        float targetForce = GetPlayerForce(target);
+        float targetHeight = GetPlayerHeight(target);
+        float targetPower = targetForce * targetHeight;
+        
+        float power = titanPower - (targetPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT);
+        power = Math.Max(power, 0f);
+        
+        // Apply throw
+        if (power > 0)
+        {
+            float velocity = power * ARMORED_RUSH_THROW_SCALE;
+            target.SetLinearVelocity(new Vector2(titanFacing * velocity, velocity * ARMORED_RUSH_THROW_UP_RATIO));
+        }
+        
+        // Apply damage
+        float damage = ARMORED_RUSH_DAMAGE_BASE * titanMods.MeleeDamageDealtModifier;
+        target.DealDamage(damage);
+        
+        // Apply recoil if armor is OFF
+        if (!armorOn)
+        {
+            player.DealDamage(damage * ARMORED_RUSH_RECOIL_RATIO);
+        }
+    }
+    
+    // Store updated hit times
+    armoredTitanRushHitTimes[playerId] = hitTimes;
+}
+
+private void CheckArmoredTitanBotRush(IPlayer player, int playerId, float currentTime)
+{
+    // Only for bots
+    if (!player.IsBot) return;
+    
+    PlayerModifiers mods = player.GetModifiers();
+    float energyPercent = mods.CurrentEnergy / (float)mods.MaxEnergy;
+    
+    // Check if currently rushing
+    bool isRushing = armoredTitanIsRushing.ContainsKey(playerId) ? armoredTitanIsRushing[playerId] : false;
+    
+    if (isRushing)
+    {
+        // Check abort conditions: energy falls below 20%
+        if (energyPercent < ARMORED_BOT_RUSH_ABORT_ENERGY)
+        {
+            // Abort rush
+            armoredTitanIsRushing[playerId] = false;
+            return;
+        }
+        
+        // Continue rushing (movement handled by game AI)
+        return;
+    }
+    
+    // Check trigger conditions: energy > 80% and multiple enemies in same direction
+    if (energyPercent < ARMORED_BOT_RUSH_ENERGY_THRESHOLD) return;
+    
+    // Count enemies in facing direction within distance
+    Vector2 titanPos = player.GetWorldPosition();
+    int titanFacing = player.FacingDirection;
+    PlayerTeam titanTeam = player.GetTeam();
+    int enemyCount = 0;
+    
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer otherPlayer in allPlayers)
+    {
+        if (otherPlayer == null || otherPlayer.IsDead || otherPlayer.UniqueID == playerId) continue;
+        
+        PlayerTeam otherTeam = otherPlayer.GetTeam();
+        if (otherTeam == titanTeam || otherTeam == PlayerTeam.Independent) continue;
+        
+        Vector2 otherPos = otherPlayer.GetWorldPosition();
+        float distance = Vector2.Distance(titanPos, otherPos);
+        
+        if (distance > ARMORED_BOT_RUSH_CHECK_DISTANCE) continue;
+        
+        // Check if in facing direction
+        float dx = otherPos.X - titanPos.X;
+        if (Math.Sign(dx) == titanFacing)
+        {
+            enemyCount++;
+        }
+    }
+    
+    // Trigger rush if enough enemies
+    if (enemyCount >= ARMORED_BOT_RUSH_MIN_ENEMIES)
+    {
+        armoredTitanIsRushing[playerId] = true;
+        
+        // Command bot to sprint
+        QuickCommand(player, new PlayerCommand(PlayerCommandType.StartSprinting));
+    }
+}
+
 private void OnTitanFalling(IPlayer titan)
 {
     Vector2 titanPos = titan.GetWorldPosition();
@@ -2423,6 +3012,110 @@ private IPlayer GetAimedPlayer(IPlayer shooter)
     }
     
     return null;
+}
+
+// Helper method for Armored Titan bot armor check
+private IPlayer GetPlayerAimingAtBot(IPlayer bot, int botId)
+{
+    PlayerTeam botTeam = bot.GetTeam();
+    IPlayer[] allPlayers = Game.GetPlayers();
+    
+    foreach (IPlayer otherPlayer in allPlayers)
+    {
+        if (otherPlayer == null || otherPlayer.IsDead || otherPlayer.UniqueID == botId) continue;
+        
+        PlayerTeam otherTeam = otherPlayer.GetTeam();
+        if (otherTeam == botTeam || otherTeam == PlayerTeam.Independent) continue;
+        
+        IPlayer aimedTarget = GetAimedPlayer(otherPlayer);
+        if (aimedTarget != null && aimedTarget.UniqueID == botId)
+        {
+            return otherPlayer;
+        }
+    }
+    
+    return null;
+}
+
+// Helper methods for Armored Titan force/height calculation
+private float GetPlayerForce(IPlayer player)
+{
+    float force = player.GetModifiers().MeleeForceModifier;
+    return (force < 0) ? 1f : force; // -1/-2 = unset, treat as default 1
+}
+
+private float GetPlayerHeight(IPlayer player)
+{
+    float size = player.GetModifiers().SizeModifier;
+    return (size < 0) ? 1f : size; // -1/-2 = unset, treat as default 1
+}
+
+// Helper method to check if point is in front of Armored Titan
+private bool IsArmoredInFront(IPlayer armoredTitan, Vector2 point)
+{
+    Vector2 titanPos = armoredTitan.GetWorldPosition();
+    int facing = armoredTitan.FacingDirection; // -1 (left) or +1 (right)
+    float dx = point.X - titanPos.X;
+    return Math.Sign(dx) == facing;
+}
+
+// Helper method to check for front melee threat
+private bool IsArmoredFrontMeleeThreat(IPlayer armoredTitan, int armoredTitanId)
+{
+    Vector2 titanPos = armoredTitan.GetWorldPosition();
+    IPlayer[] allPlayers = Game.GetPlayers();
+    
+    foreach (IPlayer enemy in allPlayers)
+    {
+        if (enemy == null || enemy.IsDead || enemy.UniqueID == armoredTitanId) continue;
+        if (!enemy.IsMeleeAttacking && !enemy.IsKicking) continue;
+        
+        Vector2 enemyPos = enemy.GetWorldPosition();
+        Vector2 d = enemyPos - titanPos;
+        
+        if (Math.Abs(d.X) <= ARMORED_MELEE_RANGE && 
+            Math.Abs(d.Y) <= ARMORED_MELEE_Y_TOLERANCE && 
+            IsArmoredInFront(armoredTitan, enemyPos))
+        {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// Helper method to check for front projectile threat
+private bool IsArmoredFrontProjectileThreat(IPlayer armoredTitan, int armoredTitanId)
+{
+    Vector2 titanPos = armoredTitan.GetWorldPosition();
+    Area titanArea = armoredTitan.GetAABB();
+    int facing = armoredTitan.FacingDirection;
+    
+    IProjectile[] projectiles = Game.GetProjectiles();
+    
+    foreach (IProjectile proj in projectiles)
+    {
+        if (proj == null || proj.IsRemoved) continue;
+        if (proj.InitialOwnerPlayerID == armoredTitanId) continue; // Ignore own projectiles
+        
+        Vector2 projPos = proj.Position;
+        Vector2 projVel = proj.Velocity;
+        
+        // Predict next position
+        Vector2 nextPos = projPos + projVel * ARMORED_PROJ_LOOKAHEAD_SEC;
+        
+        // Check if projectile is moving toward titan
+        bool movingToward = Math.Sign(projVel.X) == -facing;
+        
+        if (movingToward && 
+            IsArmoredInFront(armoredTitan, projPos) &&
+            nextPos.X >= titanArea.Left && nextPos.X <= titanArea.Right)
+        {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)
