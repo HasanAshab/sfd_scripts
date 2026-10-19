@@ -1379,13 +1379,16 @@ public void OnPlayerDeath(IPlayer deadPlayer)
     Game.ShowChatMessage("Found in gibbedByPureTitan!", Color.Green);
     
     int pureTitanId = gibbedByPureTitan[deadPlayerId];
+    
+    // Clean up tracking immediately to prevent double processing
+    gibbedByPureTitan.Remove(deadPlayerId);
+    
     IPlayer pureTitan = Game.GetPlayer(pureTitanId);
     
     // Verify Pure Titan still exists and is still a Pure Titan
     if (pureTitan == null || !titanPlayers.ContainsKey(pureTitanId) || titanPlayers[pureTitanId] != TitanType.Pure)
     {
         Game.ShowChatMessage("Pure Titan check failed", Color.Red);
-        gibbedByPureTitan.Remove(deadPlayerId);
         return;
     }
     
@@ -1393,7 +1396,6 @@ public void OnPlayerDeath(IPlayer deadPlayer)
     if (!assignedTitanPowers.ContainsKey(deadPlayerId)) 
     {
         Game.ShowChatMessage("Victim has no assigned power", Color.Red);
-        gibbedByPureTitan.Remove(deadPlayerId);
         return;
     }
     
@@ -1401,7 +1403,6 @@ public void OnPlayerDeath(IPlayer deadPlayer)
     if (extractedPower == TitanType.Pure)
     {
         Game.ShowChatMessage("Victim was Pure Titan", Color.Red);
-        gibbedByPureTitan.Remove(deadPlayerId);
         return; // Pure titans don't trigger power extract
     }
     
@@ -1409,9 +1410,6 @@ public void OnPlayerDeath(IPlayer deadPlayer)
     
     // Extract the power!
     ExtractTitanPower(pureTitan, pureTitanId, deadPlayer, deadPlayerId, extractedPower);
-    
-    // Clean up tracking
-    gibbedByPureTitan.Remove(deadPlayerId);
 }
 
 private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victim, int victimId, TitanType extractedPower)
@@ -1466,9 +1464,16 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
     titanExhaustionRecoverTime.Remove(pureTitanId);
     
     // 2. Swap powers: Pure Titan becomes the humanoid titan, victim becomes Pure Titan
+    // Check if Pure Titan has an assigned power before swapping
+    if (!assignedTitanPowers.ContainsKey(pureTitanId))
+    {
+        Game.ShowChatMessage("Error: Pure Titan " + pureTitan.Name + " has no assigned power!", Color.Red);
+        return;
+    }
+    
     TitanType tempPureTitanPower = assignedTitanPowers[pureTitanId];
     assignedTitanPowers[pureTitanId] = extractedPower; // Pure Titan gets humanoid power
-    assignedTitanPowers[victimId] = tempPureTitanPower; // Victim gets Pure Titan power
+    assignedTitanPowers[victimId] = tempPureTitanPower; // Victim gets Pure Titan power (keep them in dictionary!)
     
     // 3. Update labels
     UpdateLabelsAfterPowerSwap(pureTitanId, victimId);
@@ -1516,6 +1521,7 @@ private void UpdateLabelsAfterPowerSwap(int player1Id, int player2Id)
         CreateLabelForPlayer(player1, player1Id, assignedTitanPowers[player1Id]);
     }
     
+    // Player2 might be dead/removed, only create label if they exist
     if (player2 != null && !player2.IsRemoved && assignedTitanPowers.ContainsKey(player2Id))
     {
         CreateLabelForPlayer(player2, player2Id, assignedTitanPowers[player2Id]);
