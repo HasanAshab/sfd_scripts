@@ -1,166 +1,160 @@
-// Track when players reach max energy for regeneration delay
-private float p1MaxEnergyTime = -1;
-private float p2MaxEnergyTime = -1;
-private const float REGEN_DELAY = 1500; // 1.5 seconds in milliseconds
+// ---- Health regeneration system ----
+// Tracks regen state for ANY number of players (including ones added after
+// startup), keyed by each player's UniqueID instead of fixed array slots.
 
-// Track combat activity to prevent regeneration
-private float p1LastCombatTime = -1;
-private float p2LastCombatTime = -1;
-private const float COMBAT_COOLDOWN = 1500; // 1.5 seconds after combat before regen can start
+private class RegenState
+{
+    public float MaxEnergyTime = -1f;   // Time regen eligibility started (-1 = not tracking)
+    public float LastCombatTime = -1f;  // Time of last combat activity (-1 = none recent)
+}
 
-// Bot regeneration tracking (p3 to p8)
-private float[] botMaxEnergyTimes = new float[6] { -1, -1, -1, -1, -1, -1 }; // For p3-p8
-private float[] botLastCombatTimes = new float[6] { -1, -1, -1, -1, -1, -1 }; // For p3-p8
-private const float BOT_REGEN_DELAY = 500; // 0.5 seconds for bots
-private const float BOT_COMBAT_COOLDOWN = 500; // 0.5 seconds after combat for bots
+// Regen rules per player "type" - human-controlled vs bot.
+private struct RegenProfile
+{
+    public float RegenDelay;        // Delay after becoming eligible before regen starts
+    public float CombatCooldown;    // Delay after combat before regen can start
+    public float RegenPercent;      // % of max health regenerated per tick
+    public bool RequiresMaxEnergy;  // Humans must be at max energy; bots don't
+
+    public RegenProfile(float regenDelay, float combatCooldown, float regenPercent, bool requiresMaxEnergy)
+    {
+        RegenDelay = regenDelay;
+        CombatCooldown = combatCooldown;
+        RegenPercent = regenPercent;
+        RequiresMaxEnergy = requiresMaxEnergy;
+    }
+}
+
+private static readonly RegenProfile HumanRegenProfile = new RegenProfile(1500f, 1500f, 0.05f, true);
+private static readonly RegenProfile BotRegenProfile = new RegenProfile(500f, 500f, 0.03f, false);
+
+// Keyed by UniqueID so it works for any number of players, in any slot order,
+// including players/bots that join after OnStartup.
+private readonly Dictionary<int, RegenState> regenStates = new Dictionary<int, RegenState>();
+
+// Reused every tick instead of reallocated, to keep GC pressure down.
+private readonly HashSet<int> activePlayerIds = new HashSet<int>();
+private readonly List<int> staleIdBuffer = new List<int>();
+
+private int updateTickCount = 0;
+private const int PRUNE_INTERVAL_TICKS = 50; // Sweep stale entries roughly every 5s at a 100ms tick
 
 public void OnStartup()
 {
     // Set up combat detection events for regeneration tracking
     Events.PlayerDamageCallback.Start(OnPlayerDamage);
     Events.PlayerMeleeActionCallback.Start(OnPlayerMeleeAction);
-    
-    // Set up update event for HP regeneration
-    Events.UpdateCallback.Start(OnUpdate, 500); // Check every 100ms for smooth regeneration
+
+    // Drive regen at 100ms for smooth, responsive ticking
+    Events.UpdateCallback.Start(OnUpdate, 250);
 }
 
 public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
 {
-    // Track when player takes damage to prevent regeneration
-    UpdateCombatTime(player);
+    RegisterCombatActivity(player);
 }
 
 public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
 {
-    // Track when player performs melee action (hitting) to prevent regeneration
-    UpdateCombatTime(player);
+    RegisterCombatActivity(player);
 }
 
-private void UpdateCombatTime(IPlayer player)
+private void RegisterCombatActivity(IPlayer player)
 {
-    IPlayer[] players = Game.GetPlayers();
-    if (players.Length >= 2)
-    {
-        float currentTime = Game.TotalElapsedGameTime;
-        
-        if (player.UniqueID == players[0].UniqueID)
-        {
-            p1LastCombatTime = currentTime;
-            p1MaxEnergyTime = -1; // Reset regen timer
-        }
-        else if (player.UniqueID == players[1].UniqueID)
-        {
-            p2LastCombatTime = currentTime;
-            p2MaxEnergyTime = -1; // Reset regen timer
-        }
-        else
-        {
-            // Handle bots (p3 to p8)
-            for (int i = 2; i < players.Length && i < 8; i++)
-            {
-                if (player.UniqueID == players[i].UniqueID)
-                {
-                    int botIndex = i - 2; // Convert to bot array index (0-5)
-                    botLastCombatTimes[botIndex] = currentTime;
-                    botMaxEnergyTimes[botIndex] = -1; // Reset regen timer
-                    break;
-                }
-            }
-        }
-    }
+    if (player == null) return;
+
+    // O(1) lookup by UniqueID - no need to scan Game.GetPlayers() to find "who this is"
+    RegenState state = GetOrCreateState(player.UniqueID);
+    state.LastCombatTime = Game.TotalElapsedGameTime;
+    state.MaxEnergyTime = -1f; // Reset regen timer
 }
 
 public void OnUpdate(float elapsed)
 {
     IPlayer[] players = Game.GetPlayers();
-    
-    // Check if we have at least 2 players
-    if (players.Length >= 2)
+    activePlayerIds.Clear();
+
+    for (int i = 0; i < players.Length; i++)
     {
-        // Process main players (p1 and p2) with normal timers and energy requirement
-        ProcessPlayerRegeneration(players[0], ref p1MaxEnergyTime, p1LastCombatTime, REGEN_DELAY, COMBAT_COOLDOWN);
-        ProcessPlayerRegeneration(players[1], ref p2MaxEnergyTime, p2LastCombatTime, REGEN_DELAY, COMBAT_COOLDOWN);
-        
-        // Process bots (p3 to p8) with faster timers and no energy requirement
-        for (int i = 2; i < players.Length && i < 8; i++)
-        {
-            int botIndex = i - 2; // Convert to bot array index (0-5)
-            ProcessBotRegeneration(players[i], ref botMaxEnergyTimes[botIndex], botLastCombatTimes[botIndex]);
-        }
+        IPlayer player = players[i];
+        activePlayerIds.Add(player.UniqueID);
+
+        if (player.IsDead) continue;
+
+        ProcessRegeneration(player, GetOrCreateState(player.UniqueID));
+    }
+
+    // Periodically forget players who are no longer around, so the dictionary
+    // doesn't grow forever on long-running or high-churn servers.
+    updateTickCount++;
+    if (updateTickCount >= PRUNE_INTERVAL_TICKS)
+    {
+        updateTickCount = 0;
+        PruneStaleStates();
     }
 }
 
-private void ProcessPlayerRegeneration(IPlayer player, ref float maxEnergyTime, float lastCombatTime, float regenDelay, float combatCooldown)
+private RegenState GetOrCreateState(int uniqueId)
 {
-    if (player.IsDead) return;
-    
+    RegenState state;
+    if (!regenStates.TryGetValue(uniqueId, out state))
+    {
+        state = new RegenState();
+        regenStates[uniqueId] = state;
+    }
+    return state;
+}
+
+private void PruneStaleStates()
+{
+    staleIdBuffer.Clear();
+    foreach (KeyValuePair<int, RegenState> entry in regenStates)
+    {
+        if (!activePlayerIds.Contains(entry.Key))
+            staleIdBuffer.Add(entry.Key);
+    }
+    for (int i = 0; i < staleIdBuffer.Count; i++)
+        regenStates.Remove(staleIdBuffer[i]);
+}
+
+private void ProcessRegeneration(IPlayer player, RegenState state)
+{
+    // Bots regen faster and don't need max energy; humans do.
+    RegenProfile profile = player.IsBot ? BotRegenProfile : HumanRegenProfile;
+    float currentTime = Game.TotalElapsedGameTime;
+
+    // Still in combat cooldown - skip the modifiers read entirely
+    if (state.LastCombatTime >= 0 && currentTime - state.LastCombatTime < profile.CombatCooldown)
+    {
+        state.MaxEnergyTime = -1f;
+        return;
+    }
+
     PlayerModifiers mods = player.GetModifiers();
-    float currentTime = Game.TotalElapsedGameTime;
-    
-    // Check if player is in combat cooldown
-    if (lastCombatTime >= 0 && currentTime - lastCombatTime < combatCooldown)
-    {
-        maxEnergyTime = -1; // Reset regen timer during combat cooldown
-        return;
-    }
-    
-    // Check if player has max energy
-    if (mods.CurrentEnergy >= mods.MaxEnergy)
-    {
-        // Start tracking max energy time if not already tracking
-        if (maxEnergyTime < 0)
-        {
-            maxEnergyTime = currentTime;
-        }
-        
-        // Check if enough time has passed since reaching max energy
-        if (currentTime - maxEnergyTime >= regenDelay)
-        {
-            RegenerateHealth(player, mods, 0.05f);
-        }
-    }
-    else
-    {
-        // Reset timer if energy is not at max
-        maxEnergyTime = -1;
-    }
-}
+    bool regenEligible = !profile.RequiresMaxEnergy || mods.CurrentEnergy >= mods.MaxEnergy;
 
-private void ProcessBotRegeneration(IPlayer bot, ref float regenTimer, float lastCombatTime)
-{
-    if (bot.IsDead) return;
-    PlayerModifiers mods = bot.GetModifiers();
-    float currentTime = Game.TotalElapsedGameTime;
-    
-    // Check if bot is in combat cooldown
-    if (lastCombatTime >= 0 && currentTime - lastCombatTime < BOT_COMBAT_COOLDOWN)
+    if (!regenEligible)
     {
-        regenTimer = -1; // Reset regen timer during combat cooldown
+        state.MaxEnergyTime = -1f;
         return;
     }
-    
-    // Bots don't need max energy - just start regeneration timer after combat cooldown
-    if (regenTimer < 0)
+
+    if (state.MaxEnergyTime < 0)
     {
-        regenTimer = currentTime; // Start regen timer immediately after combat cooldown
+        state.MaxEnergyTime = currentTime;
     }
-    
-    // Check if enough time has passed for regeneration
-    if (currentTime - regenTimer >= BOT_REGEN_DELAY)
+
+    if (currentTime - state.MaxEnergyTime >= profile.RegenDelay)
     {
-        RegenerateHealth(bot, mods, 0.03f);
+        RegenerateHealth(player, mods, profile.RegenPercent);
     }
 }
 
 private void RegenerateHealth(IPlayer player, PlayerModifiers mods, float regenPercentage)
 {
-    if (mods.CurrentHealth < mods.MaxHealth)
-    {
-        // Regenerate health based on percentage of max health
-        int regenAmount = (int)(mods.MaxHealth * regenPercentage);
-        // if (regenAmount < 1) regenAmount = 1; // Ensure at least 1 HP regen
+    if (mods.CurrentHealth >= mods.MaxHealth) return;
 
-        mods.CurrentHealth = Math.Min(mods.MaxHealth, mods.CurrentHealth + regenAmount);
-        player.SetModifiers(mods);
-    }
+    int regenAmount = (int)(mods.MaxHealth * regenPercentage);
+    mods.CurrentHealth = Math.Min(mods.MaxHealth, mods.CurrentHealth + regenAmount);
+    player.SetModifiers(mods);
 }
