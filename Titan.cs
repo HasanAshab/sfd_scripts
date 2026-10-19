@@ -2191,6 +2191,11 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
     TitanType titanType = titanPlayers[titanId];
     if (titanType != TitanType.Pure && titanType != TitanType.Jaw)
     {
+        // Clean up any leftover grab data if this titan was previously Pure/Jaw and transformed
+        if (titanGrabDamage.ContainsKey(titanId))
+        {
+            titanGrabDamage.Remove(titanId);
+        }
         return;
     }
     
@@ -2204,11 +2209,16 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
     {
         if (player == null || player.IsDead || player.UniqueID == titanId) continue;
         
-        // Check if this player is caught by the titan's grab
+        // Check if this player is caught by THIS SPECIFIC titan's grab
         if (player.IsCaughtByPlayerInGrab)
         {
-            currentVictim = player;
-            break;
+            // Verify the grab is by this titan by checking if titan is grabbing
+            PlayerGrabAction titanGrabAction = titan.GetCurrentGrabAction();
+            if (titanGrabAction != PlayerGrabAction.None)
+            {
+                currentVictim = player;
+                break;
+            }
         }
     }
     
