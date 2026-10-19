@@ -181,19 +181,25 @@ public void OnStartup()
     // Set up player death callback for Pure Titan power extract ability
     Events.PlayerDeathCallback.Start(OnPlayerDeath);
     
-    // Distribute titan powers once per day using SharedStorage
+    // Distribute titan powers using SharedStorage with player group tracking
     IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
     string today = GetTodayDateString();
+    
+    // Get current player group key (sorted list of non-bot player names)
+    string playerGroupKey = GetPlayerGroupKey();
+    
+    // Storage key for this specific player group's distribution date
+    string dateKey = "DATE_" + playerGroupKey;
     string lastDistributionDate = "";
     
-    if (persistentStorage.ContainsKey("LAST_DISTRIBUTION_DATE"))
+    if (persistentStorage.ContainsKey(dateKey))
     {
-        lastDistributionDate = (string)persistentStorage.GetItem("LAST_DISTRIBUTION_DATE");
+        lastDistributionDate = (string)persistentStorage.GetItem(dateKey);
     }
     
     if (lastDistributionDate != today)
     {
-        // New day - distribute powers after 1 second delay (wait for match to start)
+        // New day for this player group - distribute powers after 1 second delay
         IObjectTimerTrigger distributionTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
         distributionTimer.SetIntervalTime(1000); // 1 second delay
         distributionTimer.SetRepeatCount(1); // Run once
@@ -202,7 +208,7 @@ public void OnStartup()
     }
     else
     {
-        // Same day - restore from storage
+        // Same day - restore from storage for this player group
         RestoreAssignedPowersFromStorage();
         
         // Recreate labels after 1 second (wait for players to spawn)
@@ -238,6 +244,29 @@ private string GetTodayDateString()
     return now.Year.ToString() + "-" + 
            now.Month.ToString("00") + "-" + 
            now.Day.ToString("00");
+}
+
+// Helper method to get player group key (sorted list of non-bot player names)
+private string GetPlayerGroupKey()
+{
+    IPlayer[] allPlayers = Game.GetPlayers();
+    List<string> playerNames = new List<string>();
+    
+    foreach (IPlayer player in allPlayers)
+    {
+        if (player == null) continue;
+        
+        // Skip players named "bot" (case-insensitive)
+        if (player.Name.ToLower() == "bot") continue;
+        
+        playerNames.Add(player.Name);
+    }
+    
+    // Sort alphabetically for consistent key generation
+    playerNames.Sort();
+    
+    // Join with underscore to create unique key
+    return string.Join("_", playerNames.ToArray());
 }
 
 public void DistributeTitanPowers(TriggerArgs args)
@@ -279,12 +308,14 @@ public void DistributeTitanPowers(TriggerArgs args)
     // Create text labels above players' heads with their titan type
     CreateTitanTypeLabels(allPlayers);
     
-    // Save assigned powers to SharedStorage (persists permanently)
+    // Save assigned powers to SharedStorage for this player group
     SaveAssignedPowersToStorage();
     
-    // Save distribution date to SharedStorage
+    // Save distribution date to SharedStorage for this player group
     IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
-    persistentStorage.SetItem("LAST_DISTRIBUTION_DATE", GetTodayDateString());
+    string playerGroupKey = GetPlayerGroupKey();
+    string dateKey = "DATE_" + playerGroupKey;
+    persistentStorage.SetItem(dateKey, GetTodayDateString());
     
     Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
 }
@@ -292,6 +323,10 @@ public void DistributeTitanPowers(TriggerArgs args)
 private void SaveAssignedPowersToStorage()
 {
     IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
+    
+    // Get player group key for this distribution set
+    string playerGroupKey = GetPlayerGroupKey();
+    string powersKey = "POWERS_" + playerGroupKey;
     
     // Serialize assignedTitanPowers dictionary to a string format: "playerName:titanType;playerName:titanType;..."
     // Skip players named "bot"
@@ -313,19 +348,23 @@ private void SaveAssignedPowersToStorage()
     }
     
     string serialized = string.Join(";", powerEntries.ToArray());
-    persistentStorage.SetItem("ASSIGNED_POWERS", serialized);
+    persistentStorage.SetItem(powersKey, serialized);
 }
 
 private void RestoreAssignedPowersFromStorage()
 {
     IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
     
-    if (!persistentStorage.ContainsKey("ASSIGNED_POWERS"))
+    // Get player group key for this distribution set
+    string playerGroupKey = GetPlayerGroupKey();
+    string powersKey = "POWERS_" + playerGroupKey;
+    
+    if (!persistentStorage.ContainsKey(powersKey))
     {
         return;
     }
     
-    string serialized = (string)persistentStorage.GetItem("ASSIGNED_POWERS");
+    string serialized = (string)persistentStorage.GetItem(powersKey);
     
     if (string.IsNullOrEmpty(serialized)) return;
     
