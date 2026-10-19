@@ -62,7 +62,7 @@ private const float JAW_TITAN_HP_BONUS = 0.0f; // 0% HP increase
 private const float JAW_TITAN_MELEE_DAMAGE_BONUS = 0.25f; // 25% melee damage increase
 private const float JAW_TITAN_MELEE_FORCE_BONUS = 0.0f; // 0% melee force increase
 private const float JAW_TITAN_SPEED_PENALTY = 0.0f; // 0% speed reduction
-private const float JAW_TITAN_ENERGY_BONUS = 0.25f; // 25% energy increase
+private const float JAW_TITAN_ENERGY_BONUS = 0.10f; // 10% energy increase
 private const float JAW_TITAN_SIZE = 0.880f; // Fixed size
 
 // Jaw Titan claw ability
@@ -83,12 +83,12 @@ private const float ARMORED_TITAN_HP_BONUS = 0.32f; // 32% HP increase
 private const float ARMORED_TITAN_MELEE_DAMAGE_BONUS = 0.25f; // 25% melee damage increase
 private const float ARMORED_TITAN_MELEE_FORCE_BONUS = 0.60f; // 60% melee force increase
 private const float ARMORED_TITAN_SPEED_PENALTY = 0.50f; // 50% speed reduction
-private const float ARMORED_TITAN_ENERGY_BONUS = 0.15f; // 15% energy increase
+private const float ARMORED_TITAN_ENERGY_BONUS = 0f; // 0% energy increase
 private const float ARMORED_TITAN_SIZE = 1.300f; // Fixed size
 
 // Armored Titan armor mode bonuses (when OFF)
 private const float ARMORED_ARMOR_OFF_SPEED_BONUS = 0.30f; // 30% speed increase
-private const float ARMORED_ARMOR_OFF_ENERGY_REGEN_BONUS = 0.30f; // 30% energy regen increase
+private const float ARMORED_ARMOR_OFF_ENERGY_REGEN_BONUS = 0.15f; // 15% energy regen increase
 
 // Armored Titan armor mode triggers for bots
 private const float ARMORED_ARMOR_ON_TRIGGER_DISTANCE = 35f; // Distance to trigger armor on
