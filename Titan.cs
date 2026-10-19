@@ -674,47 +674,62 @@ private void CreateTitanTypeLabels(IPlayer[] allPlayers)
         int playerId = player.UniqueID;
         if (assignedTitanPowers.ContainsKey(playerId))
         {
-            TitanType titanType = assignedTitanPowers[playerId];
-            
-            // Only create labels for humanoid titans (Attack, Jaw, and Armored)
-            string labelText = "";
-            Color labelColor = Color.White;
-            
-            if (titanType == TitanType.Attack)
-            {
-                labelText = "[ATK]";
-                labelColor = new Color(255, 100, 100); // Red
-            }
-            else if (titanType == TitanType.Jaw)
-            {
-                labelText = "[JAW]";
-                labelColor = new Color(100, 255, 100); // Green
-            }
-            else if (titanType == TitanType.Armored)
-            {
-                labelText = "[ARM]";
-                labelColor = new Color(100, 100, 255); // Blue
-            }
-            else
-            {
-                // Pure Titan - no label
-                continue;
-            }
-            
-            // Create text label above player's head
-            Vector2 playerPos = player.GetWorldPosition();
-            IObjectText label = (IObjectText)Game.CreateObject("Text", 
-                new Vector2(playerPos.X, playerPos.Y + 20f)); // 20 units above head
-            
-            label.SetText(labelText);
-            label.SetTextAlignment(TextAlignment.Middle);
-            label.SetTextScale(0.233f); // Decreased by 3x from 0.7f
-            label.SetTextColor(labelColor);
-            
-            // Store the label reference
-            titanTypeLabels[playerId] = label;
+            CreateLabelForPlayer(player, playerId, assignedTitanPowers[playerId]);
         }
     }
+}
+
+private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanType)
+{
+    // Clean up existing label if any
+    if (titanTypeLabels.ContainsKey(playerId))
+    {
+        IObjectText existingLabel = titanTypeLabels[playerId];
+        if (existingLabel != null && !existingLabel.IsRemoved)
+        {
+            existingLabel.Remove();
+        }
+        titanTypeLabels.Remove(playerId);
+    }
+    
+    // Only create labels for humanoid titans (Attack, Jaw, and Armored)
+    if (titanType == TitanType.Pure) return;
+    
+    string labelText = "";
+    Color labelColor = Color.White;
+    
+    if (titanType == TitanType.Attack)
+    {
+        labelText = "[ATK]";
+        labelColor = new Color(255, 100, 100); // Red
+    }
+    else if (titanType == TitanType.Jaw)
+    {
+        labelText = "[JAW]";
+        labelColor = new Color(100, 255, 100); // Green
+    }
+    else if (titanType == TitanType.Armored)
+    {
+        labelText = "[ARM]";
+        labelColor = new Color(255, 255, 0); // Yellow
+    }
+    else
+    {
+        return;
+    }
+    
+    // Create text label above player's head
+    Vector2 playerPos = player.GetWorldPosition();
+    IObjectText label = (IObjectText)Game.CreateObject("Text", 
+        new Vector2(playerPos.X, playerPos.Y + 20f)); // 20 units above head
+    
+    label.SetText(labelText);
+    label.SetTextAlignment(TextAlignment.Middle);
+    label.SetTextScale(0.4f);
+    label.SetTextColor(labelColor);
+    
+    // Store the label reference
+    titanTypeLabels[playerId] = label;
 }
 
 private void UpdateTitanTypeLabels()
@@ -2106,44 +2121,6 @@ private IPlayer GetRandomPureTitanTeammate(IPlayer player)
     }
     
     return null;
-}
-
-private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanType)
-{
-    // Only create labels for humanoid titans (Attack, Jaw, and Armored)
-    if (titanType == TitanType.Pure) return;
-    
-    string labelText = "";
-    Color labelColor = Color.White;
-    
-    if (titanType == TitanType.Attack)
-    {
-        labelText = "[ATK]";
-        labelColor = new Color(255, 100, 100); // Red
-    }
-    else if (titanType == TitanType.Jaw)
-    {
-        labelText = "[JAW]";
-        labelColor = new Color(100, 255, 100); // Green
-    }
-    else if (titanType == TitanType.Armored)
-    {
-        labelText = "[ARM]";
-        labelColor = new Color(100, 100, 255); // Blue
-    }
-    
-    // Create text label above player's head
-    Vector2 playerPos = player.GetWorldPosition();
-    IObjectText label = (IObjectText)Game.CreateObject("Text", 
-        new Vector2(playerPos.X, playerPos.Y + 20f)); // 20 units above head
-    
-    label.SetText(labelText);
-    label.SetTextAlignment(TextAlignment.Middle);
-    label.SetTextScale(0.4f);
-    label.SetTextColor(labelColor);
-    
-    // Store the label reference
-    titanTypeLabels[playerId] = label;
 }
 
 private void MakeNearbyPlayersFall(Vector2 explosionPos, float radius, int titanPlayerId)
