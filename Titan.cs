@@ -3509,6 +3509,15 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     // Set the human profile
     humanPlayer.SetProfile(humanProfile);
     
+    // Set bot behavior to ZombieA immediately after creating the player (for both bot and human players)
+    humanPlayer.SetBotBehavior(new BotBehavior(true, PredefinedAIType.ZombieA));
+    
+    // Set bot name if bot
+    if (isBot)
+    {
+        humanPlayer.SetBotName(playerName);
+    }
+    
     // Re-attach user controller for human players
     if (user != null)
     {
@@ -3529,16 +3538,30 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     PlayerCommandFaceDirection faceDir = (titanFacing < 0) ? PlayerCommandFaceDirection.Left : PlayerCommandFaceDirection.Right;
     humanPlayer.AddCommand(new PlayerCommand(PlayerCommandType.FaceAt, faceDir));
     
-    // Set bot behavior and name if bot
-    if (isBot)
+    // After 1000ms, restore the real behavior for both bots and human players
+    Events.UpdateCallback.Start((float dt) =>
     {
-        humanPlayer.SetBotName(playerName);
-        humanPlayer.SetBotBehavior(humanBotBehavior);
-        if (humanBotBehaviorSet != null)
+        if (humanPlayer == null || humanPlayer.IsDead || humanPlayer.IsRemoved) return;
+        
+        if (isBot)
         {
-            humanPlayer.SetBotBehaviorSet(humanBotBehaviorSet);
+            humanPlayer.SetBotBehavior(humanBotBehavior);
+            if (humanBotBehaviorSet != null)
+            {
+                humanBotBehaviorSet.PowerupUsage = false;
+                humanPlayer.SetBotBehaviorSet(humanBotBehaviorSet);
+            }
         }
-    }
+        else
+        {
+            humanPlayer.SetBotBehavior(new BotBehavior(false, PredefinedAIType.None));
+            humanPlayer.SetBotBehaviorActive(false);
+            if (user != null)
+            {
+                humanPlayer.SetUser(user);
+            }
+        }
+    }, 1000, 1);
     
     // Mark as already given startup strength boost so they don't immediately get another one
     givenStartupStrengthBoost.Add(humanPlayerId);
