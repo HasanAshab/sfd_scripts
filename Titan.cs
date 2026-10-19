@@ -163,7 +163,7 @@ private Dictionary<int, bool> titanExhausted = new Dictionary<int, bool>();
 private Dictionary<int, float> titanExhaustionRecoverTime = new Dictionary<int, float>();
 
 // Exhaustion duration constant
-private const float TITAN_EXHAUSTION_DURATION = 6000f; // 6 seconds in milliseconds
+private const float TITAN_EXHAUSTION_DURATION = 3000f; // 3 seconds in milliseconds
 
 // Track titan sizes for stat calculations
 private Dictionary<int, float> titanSizes = new Dictionary<int, float>();
