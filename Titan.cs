@@ -112,6 +112,7 @@ private const int ARMORED_BOT_RUSH_MIN_ENEMIES = 2; // Minimum enemies to trigge
 // Armored Titan super punch ability
 private const int ARMORED_SUPER_PUNCH_COUNT = 3; // 3rd punch is super punch
 private const int ARMORED_SUPER_PUNCH_WINDOW = 600; // 600ms window between punches
+private const float ARMORED_SUPER_PUNCH_BALANCER_MOD = 0.015f; // balance stab
 
 // Armored Titan armor reflection constants
 private const float ARMORED_MELEE_RANGE = 30f; // Melee threat detection range
@@ -1674,7 +1675,7 @@ private void HandleArmoredTitanMelee(IPlayer armoredTitan, int armoredTitanId, P
             float victimHeight = GetPlayerHeight(victim);
             float victimPower = victimForce * victimHeight;
             
-            float throwPower = titanPower - victimPower;
+            float throwPower = (titanPower - (victimPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_SUPER_PUNCH_BALANCER_MOD;
             throwPower = Math.Max(throwPower, 0f); // Never negative
             
             if (throwPower > 0)
