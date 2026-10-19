@@ -163,8 +163,97 @@ ply.SetProfile(
                         Accesory = new IProfileClothingItem("ClownMakeup", "ClothingLightGray"),
                     }
 
-        - Bot Usage: unlike real players, bots cant use this ability wisely
+        - Bot Usage: unlike real players, bots cant use this ability wisely, so here are triggers
             - on: 
                 - target is closer 35f (like attack titans hardening offensive trigger)
                 - enemy aim (like attack titans hardening defensive trigger)
-            - off: when no need to on 
+            - off: when no need to on
+
+    - Rush: Sprint:
+        - when he sprints, enemy players overlaped will get a throw.  
+        - the throw power will be based on: Armored Titans (Force * Height) - Target (Force * Height) * 1.4
+        - victims will also get a damage of 7 * Armored Titans melee damage mod and the armored titan will get a 50% recoil if he not turned on armor
+        - psudo code:
+            ```cs
+            // ---------- CONFIG ----------
+            const float CHARGE_DAMAGE_BASE   = 7f;
+            const float RECOIL_RATIO         = 0.5f;   // 50% of dealt damage comes back to the titan
+            const float TARGET_FORCE_WEIGHT  = 1.4f;   // the "* 1.4" from your formula
+            const float THROW_SCALE          = 300f;   // converts power -> velocity (TUNE IN-GAME)
+            const float THROW_UP_RATIO       = 0.6f;   // upward share of the throw
+            const float HIT_COOLDOWN_MS      = 800f;   // per-target, so one overlap isn't hit every tick
+
+            IPlayer titan;                              // the special player
+            bool    armorOn = false;                    // armor toggle state
+            float   now = 0;                            // running clock from OnUpdate
+            Dictionary<int, float> lastHitTime;         // targetUniqueID -> time of last charge hit
+
+            OnStartup():
+                titan = Game.GetPlayers()[0];
+                Events.UpdateCallback.Start(OnUpdate, 0);
+                Events.PlayerKeyInputCallback.Start(OnKeyInput);
+
+
+            // ---------- ARMOR TOGGLE ----------
+            OnKeyInput(player, keyEvents):
+                if player != titan: return
+                foreach k in keyEvents:
+                    if k.Key == <YOUR_ARMOR_KEY> and k.Event == VirtualKeyEvent.Pressed:
+                        armorOn = !armorOn
+
+
+            // ---------- HELPERS ----------
+            float GetForce(IPlayer p):
+                f = p.GetModifiers().MeleeForceModifier       // range 0-10
+                return (f < 0) ? 1 : f                        // -1/-2 = unset -> treat as default 1
+
+            float GetHeight(IPlayer p):
+                s = p.GetModifiers().SizeModifier             // range 0.5-2.0
+                return (s < 0) ? 1 : s
+                // alternative: p.GetAABB().Height (raw world units, then re-tune THROW_SCALE)
+
+
+            // ---------- SPRINT CHARGE ----------
+            OnUpdate(elapsed):
+                now += elapsed
+                if titan.IsDead or !titan.IsSprinting: return
+
+                titanArea = titan.GetAABB()
+                dir       = titan.FacingDirection             // -1 or +1
+
+                foreach target in Game.GetPlayers():
+                    if target == titan or target.IsDead: continue
+                    // optional: if target.GetTeam() == titan.GetTeam(): continue
+                    if !titanArea.Intersects(target.GetAABB()): continue
+                    // optional: skip targets behind the titan:
+                    //   if Sign(target.GetWorldPosition().X - titan.GetWorldPosition().X) != dir: continue
+                    if lastHitTime.Contains(target.UniqueID) and now - lastHitTime[target.UniqueID] < HIT_COOLDOWN_MS: continue
+
+                    lastHitTime[target.UniqueID] = now
+
+                    // --- throw power ---
+                    titanPower  = GetForce(titan)  * GetHeight(titan)
+                    targetPower = GetForce(target) * GetHeight(target)
+                    power = titanPower - targetPower * TARGET_FORCE_WEIGHT   // literal reading of your formula
+                    power = Max(power, 0)                                    // never pull the target backwards
+
+                    if power > 0:
+                        v = power * THROW_SCALE
+                        target.SetLinearVelocity(new Vector2(dir * v, v * THROW_UP_RATIO))
+
+                    // --- damage ---
+                    dmg = CHARGE_DAMAGE_BASE * titan.GetModifiers().MeleeDamageDealtModifier   // treat <0 as 1 here too
+                    target.DealDamage(dmg, titan.UniqueID)
+
+                    // --- recoil (only if armor is OFF) ---
+                    if !armorOn:
+                        titan.DealDamage(dmg * RECOIL_RATIO)
+            ```
+
+        - Bot Usage: unlike real players, bots cant use this ability wisely, 
+            - so use this:
+                - run move to position and sprint command using QuickCommand() helper
+            - triggers:
+                - current energy > 80% and was in a combat
+                - multiple enemies on the same direction on max 40f distance
+            - dont rush or abort if was in a rush, if current energy falls then 20%
