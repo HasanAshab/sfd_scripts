@@ -277,12 +277,10 @@ private string GetPlayerGroupKey()
         // Skip temporary players (case-insensitive)
         if (player.Name.ToLower() == TEMPORARY_PLAYER_NAME.ToLower())
         {
-            Game.ShowChatMessage("Skipping temporary player: " + player.Name, Color.Gray);
             continue;
         }
         
         playerNames.Add(player.Name);
-        Game.ShowChatMessage("Adding player to group: " + player.Name, Color.Gray);
     }
     
     // Sort alphabetically for consistent key generation
