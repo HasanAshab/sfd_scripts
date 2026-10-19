@@ -2,6 +2,9 @@
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
 // Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
 
+// Configuration: Temporary player name (players with this name are not stored and have special power extract rules)
+private const string TEMPORARY_PLAYER_NAME = "com";
+
 // Titan type enum
 private enum TitanType
 {
@@ -271,10 +274,10 @@ private string GetPlayerGroupKey()
     {
         if (player == null) continue;
         
-        // Skip players named "bot" (case-insensitive)
-        if (player.Name.ToLower() == "bot")
+        // Skip temporary players (case-insensitive)
+        if (player.Name.ToLower() == TEMPORARY_PLAYER_NAME.ToLower())
         {
-            Game.ShowChatMessage("Skipping bot player: " + player.Name, Color.Gray);
+            Game.ShowChatMessage("Skipping temporary player: " + player.Name, Color.Gray);
             continue;
         }
         
@@ -349,7 +352,7 @@ private void SaveAssignedPowersToStorage()
     string powersKey = "POWERS_" + playerGroupKey;
     
     // Serialize assignedTitanPowers dictionary to a string format: "playerName:titanType;playerName:titanType;..."
-    // Skip players named "bot"
+    // Skip temporary players
     List<string> powerEntries = new List<string>();
     
     foreach (var kvp in assignedTitanPowers)
@@ -357,8 +360,8 @@ private void SaveAssignedPowersToStorage()
         int playerId = kvp.Key;
         IPlayer player = Game.GetPlayer(playerId);
         
-        // Skip if player not found or player name is "bot"
-        if (player == null || player.Name.ToLower() == "bot")
+        // Skip if player not found or player is temporary
+        if (player == null || player.Name.ToLower() == TEMPORARY_PLAYER_NAME.ToLower())
         {
             continue;
         }
@@ -422,7 +425,7 @@ private void RestoreAssignedPowersFromStorage()
         }
     }
     
-    // For players without stored powers (new players or bots), assign randomly
+    // For players without stored powers (new players or temporary players), assign randomly
     foreach (IPlayer player in allPlayers)
     {
         if (player == null) continue;
@@ -430,7 +433,7 @@ private void RestoreAssignedPowersFromStorage()
         int playerId = player.UniqueID;
         if (!assignedTitanPowers.ContainsKey(playerId))
         {
-            // Assign Pure Titan to new players/bots
+            // Assign Pure Titan to new players/temporary players
             assignedTitanPowers[playerId] = TitanType.Pure;
         }
     }
@@ -1469,6 +1472,9 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
 {
     Vector2 pureTitanPos = pureTitan.GetWorldPosition();
     
+    // Check if the Pure Titan is a temporary player
+    bool isTemporaryPlayer = pureTitan.Name.ToLower() == TEMPORARY_PLAYER_NAME.ToLower();
+    
     // 1. Detransform Pure Titan with smoke effect
     Game.PlayEffect(EffectName.Steam, pureTitanPos);
     Game.PlayEffect(EffectName.Steam, pureTitanPos);
@@ -1516,30 +1522,75 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
     titanExhausted.Remove(pureTitanId);
     titanExhaustionRecoverTime.Remove(pureTitanId);
     
-    // 2. Swap powers: Pure Titan becomes the humanoid titan, victim becomes Pure Titan
-    // Check if Pure Titan has an assigned power before swapping
-    if (!assignedTitanPowers.ContainsKey(pureTitanId))
+    // 2. Handle power distribution based on whether extractor is temporary
+    if (isTemporaryPlayer)
     {
-        Game.ShowChatMessage("Error: Pure Titan " + pureTitan.Name + " has no assigned power!", Color.Red);
-        return;
+        // Temporary player: Give power to random Pure Titan teammate
+        IPlayer randomTeammatePureTitan = GetRandomPureTitanTeammate(pureTitan);
+        
+        if (randomTeammatePureTitan != null)
+        {
+            int teammateId = randomTeammatePureTitan.UniqueID;
+            
+            // Check if teammate has an assigned power
+            if (!assignedTitanPowers.ContainsKey(teammateId))
+            {
+                Game.ShowChatMessage("Error: Teammate " + randomTeammatePureTitan.Name + " has no assigned power!", Color.Red);
+                return;
+            }
+            
+            TitanType teammatePower = assignedTitanPowers[teammateId];
+            assignedTitanPowers[teammateId] = extractedPower; // Teammate gets humanoid power
+            assignedTitanPowers[victimId] = teammatePower; // Victim gets teammate's old power
+            
+            // Keep temporary player's power unchanged (stays Pure)
+            
+            // Update labels
+            UpdateLabelsAfterPowerSwap(teammateId, victimId);
+            
+            // Save updated powers
+            SaveAssignedPowersToStorage();
+            
+            // Update shared storage
+            UpdateTitanPlayersStorage();
+            
+            // Show message
+            string powerName = extractedPower == TitanType.Attack ? "ATTACK TITAN" : "JAW TITAN";
+            Game.ShowChatMessage(pureTitan.Name + " extracted the " + powerName + " power and transferred it to " + randomTeammatePureTitan.Name + "!", Color.Yellow);
+        }
+        else
+        {
+            // No Pure Titan teammate found, power is lost
+            Game.ShowChatMessage(pureTitan.Name + " extracted a power but had no teammate to transfer it to!", Color.Red);
+        }
     }
-    
-    TitanType tempPureTitanPower = assignedTitanPowers[pureTitanId];
-    assignedTitanPowers[pureTitanId] = extractedPower; // Pure Titan gets humanoid power
-    assignedTitanPowers[victimId] = tempPureTitanPower; // Victim gets Pure Titan power (keep them in dictionary!)
-    
-    // 3. Update labels
-    UpdateLabelsAfterPowerSwap(pureTitanId, victimId);
-    
-    // Save updated powers to SharedStorage (permanent storage)
-    SaveAssignedPowersToStorage();
-    
-    // Update shared storage
-    UpdateTitanPlayersStorage();
-    
-    // Show message
-    string powerName = extractedPower == TitanType.Attack ? "ATTACK TITAN" : "JAW TITAN";
-    Game.ShowChatMessage(pureTitan.Name + " extracted the " + powerName + " power from " + victim.Name + "!", Color.Yellow);
+    else
+    {
+        // Normal player: Standard power swap
+        // Check if Pure Titan has an assigned power before swapping
+        if (!assignedTitanPowers.ContainsKey(pureTitanId))
+        {
+            Game.ShowChatMessage("Error: Pure Titan " + pureTitan.Name + " has no assigned power!", Color.Red);
+            return;
+        }
+        
+        TitanType tempPureTitanPower = assignedTitanPowers[pureTitanId];
+        assignedTitanPowers[pureTitanId] = extractedPower; // Pure Titan gets humanoid power
+        assignedTitanPowers[victimId] = tempPureTitanPower; // Victim gets Pure Titan power (keep them in dictionary!)
+        
+        // Update labels
+        UpdateLabelsAfterPowerSwap(pureTitanId, victimId);
+        
+        // Save updated powers to SharedStorage (permanent storage)
+        SaveAssignedPowersToStorage();
+        
+        // Update shared storage
+        UpdateTitanPlayersStorage();
+        
+        // Show message
+        string powerName = extractedPower == TitanType.Attack ? "ATTACK TITAN" : "JAW TITAN";
+        Game.ShowChatMessage(pureTitan.Name + " extracted the " + powerName + " power from " + victim.Name + "!", Color.Yellow);
+    }
 }
 
 private void UpdateLabelsAfterPowerSwap(int player1Id, int player2Id)
@@ -1579,6 +1630,45 @@ private void UpdateLabelsAfterPowerSwap(int player1Id, int player2Id)
     {
         CreateLabelForPlayer(player2, player2Id, assignedTitanPowers[player2Id]);
     }
+}
+
+private IPlayer GetRandomPureTitanTeammate(IPlayer player)
+{
+    // Find all Pure Titan teammates (not transformed, just assigned Pure power)
+    PlayerTeam playerTeam = player.GetTeam();
+    List<IPlayer> pureTitanTeammates = new List<IPlayer>();
+    
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer p in allPlayers)
+    {
+        if (p == null || p.IsDead || p.UniqueID == player.UniqueID) continue;
+        
+        // Check if on same team
+        PlayerTeam pTeam = p.GetTeam();
+        if (playerTeam == PlayerTeam.Independent)
+        {
+            // Independent players have no teammates
+            continue;
+        }
+        
+        if (pTeam != playerTeam) continue;
+        
+        // Check if has Pure Titan power assigned
+        if (assignedTitanPowers.ContainsKey(p.UniqueID) && 
+            assignedTitanPowers[p.UniqueID] == TitanType.Pure)
+        {
+            pureTitanTeammates.Add(p);
+        }
+    }
+    
+    // Return random teammate if any found
+    if (pureTitanTeammates.Count > 0)
+    {
+        int randomIndex = rnd.Next(0, pureTitanTeammates.Count);
+        return pureTitanTeammates[randomIndex];
+    }
+    
+    return null;
 }
 
 private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanType)
