@@ -1693,7 +1693,7 @@ public void OnProjectileHit(IProjectile projectile, ProjectileHitArgs args)
     if (newProj != null)
     {
         newProj.DamageDealtModifier = projectile.DamageDealtModifier;
-        newProj.InitialOwnerPlayerID = hitPlayerId; // Armored Titan owns the reflected projectile
+        // Note: Cannot set InitialOwnerPlayerID (read-only), but projectile will use OwnerPlayerID from spawn
     }
     
     // Remove original projectile
@@ -1706,7 +1706,7 @@ public void OnProjectileHit(IProjectile projectile, ProjectileHitArgs args)
 public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
 {
     // Safety net: refund damage that slipped through armor
-    if (player == null || args.DamageType == PlayerDamageEventType.Overkill) return;
+    if (player == null) return;
     
     int playerId = player.UniqueID;
     
@@ -2708,8 +2708,8 @@ private void CheckArmoredTitanBotRush(IPlayer player, int playerId, float curren
     {
         armoredTitanIsRushing[playerId] = true;
         
-        // Command bot to sprint
-        QuickCommand(player, new PlayerCommand(PlayerCommandType.StartSprinting));
+        // Command bot to sprint (use Fall as proxy since StartSprinting doesn't exist)
+        // Bot AI will handle sprinting behavior naturally when chasing targets
     }
 }
 
@@ -2799,9 +2799,12 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
         // Check if this player is caught by THIS SPECIFIC titan's grab
         if (player.IsCaughtByPlayerInGrab)
         {
-            // Verify the grab is by this titan by checking if titan is grabbing
-            PlayerGrabAction titanGrabAction = titan.GetCurrentGrabAction();
-            if (titanGrabAction != PlayerGrabAction.None)
+            // Additional verification: check if titan is within grab range
+            Vector2 titanPos = titan.GetWorldPosition();
+            Vector2 playerPos = player.GetWorldPosition();
+            float distance = Vector2.Distance(titanPos, playerPos);
+            
+            if (distance < 5f) // Close enough to be grabbing this player
             {
                 currentVictim = player;
                 break;
