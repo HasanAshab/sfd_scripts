@@ -1658,39 +1658,69 @@ private void HandleArmoredTitanMelee(IPlayer armoredTitan, int armoredTitanId, P
     // Check if this is the 3rd punch (super punch)
     if (currentPunchCount >= ARMORED_SUPER_PUNCH_COUNT)
     {
-        // Apply super punch to all hit players
+        float titanForce = GetPlayerForce(armoredTitan);
+        float titanHeight = GetPlayerHeight(armoredTitan);
+        float titanPower = titanForce * titanHeight;
+        int titanFacing = armoredTitan.FacingDirection;
+        
+        // Apply super punch to all hit players and objects
         foreach (PlayerMeleeHitArg hitArg in args)
         {
-            if (hitArg.HitObject == null || !hitArg.IsPlayer) continue;
+            if (hitArg.HitObject == null) continue;
             
-            IPlayer victim = hitArg.HitObject as IPlayer;
-            if (victim == null || victim.IsDead) continue;
-            
-            // Calculate throw power: (Titan Force × Height) - (Target Force × Height)
-            float titanForce = GetPlayerForce(armoredTitan);
-            float titanHeight = GetPlayerHeight(armoredTitan);
-            float titanPower = titanForce * titanHeight;
-            
-            float victimForce = GetPlayerForce(victim);
-            float victimHeight = GetPlayerHeight(victim);
-            float victimPower = victimForce * victimHeight;
-            
-            float throwPower = (titanPower - (victimPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_SUPER_PUNCH_BALANCER_MOD;
-            throwPower = Math.Max(throwPower, 0f); // Never negative
-            
-            if (throwPower > 0)
+            if (hitArg.IsPlayer)
             {
-                // Apply fall command
-                QuickCommand(victim, new PlayerCommand(PlayerCommandType.Fall));
+                IPlayer victim = hitArg.HitObject as IPlayer;
+                if (victim == null || victim.IsDead) continue;
                 
-                // Apply throw velocity
-                int titanFacing = armoredTitan.FacingDirection;
-                float velocity = throwPower * ARMORED_RUSH_THROW_SCALE;
-                victim.SetLinearVelocity(new Vector2(titanFacing * velocity, velocity * ARMORED_RUSH_THROW_UP_RATIO));
+                // Calculate throw power: (Titan Force × Height) - (Target Force × Height)
+                float victimForce = GetPlayerForce(victim);
+                float victimHeight = GetPlayerHeight(victim);
+                float victimPower = victimForce * victimHeight;
                 
-                // Visual feedback
-                Game.PlayEffect(EffectName.CameraShaker, victim.GetWorldPosition());
-                Game.PlaySound("DestroyMetal", victim.GetWorldPosition());
+                float throwPower = (titanPower - (victimPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_SUPER_PUNCH_BALANCER_MOD;
+                throwPower = Math.Max(throwPower, 0f); // Never negative
+                
+                if (throwPower > 0)
+                {
+                    // Apply fall command
+                    QuickCommand(victim, new PlayerCommand(PlayerCommandType.Fall));
+                    
+                    // Apply throw velocity
+                    float velocity = throwPower * ARMORED_RUSH_THROW_SCALE;
+                    victim.SetLinearVelocity(new Vector2(titanFacing * velocity, velocity * ARMORED_RUSH_THROW_UP_RATIO));
+                    
+                    // Visual feedback
+                    Game.PlayEffect(EffectName.CameraShaker, victim.GetWorldPosition());
+                    Game.PlaySound("DestroyMetal", victim.GetWorldPosition());
+                }
+            }
+            else
+            {
+                IObject hitObj = hitArg.HitObject;
+                if (hitObj.IsRemoved || !hitObj.Destructable) continue;
+                if (hitObj.UniqueID == armoredTitanId) continue;
+                
+                string objName = hitObj.Name;
+                if (objName.StartsWith("Bg") || objName.StartsWith("BG")) continue;
+                if (objName.StartsWith("SoundArea")) continue;
+                if (objName.Contains("Trigger") || objName.Contains("Spawn") ||
+                    objName.Contains("Marker")  || objName.Contains("Ladder") ||
+                    objName.Contains("Joint")) continue;
+                
+                // Skip if object is under the titan's feet
+                if (hitObj.GetWorldPosition().Y < armoredTitan.GetAABB().Bottom) continue;
+                
+                float throwPower = titanPower * ARMORED_SUPER_PUNCH_BALANCER_MOD;
+                if (throwPower > 0)
+                {
+                    float velocity = throwPower * ARMORED_RUSH_THROW_SCALE;
+                    hitObj.SetLinearVelocity(new Vector2(titanFacing * velocity, velocity * ARMORED_RUSH_THROW_UP_RATIO));
+                    
+                    // Visual feedback
+                    Game.PlayEffect(EffectName.CameraShaker, hitObj.GetWorldPosition());
+                    Game.PlaySound("DestroyMetal", hitObj.GetWorldPosition());
+                }
             }
         }
         
@@ -2783,6 +2813,13 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
             objName.Contains("Marker")  || objName.Contains("Ladder") ||
             objName.Contains("Joint")) continue;
         
+        // Skip objects under the titan (e.g. under feet/being stood on) as throwing them launches them up into the titan
+        if (obj.GetWorldPosition().Y < titanArea.Bottom || obj.GetAABB().Top <= titanArea.Bottom + 4f) continue;
+        
+        // Only throw objects in front of titan in rush direction
+        float objDx = obj.GetWorldPosition().X - player.GetWorldPosition().X;
+        if (objDx != 0 && Math.Sign(objDx) != titanFacing) continue;
+        
         // Skip player objects (players are handled separately)
         bool isPlayerObj = false;
         foreach (IPlayer p in allPlayers)
@@ -2795,9 +2832,27 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         }
         if (isPlayerObj) continue;
         
+        int objId = obj.UniqueID;
+        
+        // Check cooldown
+        if (hitTimes.ContainsKey(objId) && currentTime - hitTimes[objId] < ARMORED_RUSH_HIT_COOLDOWN)
+        {
+            continue;
+        }
+        
+        // Record hit time
+        hitTimes[objId] = currentTime;
+        
         // Throw the object
         float throwVelocity = titanPower * ARMORED_RUSH_THROW_SCALE * ARMORED_RUSH_BALANCER_MOD;
         obj.SetLinearVelocity(new Vector2(titanFacing * throwVelocity, throwVelocity * ARMORED_RUSH_THROW_UP_RATIO));
+        
+        // Apply recoil if armor is OFF
+        float damage = ARMORED_RUSH_DAMAGE_BASE * titanMods.MeleeDamageDealtModifier;
+        if (!armorOn)
+        {
+            player.DealDamage(damage * ARMORED_RUSH_RECOIL_RATIO);
+        }
     }
     
     // Store updated hit times
