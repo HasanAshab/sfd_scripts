@@ -2758,13 +2758,13 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
     }
     
     // Check all objects for collisions and throw them
-    IObject[] allObjects = Game.GetObjects();
+    IObject[] allObjects = Game.GetObjectsByArea(titanArea);
     foreach (IObject obj in allObjects)
     {
         if (obj == null || obj.IsRemoved) continue;
         
         // Skip non-destructible objects
-        if (obj.DestructionStartHealth <= 0) continue;
+        if (!obj.Destructable) continue;
         
         // Check collision
         if (!titanArea.Intersects(obj.GetAABB())) continue;
