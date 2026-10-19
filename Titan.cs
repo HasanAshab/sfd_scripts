@@ -1468,9 +1468,9 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
             mode = attackTitanHardeningMode[playerId];
         }
         
-        if (mode == HardeningMode.Offensive && args.Length > 0)
+        if (mode == HardeningMode.Offensive && args.Length > 0 && !player.IsKicking && !player.IsJumpKicking)
         {
-            // 70% chance to stagger hit players
+            // 70% chance to stagger hit players (punches only, not kicks)
             foreach (PlayerMeleeHitArg hitArg in args)
             {
                 if (hitArg.HitObject != null && hitArg.IsPlayer)
@@ -1539,7 +1539,7 @@ private void HandleJawTitanMelee(IPlayer jawTitan, int jawTitanId, PlayerMeleeHi
     }
     
     int currentPunchCount = jawTitanPunchCount[jawTitanId];
-    bool isJumpAttack = jawTitan.IsInMidAir;
+    bool isJumpAttack = jawTitan.IsJumpAttacking && !jawTitan.IsJumpKicking && !jawTitan.IsKicking;
     
     foreach (PlayerMeleeHitArg hitArg in args)
     {
@@ -2260,7 +2260,11 @@ public void OnUpdate(float elapsed)
         {
             if (currentTime >= jawHuntVictimReenableTime[playerId])
             {
-                player.SetInputEnabled(true);
+                if (!player.IsDead)
+                {
+                    player.AddCommand(new PlayerCommand(PlayerCommandType.StopCrouch));
+                    player.SetInputEnabled(true);
+                }
                 jawHuntVictimReenableTime.Remove(playerId);
             }
         }
@@ -2311,8 +2315,9 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
     // Check if Jaw Titan is still diving/catching the victim
     if (victim.CaughtByPlayerInDiveID != jawTitanId)
     {
-        // Hunt ended - disable victim's input for 2 seconds
+        // Hunt ended - disable victim's input and crouch until stun ends
         victim.SetInputEnabled(false);
+        victim.AddCommand(new PlayerCommand(PlayerCommandType.StartCrouch));
         
         // Track when to re-enable (will be checked in OnUpdate)
         float reenableTime = currentTime + JAW_HUNT_VICTIM_STUN_DURATION;
