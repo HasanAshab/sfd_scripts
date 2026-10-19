@@ -205,6 +205,16 @@ private Dictionary<string, int> playerNameToId = new Dictionary<string, int>();
 // Track titan type labels above players' heads
 private Dictionary<int, IObjectText> titanTypeLabels = new Dictionary<int, IObjectText>();
 
+// Track bots whose PowerupUsage has been set to false
+private HashSet<int> configuredBotPowerupUsage = new HashSet<int>();
+
+// Track players who received startup strength boost
+private HashSet<int> givenStartupStrengthBoost = new HashSet<int>();
+
+// Track bot strength boost activation check times
+private Dictionary<int, float> botLastStrengthBoostCheck = new Dictionary<int, float>();
+private const float BOT_STRENGTH_BOOST_CHECK_INTERVAL = 1000f; // 1 second check interval
+
 // Helper class for grab damage tracking
 private class GrabDamageData
 {
@@ -309,6 +319,29 @@ public void InitializeTitanDistribution(TriggerArgs args)
         // Recreate labels immediately
         IPlayer[] allPlayers = Game.GetPlayers();
         CreateTitanTypeLabels(allPlayers);
+    }
+    
+    // Give strength boost to all humanoid titan owners for this match
+    GiveStrengthBoostToHumanoidTitans();
+}
+
+private void GiveStrengthBoostToHumanoidTitans()
+{
+    IPlayer[] allPlayers = Game.GetPlayers();
+    foreach (IPlayer player in allPlayers)
+    {
+        if (player == null || player.IsDead) continue;
+        
+        int playerId = player.UniqueID;
+        if (assignedTitanPowers.ContainsKey(playerId))
+        {
+            TitanType titanType = assignedTitanPowers[playerId];
+            if (titanType != TitanType.Pure && !givenStartupStrengthBoost.Contains(playerId))
+            {
+                player.GiveWeaponItem(WeaponItem.STRENGTHBOOST);
+                givenStartupStrengthBoost.Add(playerId);
+            }
+        }
     }
 }
 
@@ -1841,6 +1874,12 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
     
     int playerId = player.UniqueID;
     
+    // Check if damaged player is a bot that can activate strength boost
+    if (player.IsBot && !player.IsDead)
+    {
+        TryActivateBotStrengthBoost(player, playerId);
+    }
+    
     // Check if Armored Titan with armor ON
     if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] != TitanType.Armored) return;
     if (!armoredTitanArmorOn.ContainsKey(playerId) || !armoredTitanArmorOn[playerId]) return;
@@ -2162,6 +2201,28 @@ public void OnUpdate(float elapsed)
         if (player == null || player.IsDead) continue;
         
         int playerId = player.UniqueID;
+        
+        // Ensure humanoid titan owners get startup strength boost if not yet received
+        if (assignedTitanPowers.ContainsKey(playerId) && assignedTitanPowers[playerId] != TitanType.Pure)
+        {
+            if (!givenStartupStrengthBoost.Contains(playerId))
+            {
+                player.GiveWeaponItem(WeaponItem.STRENGTHBOOST);
+                givenStartupStrengthBoost.Add(playerId);
+            }
+        }
+        
+        // Disable default powerup usage on all bots on map (track by bot ID)
+        if (player.IsBot && !configuredBotPowerupUsage.Contains(playerId))
+        {
+            BotBehaviorSet bS = player.GetBotBehaviorSet();
+            bS.PowerupUsage = false;
+            player.SetBotBehaviorSet(bS);
+            configuredBotPowerupUsage.Add(playerId);
+        }
+        
+        // Check bot strength boost activation based on HP percentage
+        CheckBotStrengthBoostActivation(player, playerId, currentTime);
         
         // Initialize tracking
         if (!playerWasOnGround.ContainsKey(playerId))
@@ -2903,6 +2964,39 @@ private void CheckArmoredTitanBotRush(IPlayer player, int playerId, float curren
         
         // Command bot to sprint (use Fall as proxy since StartSprinting doesn't exist)
         // Bot AI will handle sprinting behavior naturally when chasing targets
+    }
+}
+
+private void TryActivateBotStrengthBoost(IPlayer player, int playerId)
+{
+    if (player.CurrentPowerupItem.WeaponItem != WeaponItem.STRENGTHBOOST) return;
+    if (player.GetStrengthBoostTime() > 0) return;
+    if (titanPlayers.ContainsKey(playerId)) return;
+    
+    PlayerModifiers mods = player.GetModifiers();
+    float currentHp = player.GetHealth();
+    float maxHp = mods.MaxHealth;
+    float hpPercent = (maxHp > 0) ? (currentHp / maxHp) : 1f;
+    hpPercent = Math.Max(0f, Math.Min(1f, hpPercent));
+    
+    // HP 100% to 0% = activate 0% to 100%
+    float activationChance = 1f - hpPercent;
+    
+    if (rnd.NextDouble() < activationChance)
+    {
+        QuickCommand(player, new PlayerCommand(PlayerCommandType.DrawPowerup));
+    }
+}
+
+private void CheckBotStrengthBoostActivation(IPlayer player, int playerId, float currentTime)
+{
+    if (!player.IsBot || player.IsDead) return;
+    
+    // Check periodically
+    if (!botLastStrengthBoostCheck.ContainsKey(playerId) || currentTime - botLastStrengthBoostCheck[playerId] >= BOT_STRENGTH_BOOST_CHECK_INTERVAL)
+    {
+        botLastStrengthBoostCheck[playerId] = currentTime;
+        TryActivateBotStrengthBoost(player, playerId);
     }
 }
 
