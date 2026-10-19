@@ -181,43 +181,12 @@ public void OnStartup()
     // Set up player death callback for Pure Titan power extract ability
     Events.PlayerDeathCallback.Start(OnPlayerDeath);
     
-    // Distribute titan powers using SharedStorage with player group tracking
-    IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
-    string today = GetTodayDateString();
-    
-    // Get current player group key (sorted list of non-bot player names)
-    string playerGroupKey = GetPlayerGroupKey();
-    
-    // Storage key for this specific player group's distribution date
-    string dateKey = "DATE_" + playerGroupKey;
-    string lastDistributionDate = "";
-    
-    if (persistentStorage.ContainsKey(dateKey))
-    {
-        lastDistributionDate = (string)persistentStorage.GetItem(dateKey);
-    }
-    
-    if (lastDistributionDate != today)
-    {
-        // New day for this player group - distribute powers after 1 second delay
-        IObjectTimerTrigger distributionTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-        distributionTimer.SetIntervalTime(1000); // 1 second delay
-        distributionTimer.SetRepeatCount(1); // Run once
-        distributionTimer.SetScriptMethod("DistributeTitanPowers");
-        distributionTimer.Trigger();
-    }
-    else
-    {
-        // Same day - restore from storage for this player group
-        RestoreAssignedPowersFromStorage();
-        
-        // Recreate labels after 1 second (wait for players to spawn)
-        IObjectTimerTrigger labelTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
-        labelTimer.SetIntervalTime(1000);
-        labelTimer.SetRepeatCount(1);
-        labelTimer.SetScriptMethod("RecreateLabelsAfterMatchStart");
-        labelTimer.Trigger();
-    }
+    // Delay initialization until all players are spawned (500ms wait for other scripts)
+    IObjectTimerTrigger initTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
+    initTimer.SetIntervalTime(500); // 500ms delay to wait for all players
+    initTimer.SetRepeatCount(1); // Run once
+    initTimer.SetScriptMethod("InitializeTitanDistribution");
+    initTimer.Trigger();
 
     // strength boost
     const float OTHERS_SCALE = 0.5f; // 1.0 = unchanged, 0.2 = others are 5x rarer
@@ -235,6 +204,52 @@ public void OnStartup()
 
     chances.Add(boost, 100);
     Game.UpdateWeaponSpawnChances(chances);
+}
+
+public void InitializeTitanDistribution(TriggerArgs args)
+{
+    // Distribute titan powers using SharedStorage with player group tracking
+    // This runs 500ms after OnStartup to ensure all players are spawned
+    IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
+    string today = GetTodayDateString();
+    
+    // Get current player group key (sorted list of non-bot player names)
+    string playerGroupKey = GetPlayerGroupKey();
+    
+    Game.ShowChatMessage("Player Group Key: " + playerGroupKey, Color.Yellow);
+    
+    // Storage key for this specific player group's distribution date
+    string dateKey = "DATE_" + playerGroupKey;
+    string lastDistributionDate = "";
+    
+    if (persistentStorage.ContainsKey(dateKey))
+    {
+        lastDistributionDate = (string)persistentStorage.GetItem(dateKey);
+        Game.ShowChatMessage("Last distribution for this group: " + lastDistributionDate, Color.Cyan);
+    }
+    else
+    {
+        Game.ShowChatMessage("No previous distribution found for this group", Color.Cyan);
+    }
+    
+    Game.ShowChatMessage("Today: " + today, Color.Cyan);
+    
+    if (lastDistributionDate != today)
+    {
+        // New day for this player group - distribute powers immediately
+        Game.ShowChatMessage("Distributing new powers...", Color.Green);
+        DistributeTitanPowers(args);
+    }
+    else
+    {
+        // Same day - restore from storage for this player group
+        Game.ShowChatMessage("Restoring powers from storage...", Color.Green);
+        RestoreAssignedPowersFromStorage();
+        
+        // Recreate labels immediately
+        IPlayer[] allPlayers = Game.GetPlayers();
+        CreateTitanTypeLabels(allPlayers);
+    }
 }
 
 // Helper method to get today's date as a string (YYYY-MM-DD format)
@@ -257,9 +272,14 @@ private string GetPlayerGroupKey()
         if (player == null) continue;
         
         // Skip players named "bot" (case-insensitive)
-        if (player.Name.ToLower() == "bot") continue;
+        if (player.Name.ToLower() == "bot")
+        {
+            Game.ShowChatMessage("Skipping bot player: " + player.Name, Color.Gray);
+            continue;
+        }
         
         playerNames.Add(player.Name);
+        Game.ShowChatMessage("Adding player to group: " + player.Name, Color.Gray);
     }
     
     // Sort alphabetically for consistent key generation
@@ -414,12 +434,6 @@ private void RestoreAssignedPowersFromStorage()
             assignedTitanPowers[playerId] = TitanType.Pure;
         }
     }
-}
-
-public void RecreateLabelsAfterMatchStart(TriggerArgs args)
-{
-    IPlayer[] allPlayers = Game.GetPlayers();
-    CreateTitanTypeLabels(allPlayers);
 }
 private void DistributeWithOriginalAlgorithm(IPlayer[] allPlayers)
 {
