@@ -2763,11 +2763,35 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
     {
         if (obj == null || obj.IsRemoved) continue;
         
-        // Skip non-destructible objects
+        // Only throw destructible objects
         if (!obj.Destructable) continue;
         
         // Check collision
         if (!titanArea.Intersects(obj.GetAABB())) continue;
+        
+        // Skip the titan player itself
+        if (obj.UniqueID == playerId) continue;
+        
+        string objName = obj.Name;
+        
+        // Skip background/non-physical objects (mirrors ODM script filter)
+        if (objName.StartsWith("Bg") || objName.StartsWith("BG")) continue;
+        if (objName.StartsWith("SoundArea")) continue;
+        if (objName.Contains("Trigger") || objName.Contains("Spawn") ||
+            objName.Contains("Marker")  || objName.Contains("Ladder") ||
+            objName.Contains("Joint")) continue;
+        
+        // Skip player objects (players are handled separately)
+        bool isPlayerObj = false;
+        foreach (IPlayer p in allPlayers)
+        {
+            if (p != null && p.UniqueID == obj.UniqueID)
+            {
+                isPlayerObj = true;
+                break;
+            }
+        }
+        if (isPlayerObj) continue;
         
         // Throw the object
         float throwVelocity = titanPower * ARMORED_RUSH_THROW_SCALE * 0.5f; // Half power for objects
@@ -2926,19 +2950,11 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
     {
         if (player == null || player.IsDead || player.UniqueID == titanId) continue;
         
-        // Check if this player is caught by THIS SPECIFIC titan's grab
-        if (player.IsCaughtByPlayerInGrab)
+        // Check if this player is caught in a grab specifically by THIS titan
+        if (player.IsCaughtByPlayerInGrab && player.CaughtByPlayerInGrabID == titanId)
         {
-            // Additional verification: check if titan is within grab range
-            Vector2 titanPos = titan.GetWorldPosition();
-            Vector2 playerPos = player.GetWorldPosition();
-            float distance = Vector2.Distance(titanPos, playerPos);
-            
-            if (distance < 5f) // Close enough to be grabbing this player
-            {
-                currentVictim = player;
-                break;
-            }
+            currentVictim = player;
+            break;
         }
     }
     
