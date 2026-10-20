@@ -41,8 +41,8 @@ private const float ATTACK_TITAN_ENERGY_BONUS = 0.30f; // 30% energy increase
 
 // Attack Titan hardening costs and bonuses
 private const float HARDENING_ENERGY_COST_PER_SECOND = 0.14f; // 14% of max energy per second
+private const float HARDENING_OFFENSIVE_ENERGY_DRAIN = 25f; // Offensive hardening drains 25 energy on punch hit
 private const float HARDENING_OFFENSIVE_DAMAGE_BONUS = 0.25f; // 25% melee damage increase
-private const float HARDENING_OFFENSIVE_STAGGER_CHANCE = 0.70f; // 70% stagger chance
 private const float HARDENING_DEFENSIVE_SPEED_PENALTY = 0.20f; // 20% speed reduction
 private const float HARDENING_DEFENSIVE_DEFENSE_BONUS = 0.75f; // 75% damage reduction
 private const float HARDENING_OFFENSIVE_TRIGGER_DISTANCE = 25f; // Distance to trigger offensive mode
@@ -52,6 +52,10 @@ private const float HARDENING_LOW_ENERGY_THRESHOLD = 0.30f; // 30% energy thresh
 private const float HARDENING_AVOID_TRIGGER_CHANCE = 0.80f; // 80% chance to avoid when low energy
 private const float HARDENING_SWITCH_TO_NEUTRAL_CHANCE = 0.60f; // 60% chance to switch back when low energy
 private const float AIM_DETECTION_RANGE = 800f; // Range for raycast aim detection
+
+// Attack Titan super punch ability
+private const int ATTACK_SUPER_PUNCH_COUNT = 3; // 3rd punch is super punch (always staggers)
+private const int ATTACK_SUPER_PUNCH_WINDOW = 600; // 600ms window between punches
 
 // Attack Titan slowmo ability
 private const float SLOWMO_ENERGY_COST = 0.30f; // 30% of max energy
@@ -154,6 +158,8 @@ private Dictionary<int, float> attackTitanHardeningEnergyCost = new Dictionary<i
 private Dictionary<int, float> attackTitanLastMeleeTime = new Dictionary<int, float>();
 private Dictionary<int, float> attackTitanLastDefensiveCheck = new Dictionary<int, float>();
 private Dictionary<int, float> attackTitanSlowmoEndTime = new Dictionary<int, float>();
+private Dictionary<int, int> attackTitanPunchCount = new Dictionary<int, int>(); // Track punch count for super punch
+private Dictionary<int, float> attackTitanLastPunchTime = new Dictionary<int, float>(); // Track last punch time
 
 // Track player ground state for fall detection
 private Dictionary<int, bool> playerWasOnGround = new Dictionary<int, bool>();
@@ -1032,6 +1038,9 @@ private void TransformToAttackTitan(IPlayer player, int playerId)
     // Initialize Attack Titan hardening mode to Neutral
     attackTitanHardeningMode[playerId] = HardeningMode.Neutral;
     
+    // Initialize Attack Titan punch count
+    attackTitanPunchCount[playerId] = 0;
+    
     // Apply height-based scaling (different from Pure Titan's random size)
     ApplyAttackTitanHeightScaling(player, playerId, mods);
 }
@@ -1564,34 +1573,7 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
     // Handle Attack Titan melee
     if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Attack)
     {
-        // Update last melee time for offensive mode timeout
-        attackTitanLastMeleeTime[playerId] = currentTime;
-        
-        // Check for offensive hardening stagger chance
-        HardeningMode mode = HardeningMode.Neutral;
-        if (attackTitanHardeningMode.ContainsKey(playerId))
-        {
-            mode = attackTitanHardeningMode[playerId];
-        }
-        
-        if (mode == HardeningMode.Offensive && args.Length > 0 && !player.IsKicking && !player.IsJumpKicking)
-        {
-            // 70% chance to stagger hit players (punches only, not kicks)
-            foreach (PlayerMeleeHitArg hitArg in args)
-            {
-                if (hitArg.HitObject != null && hitArg.IsPlayer)
-                {
-                    if (rnd.NextDouble() < HARDENING_OFFENSIVE_STAGGER_CHANCE)
-                    {
-                        IPlayer hitPlayer = Game.GetPlayer(hitArg.HitObject.UniqueID);
-                        if (hitPlayer != null && !hitPlayer.IsDead)
-                        {
-                            QuickCommand(hitPlayer, new PlayerCommand(PlayerCommandType.Stagger));
-                        }
-                    }
-                }
-            }
-        }
+        HandleAttackTitanMelee(player, playerId, args, currentTime);
         return;
     }
     
@@ -1617,6 +1599,89 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
     else
     {
         playerFacingDirections[playerId] = player.FacingDirection;
+    }
+}
+
+private void HandleAttackTitanMelee(IPlayer attackTitan, int attackTitanId, PlayerMeleeHitArg[] args, float currentTime)
+{
+    // Update last melee time for offensive mode timeout
+    attackTitanLastMeleeTime[attackTitanId] = currentTime;
+    
+    // Only track punch combos when not kicking
+    bool isPunch = !attackTitan.IsKicking && !attackTitan.IsJumpKicking;
+    
+    if (isPunch)
+    {
+        // Update punch count and timing
+        if (!attackTitanLastPunchTime.ContainsKey(attackTitanId))
+        {
+            attackTitanPunchCount[attackTitanId] = 1;
+            attackTitanLastPunchTime[attackTitanId] = currentTime;
+        }
+        else
+        {
+            float timeSinceLastPunch = currentTime - attackTitanLastPunchTime[attackTitanId];
+            if (timeSinceLastPunch <= ATTACK_SUPER_PUNCH_WINDOW)
+            {
+                // Within window, increment punch count
+                attackTitanPunchCount[attackTitanId]++;
+            }
+            else
+            {
+                // Outside window, reset to 1
+                attackTitanPunchCount[attackTitanId] = 1;
+            }
+            attackTitanLastPunchTime[attackTitanId] = currentTime;
+        }
+    }
+    
+    int currentPunchCount = attackTitanPunchCount.ContainsKey(attackTitanId) ? attackTitanPunchCount[attackTitanId] : 0;
+    bool isSuperPunch = isPunch && currentPunchCount >= ATTACK_SUPER_PUNCH_COUNT;
+    
+    // Check hardening mode
+    HardeningMode mode = HardeningMode.Neutral;
+    if (attackTitanHardeningMode.ContainsKey(attackTitanId))
+    {
+        mode = attackTitanHardeningMode[attackTitanId];
+    }
+    
+    bool hasOffensiveHardening = (mode == HardeningMode.Offensive);
+    
+    // Process hit targets
+    if (args != null && args.Length > 0)
+    {
+        foreach (PlayerMeleeHitArg hitArg in args)
+        {
+            if (hitArg.HitObject == null || !hitArg.IsPlayer) continue;
+            
+            IPlayer hitPlayer = hitArg.HitObject as IPlayer;
+            if (hitPlayer == null)
+            {
+                hitPlayer = Game.GetPlayer(hitArg.HitObject.UniqueID);
+            }
+            if (hitPlayer == null || hitPlayer.IsDead) continue;
+            
+            // 1. Offensive Hardening: always drain 25f energy on victim
+            if (hasOffensiveHardening)
+            {
+                PlayerModifiers victimMods = hitPlayer.GetModifiers();
+                victimMods.CurrentEnergy = Math.Max(0f, victimMods.CurrentEnergy - HARDENING_OFFENSIVE_ENERGY_DRAIN);
+                hitPlayer.SetModifiers(victimMods);
+                Game.PlaySound("ElectricSpark", hitPlayer.GetWorldPosition());
+            }
+            
+            // 2. Super Punch: on third punch, victim will always stagger
+            if (isSuperPunch)
+            {
+                QuickCommand(hitPlayer, new PlayerCommand(PlayerCommandType.Stagger));
+            }
+        }
+    }
+    
+    // Reset punch count after 3rd punch
+    if (isSuperPunch)
+    {
+        attackTitanPunchCount[attackTitanId] = 0;
     }
 }
 
@@ -4043,6 +4108,8 @@ private void CleanupTitanData(int titanPlayerId)
     attackTitanLastMeleeTime.Remove(titanPlayerId);
     attackTitanLastDefensiveCheck.Remove(titanPlayerId);
     attackTitanSlowmoEndTime.Remove(titanPlayerId);
+    attackTitanPunchCount.Remove(titanPlayerId);
+    attackTitanLastPunchTime.Remove(titanPlayerId);
     
     // Clean up Jaw Titan data
     jawTitanPunchCount.Remove(titanPlayerId);
