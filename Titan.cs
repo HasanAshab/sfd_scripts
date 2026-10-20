@@ -74,6 +74,11 @@ private const float JAW_CLAW_GIB_THRESHOLD = 0.30f; // 30% overkill = gib
 // Jaw Titan hunt ability
 private const float JAW_HUNT_VICTIM_STUN_DURATION = 1000f; // 1 seconds input disable after hunt
 
+// Jaw Titan bot backstab targeting
+private const float JAW_BOT_BACKSTAB_COMBAT_RANGE = 50f;   // Range for in-combat backstab check
+private const float JAW_BOT_COMBAT_TIMEOUT_MS = 3000f;     // Time with no melee before considered out-of-combat
+private const float JAW_BOT_TARGETING_INTERVAL_MS = 300f;  // How often to re-evaluate target
+
 // Jaw Titan sharp claw ability
 private const int JAW_SHARP_CLAW_PUNCH_COUNT = 3; // 3rd punch breaks objects
 private const int JAW_SHARP_CLAW_PUNCH_WINDOW = 600; // 600ms window between punches
@@ -184,6 +189,9 @@ private Dictionary<int, IPlayer> jawTitanHuntVictim = new Dictionary<int, IPlaye
 private Dictionary<int, float> jawTitanHuntDamageTime = new Dictionary<int, float>(); // Track hunt damage timing
 private Dictionary<int, float> jawTitanHuntBloodEffectTime = new Dictionary<int, float>(); // Track hunt blood effect timing
 private Dictionary<int, float> jawHuntVictimReenableTime = new Dictionary<int, float>(); // Track when to re-enable victim input
+private Dictionary<int, float> jawBotLastCombatTime = new Dictionary<int, float>(); // Track last combat time for bot targeting
+private Dictionary<int, IPlayer> jawBotCurrentTarget = new Dictionary<int, IPlayer>(); // Current forced bot target
+private Dictionary<int, float> jawBotLastTargetCheck = new Dictionary<int, float>(); // Rate-limit target evaluations
 
 // Track Armored Titan specific data
 private Dictionary<int, bool> armoredTitanArmorOn = new Dictionary<int, bool>(); // Track armor state (true = on, false = off)
@@ -1636,6 +1644,12 @@ private void HandleJawTitanMelee(IPlayer jawTitan, int jawTitanId, PlayerMeleeHi
         jawTitanLastPunchTime[jawTitanId] = currentTime;
     }
     
+    // Record combat timestamp for bot backstab targeting logic
+    if (jawTitan.IsBot)
+    {
+        jawBotLastCombatTime[jawTitanId] = currentTime;
+    }
+    
     int currentPunchCount = jawTitanPunchCount[jawTitanId];
     bool isJumpAttack = jawTitan.IsJumpAttacking && !jawTitan.IsJumpKicking && !jawTitan.IsKicking;
     
@@ -2460,6 +2474,12 @@ public void OnUpdate(float elapsed)
                 
                 // Jaw Titan also has exhaustion
                 CheckTitanExhaustion(player, playerId);
+                
+                // Bot backstab targeting
+                if (player.IsBot)
+                {
+                    CheckJawTitanBotTargeting(player, playerId, currentTime);
+                }
             }
             else if (titanType == TitanType.Armored)
             {
@@ -2599,6 +2619,117 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
         
         // Update next damage time
         jawTitanHuntDamageTime[jawTitanId] = currentTime + GRAB_DAMAGE_INTERVAL;
+    }
+}
+
+// Checks and updates the Jaw Titan bot's forced target using backstab-priority logic:
+// Priority 1 (global, out-of-combat): closest enemy with back exposed
+// Priority 2 (in-combat, range 50f): any enemy with back exposed
+// Priority 3 (in-combat, none in range): keep current target
+// Priority 4 (out-of-combat 3s+, none in range): fall back to priority 1
+private void CheckJawTitanBotTargeting(IPlayer jawBot, int jawBotId, float currentTime)
+{
+    // Rate-limit evaluations
+    if (jawBotLastTargetCheck.ContainsKey(jawBotId) &&
+        currentTime - jawBotLastTargetCheck[jawBotId] < JAW_BOT_TARGETING_INTERVAL_MS)
+    {
+        return;
+    }
+    jawBotLastTargetCheck[jawBotId] = currentTime;
+    
+    PlayerTeam jawTeam = jawBot.GetTeam();
+    Vector2 jawPos = jawBot.GetWorldPosition();
+    int jawFacing = jawBot.FacingDirection;
+    
+    // Build list of alive enemies
+    IPlayer[] enemies = Game.GetPlayers().Where(p =>
+        p != null &&
+        !p.IsDead &&
+        p.UniqueID != jawBotId &&
+        p.GetTeam() != jawTeam
+    ).ToArray();
+    
+    if (enemies.Length == 0)
+    {
+        jawBot.SetForcedBotTarget(null);
+        jawBotCurrentTarget.Remove(jawBotId);
+        return;
+    }
+    
+    // A target has its back exposed when it faces the SAME direction as the Jaw Titan
+    // (jaw is behind them — they face away from jaw)
+    // We use playerFacingDirections (updated every tick) for accuracy
+    
+    // Determine in-combat state: was a melee hit registered recently?
+    bool isInCombat = jawBotLastCombatTime.ContainsKey(jawBotId) &&
+                      (currentTime - jawBotLastCombatTime[jawBotId]) < JAW_BOT_COMBAT_TIMEOUT_MS;
+    
+    // --- Priority 2 / 3: In-combat ---
+    if (isInCombat)
+    {
+        // Look for backstab target within combat range
+        IPlayer backstabTarget = null;
+        float closestDist = float.MaxValue;
+        
+        foreach (IPlayer enemy in enemies)
+        {
+            float dist = Vector2.Distance(jawPos, enemy.GetWorldPosition());
+            if (dist > JAW_BOT_BACKSTAB_COMBAT_RANGE) continue;
+            
+            // Back exposed = enemy faces same direction as the Jaw Titan
+            int enemyFacing = playerFacingDirections.ContainsKey(enemy.UniqueID)
+                ? playerFacingDirections[enemy.UniqueID]
+                : enemy.FacingDirection;
+            
+            if (enemyFacing == jawFacing && dist < closestDist)
+            {
+                closestDist = dist;
+                backstabTarget = enemy;
+            }
+        }
+        
+        if (backstabTarget != null)
+        {
+            // Priority 2: found a backstab target in range — switch to it
+            jawBotCurrentTarget[jawBotId] = backstabTarget;
+            jawBot.SetForcedBotTarget(backstabTarget);
+        }
+        // else Priority 3: keep current target unchanged
+        
+        return;
+    }
+    
+    // --- Priority 1 / 4: Out-of-combat (or timed out) ---
+    // Find globally closest enemy with back exposed
+    IPlayer globalBackstab = null;
+    float globalClosestDist = float.MaxValue;
+    
+    foreach (IPlayer enemy in enemies)
+    {
+        int enemyFacing = playerFacingDirections.ContainsKey(enemy.UniqueID)
+            ? playerFacingDirections[enemy.UniqueID]
+            : enemy.FacingDirection;
+        
+        if (enemyFacing != jawFacing) continue; // Not a backstab opportunity
+        
+        float dist = Vector2.Distance(jawPos, enemy.GetWorldPosition());
+        if (dist < globalClosestDist)
+        {
+            globalClosestDist = dist;
+            globalBackstab = enemy;
+        }
+    }
+    
+    if (globalBackstab != null)
+    {
+        jawBotCurrentTarget[jawBotId] = globalBackstab;
+        jawBot.SetForcedBotTarget(globalBackstab);
+    }
+    else
+    {
+        // No backstab opportunity at all — let AI choose freely
+        jawBot.SetForcedBotTarget(null);
+        jawBotCurrentTarget.Remove(jawBotId);
     }
 }
 
@@ -3911,6 +4042,9 @@ private void CleanupTitanData(int titanPlayerId)
     jawTitanHuntDamageTime.Remove(titanPlayerId);
     jawTitanHuntBloodEffectTime.Remove(titanPlayerId);
     jawHuntVictimReenableTime.Remove(titanPlayerId);
+    jawBotLastCombatTime.Remove(titanPlayerId);
+    jawBotCurrentTarget.Remove(titanPlayerId);
+    jawBotLastTargetCheck.Remove(titanPlayerId);
     
     // Clean up Armored Titan data
     armoredTitanArmorOn.Remove(titanPlayerId);
