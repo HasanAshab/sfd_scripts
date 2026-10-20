@@ -1988,150 +1988,247 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
 private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victim, int victimId, TitanType extractedPower)
 {
     Vector2 pureTitanPos = pureTitan.GetWorldPosition();
+    int pureTitanFacing = pureTitan.FacingDirection;
+    PlayerTeam pureTitanTeam = pureTitan.GetTeam();
+    bool isBot = pureTitan.IsBot;
+    string playerName = pureTitan.Name;
     
     // Check if the Pure Titan is a temporary player
-    bool isTemporaryPlayer = pureTitan.Name.ToLower() == TEMPORARY_PLAYER_NAME.ToLower();
+    bool isTemporaryPlayer = playerName.ToLower() == TEMPORARY_PLAYER_NAME.ToLower();
     
-    // 1. Detransform Pure Titan with smoke effect
+    // Get original profile and modifiers (human form)
+    IProfile humanProfile = originalProfiles.ContainsKey(pureTitanId) ? originalProfiles[pureTitanId] : pureTitan.GetProfile();
+    PlayerModifiers humanMods = originalModifiers.ContainsKey(pureTitanId) ? originalModifiers[pureTitanId] : new PlayerModifiers();
+    
+    // Get original bot behaviors
+    BotBehavior humanBotBehavior = originalBotBehaviors.ContainsKey(pureTitanId) ? originalBotBehaviors[pureTitanId] : new BotBehavior(true, PredefinedAIType.BotA);
+    BotBehaviorSet humanBotBehaviorSet = originalBotBehaviorSets.ContainsKey(pureTitanId) ? originalBotBehaviorSets[pureTitanId] : null;
+    
+    // Get user controller (for human players) before anything happens
+    IUser user = pureTitan.GetUser();
+    
+    // 1. Detransform Pure Titan with smoke and destruction effect
     Game.PlayEffect(EffectName.Steam, pureTitanPos);
     Game.PlayEffect(EffectName.Steam, pureTitanPos);
     Game.PlaySound("BarrelDestroyed", pureTitanPos);
     
-    // Restore original profile and modifiers
-    if (originalProfiles.ContainsKey(pureTitanId))
+    // Remove old label immediately so it doesn't float above the corpse
+    if (titanTypeLabels.ContainsKey(pureTitanId))
     {
-        pureTitan.SetProfile(originalProfiles[pureTitanId]);
-        originalProfiles.Remove(pureTitanId);
-    }
-    
-    if (originalModifiers.ContainsKey(pureTitanId))
-    {
-        pureTitan.SetModifiers(originalModifiers[pureTitanId]);
-        originalModifiers.Remove(pureTitanId);
-    }
-    
-    // Restore original bot behavior and behavior set if bot
-    if (pureTitan.IsBot)
-    {
-        if (originalBotBehaviors.ContainsKey(pureTitanId))
+        IObjectText label = titanTypeLabels[pureTitanId];
+        if (label != null && !label.IsRemoved)
         {
-            pureTitan.SetBotBehavior(originalBotBehaviors[pureTitanId]);
-            originalBotBehaviors.Remove(pureTitanId);
+            label.Remove();
         }
-        
-        if (originalBotBehaviorSets.ContainsKey(pureTitanId))
-        {
-            pureTitan.SetBotBehaviorSet(originalBotBehaviorSets[pureTitanId]);
-            originalBotBehaviorSets.Remove(pureTitanId);
-        }
+        titanTypeLabels.Remove(pureTitanId);
     }
     
-    // Make Pure Titan fall (simulate weakness after detransformation)
-    QuickCommand(pureTitan, new PlayerCommand(PlayerCommandType.Fall));
+    // Preserve old pure titan power before removing
+    TitanType tempPureTitanPower = assignedTitanPowers.ContainsKey(pureTitanId) ? assignedTitanPowers[pureTitanId] : TitanType.Pure;
+    assignedTitanPowers.Remove(pureTitanId);
     
-    // Remove from titan players list
-    titanPlayers.Remove(pureTitanId);
+    // Clean up all titan tracking data for this player BEFORE killing
+    CleanupTitanData(pureTitanId);
     
-    // Clean up titan-specific data
-    titanSizes.Remove(pureTitanId);
-    titanGrabDamage.Remove(pureTitanId);
-    titanInputDisabled.Remove(pureTitanId);
-    titanExhausted.Remove(pureTitanId);
-    titanExhaustionRecoverTime.Remove(pureTitanId);
+    // Update shared storage immediately to notify odm.cs that titan is dead
+    UpdateTitanPlayersStorage();
     
-    // 2. Handle power distribution based on whether extractor is temporary
-    if (isTemporaryPlayer)
+    // Kill the pure titan player immediately (leaving the titan corpse on the ground to steam)
+    pureTitan.Kill();
+    
+    // Determine power name for chat message
+    string powerName = "UNKNOWN";
+    if (extractedPower == TitanType.Attack) powerName = "ATTACK TITAN";
+    else if (extractedPower == TitanType.Jaw) powerName = "JAW TITAN";
+    else if (extractedPower == TitanType.Armored) powerName = "ARMORED TITAN";
+    
+    // The detransformed human spawns after 1500ms of the titan body being killed
+    Events.UpdateCallback.Start((float dt) =>
     {
-        // Temporary player: Give power to random Pure Titan teammate
-        IPlayer randomTeammatePureTitan = GetRandomPureTitanTeammate(pureTitan);
+        // Calculate ground position where corpse landed
+        Vector2 corpsePos = (pureTitan != null) ? pureTitan.GetWorldPosition() : pureTitanPos;
+        Area corpseArea = (pureTitan != null) ? pureTitan.GetAABB() : new Area(corpsePos.Y + 10f, corpsePos.X - 10f, corpsePos.Y - 10f, corpsePos.X + 10f);
+        Vector2 spawnPos = corpsePos;
         
-        if (randomTeammatePureTitan != null)
+        if (pureTitan != null && pureTitan.IsOnGround)
         {
-            int teammateId = randomTeammatePureTitan.UniqueID;
-            
-            // Check if teammate has an assigned power
-            if (!assignedTitanPowers.ContainsKey(teammateId))
-            {
-                Game.ShowChatMessage("Error: Teammate " + randomTeammatePureTitan.Name + " has no assigned power!", Color.Red);
-                return;
-            }
-            
-            TitanType teammatePower = assignedTitanPowers[teammateId];
-            assignedTitanPowers[teammateId] = extractedPower; // Teammate gets humanoid power
-            assignedTitanPowers[victimId] = teammatePower; // Victim gets teammate's old power
-            
-            // Keep temporary player's power unchanged (stays Pure)
-            
-            // Update labels
-            UpdateLabelsAfterPowerSwap(teammateId, victimId);
-            
-            // Save updated powers
-            SaveAssignedPowersToStorage();
-            
-            // Update shared storage
-            UpdateTitanPlayersStorage();
-            
-            // Show message
-            string powerName = "UNKNOWN";
-            if (extractedPower == TitanType.Attack)
-            {
-                powerName = "ATTACK TITAN";
-            }
-            else if (extractedPower == TitanType.Jaw)
-            {
-                powerName = "JAW TITAN";
-            }
-            else if (extractedPower == TitanType.Armored)
-            {
-                powerName = "ARMORED TITAN";
-            }
-            Game.ShowChatMessage(pureTitan.Name + " extracted the " + powerName + " power and transferred it to " + randomTeammatePureTitan.Name + "!", Color.Yellow);
+            spawnPos = new Vector2(corpsePos.X, corpseArea.Bottom + 10f);
         }
         else
         {
-            // No Pure Titan teammate found, power is lost
-            Game.ShowChatMessage(pureTitan.Name + " extracted a power but had no teammate to transfer it to!", Color.Red);
+            RayCastInput rcInput = new RayCastInput(true)
+            {
+                ClosestHitOnly = true,
+                MaskBits = 0x0001,
+                FilterOnMaskBits = true
+            };
+            RayCastResult[] hits = Game.RayCast(corpsePos, corpsePos - new Vector2(0f, 200f), rcInput);
+            if (hits.Length > 0 && hits[0].Hit)
+            {
+                spawnPos = new Vector2(corpsePos.X, hits[0].Position.Y + 10f);
+            }
+            else
+            {
+                spawnPos = new Vector2(corpsePos.X, corpseArea.Bottom + 10f);
+            }
         }
-    }
-    else
-    {
-        // Normal player: Standard power swap
-        // Check if Pure Titan has an assigned power before swapping
-        if (!assignedTitanPowers.ContainsKey(pureTitanId))
+        
+        // Steam effect at spawn position
+        Game.PlayEffect(EffectName.Steam, spawnPos);
+        
+        // Fire the trigger itself to spawn the player with the zombie emerging animation
+        IPlayer humanPlayer = null;
+        if (zombieSpawnTrigger != null)
         {
-            Game.ShowChatMessage("Error: Pure Titan " + pureTitan.Name + " has no assigned power!", Color.Red);
+            zombieSpawnTrigger.SetWorldPosition(spawnPos);
+            zombieSpawnTrigger.SetFaceDirection(pureTitanFacing);
+            zombieSpawnTrigger.SetEnabled(true);
+            zombieSpawnTrigger.Trigger();
+            humanPlayer = zombieSpawnTrigger.GetLastCreatedPlayer();
+        }
+        if (humanPlayer == null)
+        {
+            humanPlayer = Game.CreatePlayer(spawnPos);
+        }
+        if (humanPlayer == null)
+        {
             return;
         }
         
-        TitanType tempPureTitanPower = assignedTitanPowers[pureTitanId];
-        assignedTitanPowers[pureTitanId] = extractedPower; // Pure Titan gets humanoid power
-        assignedTitanPowers[victimId] = tempPureTitanPower; // Victim gets Pure Titan power (keep them in dictionary!)
+        int humanPlayerId = humanPlayer.UniqueID;
         
-        // Update labels
-        UpdateLabelsAfterPowerSwap(pureTitanId, victimId);
+        // Set team
+        humanPlayer.SetTeam(pureTitanTeam);
         
-        // Save updated powers to SharedStorage (permanent storage)
+        // Set the human profile
+        humanPlayer.SetProfile(humanProfile);
+        
+        // Set bot name if bot
+        if (isBot)
+        {
+            humanPlayer.SetBotName(playerName);
+        }
+        
+        // Re-attach user controller for human players (temporarily disable input so emerging animation plays without key interruption)
+        if (user != null)
+        {
+            humanPlayer.SetUser(user);
+            humanPlayer.SetInputEnabled(false);
+        }
+        
+        // Set full HP and full energy from original modifiers
+        if (humanMods.MaxHealth <= 0) humanMods.MaxHealth = 100;
+        if (humanMods.MaxEnergy <= 0) humanMods.MaxEnergy = 100;
+        humanMods.CurrentHealth = humanMods.MaxHealth;
+        humanMods.CurrentEnergy = humanMods.MaxEnergy;
+        humanPlayer.SetModifiers(humanMods);
+        
+        // Set facing direction directly without queuing a command that could cancel the emergence animation
+        humanPlayer.SetFaceDirection(pureTitanFacing);
+        
+        // After 1000ms, restore the real behavior for both bots and human players
+        Events.UpdateCallback.Start((float dt2) =>
+        {
+            if (humanPlayer == null || humanPlayer.IsDead || humanPlayer.IsRemoved) return;
+            
+            if (isBot)
+            {
+                humanPlayer.SetBotBehavior(humanBotBehavior);
+                if (humanBotBehaviorSet != null)
+                {
+                    humanBotBehaviorSet.PowerupUsage = false;
+                    humanPlayer.SetBotBehaviorSet(humanBotBehaviorSet);
+                }
+            }
+            else
+            {
+                humanPlayer.SetBotBehavior(new BotBehavior(false, PredefinedAIType.None));
+                humanPlayer.SetBotBehaviorActive(false);
+                if (user != null)
+                {
+                    humanPlayer.SetUser(user);
+                    humanPlayer.SetInputEnabled(true);
+                }
+            }
+        }, 1000, 1);
+        
+        // Mark as already given startup strength boost so they don't immediately get another one
+        givenStartupStrengthBoost.Add(humanPlayerId);
+        
+        // Clean up old original data references
+        originalProfiles.Remove(pureTitanId);
+        originalModifiers.Remove(pureTitanId);
+        originalBotBehaviors.Remove(pureTitanId);
+        originalBotBehaviorSets.Remove(pureTitanId);
+        
+        // Update name mapping
+        if (playerNameToId.ContainsKey(playerName))
+        {
+            playerNameToId[playerName] = humanPlayerId;
+        }
+        
+        // Ensure the new bot gets PowerupUsage disabled
+        if (isBot && !configuredBotPowerupUsage.Contains(humanPlayerId))
+        {
+            BotBehaviorSet bS = humanPlayer.GetBotBehaviorSet();
+            bS.PowerupUsage = false;
+            humanPlayer.SetBotBehaviorSet(bS);
+            configuredBotPowerupUsage.Add(humanPlayerId);
+        }
+        
+        // 2. Handle power distribution based on whether extractor is temporary
+        if (isTemporaryPlayer)
+        {
+            // Temporary player: Give power to random Pure Titan teammate
+            IPlayer randomTeammatePureTitan = GetRandomPureTitanTeammate(humanPlayer);
+            
+            if (randomTeammatePureTitan != null)
+            {
+                int teammateId = randomTeammatePureTitan.UniqueID;
+                if (assignedTitanPowers.ContainsKey(teammateId))
+                {
+                    TitanType teammatePower = assignedTitanPowers[teammateId];
+                    assignedTitanPowers[teammateId] = extractedPower;
+                    assignedTitanPowers[victimId] = teammatePower;
+                    assignedTitanPowers[humanPlayerId] = TitanType.Pure;
+                    
+                    UpdateLabelsAfterPowerSwap(teammateId, victimId);
+                    CreateLabelForPlayer(humanPlayer, humanPlayerId, TitanType.Pure);
+                    
+                    Game.ShowChatMessage(playerName + " extracted the " + powerName + " power and transferred it to " + randomTeammatePureTitan.Name + "!", Color.Yellow);
+                }
+            }
+            else
+            {
+                assignedTitanPowers[humanPlayerId] = TitanType.Pure;
+                CreateLabelForPlayer(humanPlayer, humanPlayerId, TitanType.Pure);
+                Game.ShowChatMessage(playerName + " extracted a power but had no teammate to transfer it to!", Color.Red);
+            }
+        }
+        else
+        {
+            // Normal player: Standard power swap
+            assignedTitanPowers[humanPlayerId] = extractedPower; // Extractor gets humanoid power
+            assignedTitanPowers[victimId] = tempPureTitanPower; // Victim gets Pure Titan power
+            
+            // Create label for the new human player
+            CreateLabelForPlayer(humanPlayer, humanPlayerId, extractedPower);
+            
+            // Update victim label if still around
+            if (victim != null && !victim.IsRemoved && assignedTitanPowers.ContainsKey(victimId))
+            {
+                CreateLabelForPlayer(victim, victimId, tempPureTitanPower);
+            }
+            
+            Game.ShowChatMessage(playerName + " extracted the " + powerName + " power from " + victim.Name + "!", Color.Yellow);
+        }
+        
+        // Save updated powers
         SaveAssignedPowersToStorage();
         
         // Update shared storage
         UpdateTitanPlayersStorage();
-        
-        // Show message
-        string powerName = "UNKNOWN";
-        if (extractedPower == TitanType.Attack)
-        {
-            powerName = "ATTACK TITAN";
-        }
-        else if (extractedPower == TitanType.Jaw)
-        {
-            powerName = "JAW TITAN";
-        }
-        else if (extractedPower == TitanType.Armored)
-        {
-            powerName = "ARMORED TITAN";
-        }
-        Game.ShowChatMessage(pureTitan.Name + " extracted the " + powerName + " power from " + victim.Name + "!", Color.Yellow);
-    }
+    }, DETACH_SPAWN_DELAY_MS, 1);
 }
 
 private void UpdateLabelsAfterPowerSwap(int player1Id, int player2Id)
