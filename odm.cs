@@ -847,7 +847,7 @@ public class RopeController
 					float totalDamage = weaponDamage * meleeDamageDealt * distanceMultiplier;
 					bool willDie = target.GetHealth() <= totalDamage;
 
-					target.DealDamage(totalDamage);
+					target.DealDamage(totalDamage, ply.UniqueID);
 					Game.PlayEffect(EffectName.Blood, targetPos);
 
 					if(hasRollPowerUp)
