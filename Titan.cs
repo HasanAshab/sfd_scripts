@@ -222,6 +222,9 @@ private const float BOT_DETACH_HP_HIGH = 0.15f; // 15% HP = 20% detach chance
 private const float BOT_DETACH_HP_LOW = 0.05f; // 5% HP = 90% detach chance
 private const float BOT_DETACH_CHANCE_MIN = 0.20f; // 20% chance at 15% HP
 private const float BOT_DETACH_CHANCE_MAX = 0.90f; // 90% chance at 5% HP
+private Dictionary<int, float> walkKeyPressStartTime = new Dictionary<int, float>();
+private const float HUMAN_DETACH_HOLD_TIME = 800f; // 800ms hold walk key to detach
+private const uint DETACH_SPAWN_DELAY_MS = 1500; // 1500ms delay between killing titan body and spawning human
 
 // Zombie spawn trigger for detach animation
 private IObjectPlayerSpawnTrigger zombieSpawnTrigger = null;
@@ -1340,15 +1343,24 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
     
     int playerId = player.UniqueID;
     
-    // Detach: human players (non-bot) can detach by pressing Walk key (non-Pure titans only)
+    // Detach: human players (non-bot) can detach by holding Walk key for 800ms (non-Pure titans only)
     if (!player.IsBot && titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] != TitanType.Pure)
     {
         foreach (VirtualKeyInfo keyInfo in keyInfos)
         {
-            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.WALKING)
+            if (keyInfo.Key == VirtualKey.WALKING)
             {
-                DetachTitan(player, playerId);
-                return; // Player is being replaced, stop processing
+                if (keyInfo.Event == VirtualKeyEvent.Pressed)
+                {
+                    if (!walkKeyPressStartTime.ContainsKey(playerId))
+                    {
+                        walkKeyPressStartTime[playerId] = Game.TotalElapsedRealTime;
+                    }
+                }
+                else if (keyInfo.Event == VirtualKeyEvent.Released)
+                {
+                    walkKeyPressStartTime.Remove(playerId);
+                }
             }
         }
     }
@@ -2331,6 +2343,11 @@ public void OnUpdate(float elapsed)
             if (player.IsBot && titanType != TitanType.Pure)
             {
                 CheckBotDetach(player, playerId, currentTime);
+            }
+            else if (!player.IsBot && titanType != TitanType.Pure)
+            {
+                // Human detach check: hold walk for 800ms
+                CheckHumanDetach(player, playerId, currentTime);
             }
         }
         
@@ -3447,6 +3464,29 @@ private bool IsArmoredFrontProjectileThreat(IPlayer armoredTitan, int armoredTit
     return false;
 }
 
+private void CheckHumanDetach(IPlayer player, int playerId, float currentTime)
+{
+    if (player.KeyPressed(VirtualKey.WALKING))
+    {
+        if (!walkKeyPressStartTime.ContainsKey(playerId))
+        {
+            walkKeyPressStartTime[playerId] = currentTime;
+        }
+        else if (currentTime - walkKeyPressStartTime[playerId] >= HUMAN_DETACH_HOLD_TIME)
+        {
+            walkKeyPressStartTime.Remove(playerId);
+            DetachTitan(player, playerId);
+        }
+    }
+    else
+    {
+        if (walkKeyPressStartTime.ContainsKey(playerId))
+        {
+            walkKeyPressStartTime.Remove(playerId);
+        }
+    }
+}
+
 private void CheckBotDetach(IPlayer player, int playerId, float currentTime)
 {
     // Periodic check
@@ -3488,6 +3528,8 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     if (!titanPlayers.ContainsKey(titanPlayerId)) return;
     if (titanPlayers[titanPlayerId] == TitanType.Pure) return;
     
+    walkKeyPressStartTime.Remove(titanPlayerId);
+    
     Vector2 titanPos = titanPlayer.GetWorldPosition();
     int titanFacing = titanPlayer.FacingDirection;
     PlayerTeam titanTeam = titanPlayer.GetTeam();
@@ -3510,132 +3552,7 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     Game.PlayEffect(EffectName.Steam, titanPos);
     Game.PlaySound("BarrelDestroyed", titanPos);
     
-    // Clean up all titan tracking data for this player BEFORE killing
-    CleanupTitanData(titanPlayerId);
-    
-    // Calculate ground position so the zombie emerging animation can play
-    Vector2 spawnPos = titanPos;
-    Area titanArea = titanPlayer.GetAABB();
-    
-    // Check if on ground or find ground below
-    if (titanPlayer.IsOnGround)
-    {
-        spawnPos = new Vector2(titanPos.X, titanArea.Bottom + 10f);
-    }
-    else
-    {
-        RayCastInput rcInput = new RayCastInput(true)
-        {
-            ClosestHitOnly = true,
-            MaskBits = 0x0001,
-            FilterOnMaskBits = true
-        };
-        RayCastResult[] hits = Game.RayCast(titanPos, titanPos - new Vector2(0f, 200f), rcInput);
-        if (hits.Length > 0 && hits[0].Hit)
-        {
-            spawnPos = new Vector2(titanPos.X, hits[0].Position.Y + 10f);
-        }
-        else
-        {
-            spawnPos = new Vector2(titanPos.X, titanArea.Bottom + 10f);
-        }
-    }
-    
-    // Fire the trigger itself to spawn the player with the zombie emerging animation
-    IPlayer humanPlayer = null;
-    if (zombieSpawnTrigger != null)
-    {
-        zombieSpawnTrigger.SetWorldPosition(spawnPos);
-        zombieSpawnTrigger.SetFaceDirection(titanFacing);
-        zombieSpawnTrigger.SetEnabled(true);
-        zombieSpawnTrigger.Trigger();
-        humanPlayer = zombieSpawnTrigger.GetLastCreatedPlayer();
-    }
-    if (humanPlayer == null)
-    {
-        humanPlayer = Game.CreatePlayer(spawnPos);
-    }
-    if (humanPlayer == null)
-    {
-        titanPlayer.Kill();
-        return;
-    }
-    
-    int humanPlayerId = humanPlayer.UniqueID;
-    
-    // Set team
-    humanPlayer.SetTeam(titanTeam);
-    
-    // Set the human profile
-    humanPlayer.SetProfile(humanProfile);
-    
-    // Set bot name if bot
-    if (isBot)
-    {
-        humanPlayer.SetBotName(playerName);
-    }
-    
-    // Re-attach user controller for human players (temporarily disable input so emerging animation plays without key interruption)
-    if (user != null)
-    {
-        humanPlayer.SetUser(user);
-        humanPlayer.SetInputEnabled(false);
-    }
-    
-    // Kill the titan player (leaving the titan corpse on the ground to steam)
-    titanPlayer.Kill();
-    
-    // Set full HP and full energy from original modifiers
-    if (humanMods.MaxHealth <= 0) humanMods.MaxHealth = 100;
-    if (humanMods.MaxEnergy <= 0) humanMods.MaxEnergy = 100;
-    humanMods.CurrentHealth = humanMods.MaxHealth;
-    humanMods.CurrentEnergy = humanMods.MaxEnergy;
-    humanPlayer.SetModifiers(humanMods);
-    
-    // Set facing direction directly without queuing a command that could cancel the emergence animation
-    humanPlayer.SetFaceDirection(titanFacing);
-    
-    // After 1000ms, restore the real behavior for both bots and human players
-    Events.UpdateCallback.Start((float dt) =>
-    {
-        if (humanPlayer == null || humanPlayer.IsDead || humanPlayer.IsRemoved) return;
-        
-        if (isBot)
-        {
-            humanPlayer.SetBotBehavior(humanBotBehavior);
-            if (humanBotBehaviorSet != null)
-            {
-                humanBotBehaviorSet.PowerupUsage = false;
-                humanPlayer.SetBotBehaviorSet(humanBotBehaviorSet);
-            }
-        }
-        else
-        {
-            humanPlayer.SetBotBehavior(new BotBehavior(false, PredefinedAIType.None));
-            humanPlayer.SetBotBehaviorActive(false);
-            if (user != null)
-            {
-                humanPlayer.SetUser(user);
-                humanPlayer.SetInputEnabled(true);
-            }
-        }
-    }, 1000, 1);
-    
-    // Mark as already given startup strength boost so they don't immediately get another one
-    givenStartupStrengthBoost.Add(humanPlayerId);
-    
-    // Transfer assigned power to the new player ID
-    if (assignedTitanPowers.ContainsKey(titanPlayerId))
-    {
-        TitanType power = assignedTitanPowers[titanPlayerId];
-        assignedTitanPowers.Remove(titanPlayerId);
-        assignedTitanPowers[humanPlayerId] = power;
-        
-        // Update label for the new player
-        CreateLabelForPlayer(humanPlayer, humanPlayerId, power);
-    }
-    
-    // Remove old label if exists
+    // Remove old label immediately so it doesn't float above the corpse
     if (titanTypeLabels.ContainsKey(titanPlayerId))
     {
         IObjectText label = titanTypeLabels[titanPlayerId];
@@ -3646,36 +3563,174 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
         titanTypeLabels.Remove(titanPlayerId);
     }
     
-    // Clean up old original data references
-    originalProfiles.Remove(titanPlayerId);
-    originalModifiers.Remove(titanPlayerId);
-    originalBotBehaviors.Remove(titanPlayerId);
-    originalBotBehaviorSets.Remove(titanPlayerId);
-    
-    // Update name mapping
-    if (playerNameToId.ContainsKey(playerName))
+    // Preserve assigned titan power
+    TitanType power = TitanType.Pure;
+    bool hasPower = false;
+    if (assignedTitanPowers.ContainsKey(titanPlayerId))
     {
-        playerNameToId[playerName] = humanPlayerId;
+        power = assignedTitanPowers[titanPlayerId];
+        hasPower = true;
+        assignedTitanPowers.Remove(titanPlayerId);
     }
     
-    // Ensure the new bot gets PowerupUsage disabled
-    if (isBot && !configuredBotPowerupUsage.Contains(humanPlayerId))
-    {
-        BotBehaviorSet bS = humanPlayer.GetBotBehaviorSet();
-        bS.PowerupUsage = false;
-        humanPlayer.SetBotBehaviorSet(bS);
-        configuredBotPowerupUsage.Add(humanPlayerId);
-    }
+    // Clean up all titan tracking data for this player BEFORE killing
+    CleanupTitanData(titanPlayerId);
     
-    // Update shared storage to notify odm.cs
+    // Update shared storage immediately to notify odm.cs that titan is dead
     UpdateTitanPlayersStorage();
     
-    // Save updated powers
-    SaveAssignedPowersToStorage();
-    
+    // Kill the titan player immediately (leaving the titan corpse on the ground to steam)
+    titanPlayer.Kill();
     
     // Show detach message
     Game.ShowChatMessage(playerName + " has detached from their Titan form!", Color.Cyan);
+    
+    // The detransformed human spawns after 1500ms of the titan body being killed
+    Events.UpdateCallback.Start((float dt) =>
+    {
+        // Calculate ground position where corpse landed
+        Vector2 corpsePos = (titanPlayer != null) ? titanPlayer.GetWorldPosition() : titanPos;
+        Area corpseArea = (titanPlayer != null) ? titanPlayer.GetAABB() : new Area(corpsePos.Y + 10f, corpsePos.X - 10f, corpsePos.Y - 10f, corpsePos.X + 10f);
+        Vector2 spawnPos = corpsePos;
+        
+        if (titanPlayer != null && titanPlayer.IsOnGround)
+        {
+            spawnPos = new Vector2(corpsePos.X, corpseArea.Bottom + 10f);
+        }
+        else
+        {
+            RayCastInput rcInput = new RayCastInput(true)
+            {
+                ClosestHitOnly = true,
+                MaskBits = 0x0001,
+                FilterOnMaskBits = true
+            };
+            RayCastResult[] hits = Game.RayCast(corpsePos, corpsePos - new Vector2(0f, 200f), rcInput);
+            if (hits.Length > 0 && hits[0].Hit)
+            {
+                spawnPos = new Vector2(corpsePos.X, hits[0].Position.Y + 10f);
+            }
+            else
+            {
+                spawnPos = new Vector2(corpsePos.X, corpseArea.Bottom + 10f);
+            }
+        }
+        
+        // Steam effect at spawn position
+        Game.PlayEffect(EffectName.Steam, spawnPos);
+        
+        // Fire the trigger itself to spawn the player with the zombie emerging animation
+        IPlayer humanPlayer = null;
+        if (zombieSpawnTrigger != null)
+        {
+            zombieSpawnTrigger.SetWorldPosition(spawnPos);
+            zombieSpawnTrigger.SetFaceDirection(titanFacing);
+            zombieSpawnTrigger.SetEnabled(true);
+            zombieSpawnTrigger.Trigger();
+            humanPlayer = zombieSpawnTrigger.GetLastCreatedPlayer();
+        }
+        if (humanPlayer == null)
+        {
+            humanPlayer = Game.CreatePlayer(spawnPos);
+        }
+        if (humanPlayer == null)
+        {
+            return;
+        }
+        
+        int humanPlayerId = humanPlayer.UniqueID;
+        
+        // Set team
+        humanPlayer.SetTeam(titanTeam);
+        
+        // Set the human profile
+        humanPlayer.SetProfile(humanProfile);
+        
+        // Set bot name if bot
+        if (isBot)
+        {
+            humanPlayer.SetBotName(playerName);
+        }
+        
+        // Re-attach user controller for human players (temporarily disable input so emerging animation plays without key interruption)
+        if (user != null)
+        {
+            humanPlayer.SetUser(user);
+            humanPlayer.SetInputEnabled(false);
+        }
+        
+        // Set full HP and full energy from original modifiers
+        if (humanMods.MaxHealth <= 0) humanMods.MaxHealth = 100;
+        if (humanMods.MaxEnergy <= 0) humanMods.MaxEnergy = 100;
+        humanMods.CurrentHealth = humanMods.MaxHealth;
+        humanMods.CurrentEnergy = humanMods.MaxEnergy;
+        humanPlayer.SetModifiers(humanMods);
+        
+        // Set facing direction directly without queuing a command that could cancel the emergence animation
+        humanPlayer.SetFaceDirection(titanFacing);
+        
+        // After 1000ms, restore the real behavior for both bots and human players
+        Events.UpdateCallback.Start((float dt2) =>
+        {
+            if (humanPlayer == null || humanPlayer.IsDead || humanPlayer.IsRemoved) return;
+            
+            if (isBot)
+            {
+                humanPlayer.SetBotBehavior(humanBotBehavior);
+                if (humanBotBehaviorSet != null)
+                {
+                    humanBotBehaviorSet.PowerupUsage = false;
+                    humanPlayer.SetBotBehaviorSet(humanBotBehaviorSet);
+                }
+            }
+            else
+            {
+                humanPlayer.SetBotBehavior(new BotBehavior(false, PredefinedAIType.None));
+                humanPlayer.SetBotBehaviorActive(false);
+                if (user != null)
+                {
+                    humanPlayer.SetUser(user);
+                    humanPlayer.SetInputEnabled(true);
+                }
+            }
+        }, 1000, 1);
+        
+        // Mark as already given startup strength boost so they don't immediately get another one
+        givenStartupStrengthBoost.Add(humanPlayerId);
+        
+        // Transfer assigned power to the new player ID
+        if (hasPower)
+        {
+            assignedTitanPowers[humanPlayerId] = power;
+            
+            // Update label for the new player
+            CreateLabelForPlayer(humanPlayer, humanPlayerId, power);
+        }
+        
+        // Clean up old original data references
+        originalProfiles.Remove(titanPlayerId);
+        originalModifiers.Remove(titanPlayerId);
+        originalBotBehaviors.Remove(titanPlayerId);
+        originalBotBehaviorSets.Remove(titanPlayerId);
+        
+        // Update name mapping
+        if (playerNameToId.ContainsKey(playerName))
+        {
+            playerNameToId[playerName] = humanPlayerId;
+        }
+        
+        // Ensure the new bot gets PowerupUsage disabled
+        if (isBot && !configuredBotPowerupUsage.Contains(humanPlayerId))
+        {
+            BotBehaviorSet bS = humanPlayer.GetBotBehaviorSet();
+            bS.PowerupUsage = false;
+            humanPlayer.SetBotBehaviorSet(bS);
+            configuredBotPowerupUsage.Add(humanPlayerId);
+        }
+        
+        // Save updated powers
+        SaveAssignedPowersToStorage();
+    }, DETACH_SPAWN_DELAY_MS, 1);
 }
 
 private void CleanupTitanData(int titanPlayerId)
@@ -3724,6 +3779,9 @@ private void CleanupTitanData(int titanPlayerId)
     
     // Clean up strength boost tracking
     givenStartupStrengthBoost.Remove(titanPlayerId);
+    
+    // Clean up walk key press tracking
+    walkKeyPressStartTime.Remove(titanPlayerId);
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)
