@@ -151,6 +151,8 @@ public class RopeController
 	private const float DIVE_SLOWMO_DURATION = 4000f; // Slowmo duration in real milliseconds (4 seconds)
 	private const float DIVE_SLOWMO_SPEED = 0.25f; // Slowmo speed (25% of normal)
 	private const float ROLL_HIT_FALL_INPUT_DISABLE_DURATION = 2000f;
+	private const float BLOCK_STUN_EXTRA_DURATION = 1500f; // Extra stun duration when blocking (+1.5s)
+	private const float BLOCK_DAMAGE_MULTIPLIER = 0.10f; // 10% damage when blocking
 	private const float AIM_DISTANCE = 25f;
 	private const float AIM_ROTATE_SPEED = 0.06f;
 	private const float QUICK_TAP_THRESHOLD = 200f;
@@ -845,6 +847,12 @@ public class RopeController
 					}
 
 					float totalDamage = weaponDamage * meleeDamageDealt * distanceMultiplier;
+					bool isBlocking = target.KeyPressed(VirtualKey.BLOCK) || target.IsBlocking;
+					if(isBlocking)
+					{
+						totalDamage *= BLOCK_DAMAGE_MULTIPLIER;
+					}
+
 					bool willDie = target.GetHealth() <= totalDamage;
 
 					target.DealDamage(totalDamage, ply.UniqueID);
@@ -855,13 +863,19 @@ public class RopeController
 						Game.PlayEffect(EffectName.Blood, targetPos);
 						Game.PlayEffect(EffectName.Blood, targetPos);
 						Game.PlaySound("KatanaDraw", targetPos);
-						ForceFall(target, now);
+						
+						float stunDuration = ROLL_HIT_FALL_INPUT_DISABLE_DURATION + (isBlocking ? BLOCK_STUN_EXTRA_DURATION : 0f);
+						ForceFall(target, now, stunDuration);
 
 						if(isDiving && willDie) target.Gib();
 					}
 					else
 					{
 						Game.PlaySound("MacheteDraw", targetPos);
+						if(isBlocking)
+						{
+							ForceFall(target, now, BLOCK_STUN_EXTRA_DURATION);
+						}
 					}
 				}
 			}
@@ -989,14 +1003,14 @@ public class RopeController
 		return false;
 	}
 
-	private void ForceFall(IPlayer target, float now)
+	private void ForceFall(IPlayer target, float now, float stunDuration = ROLL_HIT_FALL_INPUT_DISABLE_DURATION)
 	{
 		target.SetInputEnabled(false);
 		target.ClearCommandQueue();
 		target.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
 		target.AddCommand(new PlayerCommand(PlayerCommandType.StartCrouch));
 
-		float releaseTime = now + ROLL_HIT_FALL_INPUT_DISABLE_DURATION;
+		float releaseTime = now + stunDuration;
 		int targetUID = target.UniqueID;
 
 		RopeController targetController;
