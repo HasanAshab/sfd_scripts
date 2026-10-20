@@ -223,6 +223,9 @@ private const float BOT_DETACH_HP_LOW = 0.05f; // 5% HP = 90% detach chance
 private const float BOT_DETACH_CHANCE_MIN = 0.20f; // 20% chance at 15% HP
 private const float BOT_DETACH_CHANCE_MAX = 0.90f; // 90% chance at 5% HP
 
+// Zombie spawn trigger for detach animation
+private IObjectPlayerSpawnTrigger zombieSpawnTrigger = null;
+
 // Helper class for grab damage tracking
 private class GrabDamageData
 {
@@ -240,6 +243,18 @@ public void OnStartup()
     // Initialize shared storage for cooperation with odm.cs script
     IScriptStorage storage = Game.GetSharedStorage("TitanODMSync");
     storage.SetItem("TITAN_PLAYERS", ""); // Initialize with empty string
+    
+    // Create zombie spawn trigger once for detach animation
+    zombieSpawnTrigger = (IObjectPlayerSpawnTrigger)Game.CreateObject("PlayerSpawnTrigger");
+    if (zombieSpawnTrigger != null)
+    {
+        zombieSpawnTrigger.SetPredefinedAI(PredefinedAIType.ZombieA);
+        zombieSpawnTrigger.SetSpawnWeaponItemRifle(WeaponItem.NONE);
+        zombieSpawnTrigger.SetSpawnWeaponItemHandgun(WeaponItem.NONE);
+        zombieSpawnTrigger.SetSpawnWeaponItemMelee(WeaponItem.NONE);
+        zombieSpawnTrigger.SetSpawnWeaponItemThrown(WeaponItem.NONE);
+        zombieSpawnTrigger.SetSpawnWeaponItemPowerup(WeaponItem.NONE);
+    }
     
     // Set up update callback to detect strength boost pickups and falls
     Events.UpdateCallback.Start(OnUpdate, 50); // Check every 50ms
@@ -3496,8 +3511,48 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     // Clean up all titan tracking data for this player BEFORE killing
     CleanupTitanData(titanPlayerId);
     
-    // Create a new human player at the same position
-    IPlayer humanPlayer = Game.CreatePlayer(titanPos);
+    // Calculate ground position so the zombie emerging animation can play
+    Vector2 spawnPos = titanPos;
+    Area titanArea = titanPlayer.GetAABB();
+    
+    // Check if on ground or find ground below
+    if (titanPlayer.IsOnGround)
+    {
+        spawnPos = new Vector2(titanPos.X, titanArea.Bottom + 10f);
+    }
+    else
+    {
+        RayCastInput rcInput = new RayCastInput(true)
+        {
+            ClosestHitOnly = true,
+            MaskBits = 0x0001,
+            FilterOnMaskBits = true
+        };
+        RayCastResult[] hits = Game.RayCast(titanPos, titanPos - new Vector2(0f, 200f), rcInput);
+        if (hits.Length > 0 && hits[0].Hit)
+        {
+            spawnPos = new Vector2(titanPos.X, hits[0].Position.Y + 10f);
+        }
+        else
+        {
+            spawnPos = new Vector2(titanPos.X, titanArea.Bottom + 10f);
+        }
+    }
+    
+    // Create new player using the zombie spawn trigger to trigger the zombie spawn animation
+    IPlayer humanPlayer = null;
+    if (zombieSpawnTrigger != null)
+    {
+        humanPlayer = zombieSpawnTrigger.CreatePlayer(spawnPos);
+        if (humanPlayer == null)
+        {
+            humanPlayer = zombieSpawnTrigger.GetLastCreatedPlayer();
+        }
+    }
+    if (humanPlayer == null)
+    {
+        humanPlayer = Game.CreatePlayer(spawnPos);
+    }
     if (humanPlayer == null)
     {
         titanPlayer.Kill();
@@ -3511,9 +3566,6 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     
     // Set the human profile
     humanPlayer.SetProfile(humanProfile);
-    
-    // Set bot behavior to ZombieA immediately after creating the player (for both bot and human players)
-    humanPlayer.SetBotBehavior(new BotBehavior(true, PredefinedAIType.ZombieA));
     
     // Set bot name if bot
     if (isBot)
@@ -3618,8 +3670,6 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     // Save updated powers
     SaveAssignedPowersToStorage();
     
-    // Make the human fall (weakness after detransformation)
-    QuickCommand(humanPlayer, new PlayerCommand(PlayerCommandType.Fall));
     
     // Show detach message
     Game.ShowChatMessage(playerName + " has detached from their Titan form!", Color.Cyan);
