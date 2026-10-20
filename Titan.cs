@@ -84,7 +84,7 @@ private const int JAW_SHARP_CLAW_PUNCH_COUNT = 3; // 3rd punch breaks objects
 private const int JAW_SHARP_CLAW_PUNCH_WINDOW = 600; // 600ms window between punches
 
 // Armored Titan stats
-private const float ARMORED_TITAN_HP_BONUS = 0.32f; // 32% HP increase
+private const float ARMORED_TITAN_HP_BONUS = 0.15f; // 32% HP increase
 private const float ARMORED_TITAN_MELEE_DAMAGE_BONUS = 0.10f; // 10% melee damage increase
 private const float ARMORED_TITAN_MELEE_FORCE_BONUS = 0.60f; // 60% melee force increase
 private const float ARMORED_TITAN_SPEED_PENALTY = 0.50f; // 50% speed reduction
