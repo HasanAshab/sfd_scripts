@@ -1992,6 +1992,7 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
     PlayerTeam pureTitanTeam = pureTitan.GetTeam();
     bool isBot = pureTitan.IsBot;
     string playerName = pureTitan.Name;
+    string victimName = (victim != null) ? victim.Name : ""; // Capture now, victim may be removed by spawn time
     
     // Check if the Pure Titan is a temporary player
     bool isTemporaryPlayer = playerName.ToLower() == TEMPORARY_PLAYER_NAME.ToLower();
@@ -2237,6 +2238,30 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
         
         // Save updated powers
         SaveAssignedPowersToStorage();
+        
+        // Additionally force-write the victim's power by name directly, since Game.GetPlayer(victimId)
+        // returns null for dead/removed players and SaveAssignedPowersToStorage would skip them
+        if (!string.IsNullOrEmpty(victimName) && victimName.ToLower() != TEMPORARY_PLAYER_NAME.ToLower())
+        {
+            IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
+            string playerGroupKey = GetPlayerGroupKey();
+            string powersKey = "POWERS_" + playerGroupKey;
+            string existing = "";
+            persistentStorage.TryGetItemString(powersKey, out existing);
+            // Remove any old entry for this victim name, then append the correct one
+            List<string> entries = new List<string>();
+            if (!string.IsNullOrEmpty(existing))
+            {
+                foreach (string e in existing.Split(';'))
+                {
+                    if (!string.IsNullOrEmpty(e) && !e.StartsWith(victimName + ":"))
+                        entries.Add(e);
+                }
+            }
+            TitanType victimNewPower = assignedTitanPowers.ContainsKey(victimId) ? assignedTitanPowers[victimId] : TitanType.Pure;
+            entries.Add(victimName + ":" + ((int)victimNewPower).ToString());
+            persistentStorage.SetItem(powersKey, string.Join(";", entries.ToArray()));
+        }
         
         // Update shared storage
         UpdateTitanPlayersStorage();
