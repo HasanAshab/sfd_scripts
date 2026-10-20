@@ -3499,7 +3499,11 @@ private bool IsArmoredInFront(IPlayer armoredTitan, Vector2 point)
     Vector2 titanPos = armoredTitan.GetWorldPosition();
     int facing = armoredTitan.FacingDirection; // -1 (left) or +1 (right)
     float dx = point.X - titanPos.X;
-    return Math.Sign(dx) == facing;
+
+    // Positive = in front of the titan, negative = behind it
+    float forwardDistance = dx * facing;
+    // In front, OR only slightly behind (attacker just passed the titan)
+    return forwardDistance >= -10f;
 }
 
 // Helper method to check for front melee threat
