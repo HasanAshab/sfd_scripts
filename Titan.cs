@@ -2033,6 +2033,13 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
     // Update shared storage immediately to notify odm.cs that titan is dead
     UpdateTitanPlayersStorage();
     
+    // Prevent the game from declaring round-over during the 1500ms spawn delay
+    // Use the same SuperDSCoopSync storage/keys as SuperDS.cs so CoopGameOver.cs handles it automatically
+    Game.AutoVictoryConditionEnabled = false;
+    IScriptStorage extractStorage = Game.GetSharedStorage("SuperDSCoopSync");
+    extractStorage.SetItem("P2_SPLITTING", true);
+    extractStorage.SetItem("P2_SPLIT_TIME", Game.TotalElapsedGameTime + 3000f); // 3s buffer
+    
     // Kill the pure titan player immediately (leaving the titan corpse on the ground to steam)
     pureTitan.Kill();
     
@@ -2151,6 +2158,11 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
                 }
             }
         }, 1000, 1);
+        
+        // Re-enable auto-victory now that the human player has spawned successfully
+        Game.AutoVictoryConditionEnabled = true;
+        IScriptStorage postExtractStorage = Game.GetSharedStorage("SuperDSCoopSync");
+        postExtractStorage.SetItem("P2_SPLITTING", false);
         
         // Mark as already given startup strength boost so they don't immediately get another one
         givenStartupStrengthBoost.Add(humanPlayerId);
@@ -3680,6 +3692,13 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     // Update shared storage immediately to notify odm.cs that titan is dead
     UpdateTitanPlayersStorage();
     
+    // Prevent the game from declaring round-over during the 1500ms spawn delay
+    // Use the same SuperDSCoopSync storage/keys as SuperDS.cs so CoopGameOver.cs handles it automatically
+    Game.AutoVictoryConditionEnabled = false;
+    IScriptStorage detachStorage = Game.GetSharedStorage("SuperDSCoopSync");
+    detachStorage.SetItem("P2_SPLITTING", true);
+    detachStorage.SetItem("P2_SPLIT_TIME", Game.TotalElapsedGameTime + 3000f); // 3s buffer
+    
     // Kill the titan player immediately (leaving the titan corpse on the ground to steam)
     titanPlayer.Kill();
     
@@ -3795,6 +3814,11 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
                 }
             }
         }, 1000, 1);
+        
+        // Re-enable auto-victory now that the human player has spawned successfully
+        Game.AutoVictoryConditionEnabled = true;
+        IScriptStorage postDetachStorage = Game.GetSharedStorage("SuperDSCoopSync");
+        postDetachStorage.SetItem("P2_SPLITTING", false);
         
         // Mark as already given startup strength boost so they don't immediately get another one
         givenStartupStrengthBoost.Add(humanPlayerId);
