@@ -3040,6 +3040,9 @@ private void CheckArmoredTitanBotArmor(IPlayer player, int playerId, float curre
     // Only for bots
     if (!player.IsBot) return;
     
+    // Don't turn armor on while exhausted
+    if (titanExhausted.ContainsKey(playerId) && titanExhausted[playerId]) return;
+    
     // Check armor state periodically
     if (!armoredTitanLastArmorCheck.ContainsKey(playerId) || 
         currentTime - armoredTitanLastArmorCheck[playerId] >= ARMORED_ARMOR_ON_CHECK_INTERVAL)
@@ -3361,6 +3364,12 @@ private void CheckTitanExhaustion(IPlayer titan, int titanId)
         titan.SetInputEnabled(false);
         QuickCommand(titan, new PlayerCommand(PlayerCommandType.DeathKneelInfinite));
         titanExhausted[titanId] = true;
+        
+        // Turn off armor if Armored Titan
+        if (titanPlayers.ContainsKey(titanId) && titanPlayers[titanId] == TitanType.Armored)
+        {
+            ApplyArmoredTitanArmor(titan, titanId, false);
+        }
         
         // Set recovery time to 6 seconds from now
         titanExhaustionRecoverTime[titanId] = currentTime + TITAN_EXHAUSTION_DURATION;
