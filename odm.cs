@@ -138,9 +138,9 @@ public class RopeController
 	private const float MELEE_DAMAGE_MAX_DISTANCE = 23f;
 	private const float MELEE_DAMAGE_MID_DISTANCE = 15f;
 	private const float MELEE_DAMAGE_MIN_DISTANCE = 3f;
-	private const float MELEE_DAMAGE_MIN_MULTIPLIER = 1.1f;
-	private const float MELEE_DAMAGE_MID_MULTIPLIER = 1.6f;
-	private const float MELEE_DAMAGE_MAX_MULTIPLIER = 2.1f;
+	private const float MELEE_DAMAGE_MIN_MULTIPLIER = 1f;
+	private const float MELEE_DAMAGE_MID_MULTIPLIER = 1.4f;
+	private const float MELEE_DAMAGE_MAX_MULTIPLIER = 1.9f;
 	private const float MELEE_DAMAGE_OBJECT_MODIFIER = 1f;
 	private const float GAS_MAX_CAPACITY = 100f;
 	private const float GAS_PULL_COST_PER_SECOND = 10f;
