@@ -248,6 +248,8 @@ public void OnStartup()
     zombieSpawnTrigger = (IObjectPlayerSpawnTrigger)Game.CreateObject("PlayerSpawnTrigger");
     if (zombieSpawnTrigger != null)
     {
+        zombieSpawnTrigger.SetActivateOnStartup(false);
+        zombieSpawnTrigger.SetEnabled(true);
         zombieSpawnTrigger.SetPredefinedAI(PredefinedAIType.ZombieA);
         zombieSpawnTrigger.SetSpawnWeaponItemRifle(WeaponItem.NONE);
         zombieSpawnTrigger.SetSpawnWeaponItemHandgun(WeaponItem.NONE);
@@ -3539,15 +3541,15 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
         }
     }
     
-    // Create new player using the zombie spawn trigger to trigger the zombie spawn animation
+    // Fire the trigger itself to spawn the player with the zombie emerging animation
     IPlayer humanPlayer = null;
     if (zombieSpawnTrigger != null)
     {
-        humanPlayer = zombieSpawnTrigger.CreatePlayer(spawnPos);
-        if (humanPlayer == null)
-        {
-            humanPlayer = zombieSpawnTrigger.GetLastCreatedPlayer();
-        }
+        zombieSpawnTrigger.SetWorldPosition(spawnPos);
+        zombieSpawnTrigger.SetFaceDirection(titanFacing);
+        zombieSpawnTrigger.SetEnabled(true);
+        zombieSpawnTrigger.Trigger();
+        humanPlayer = zombieSpawnTrigger.GetLastCreatedPlayer();
     }
     if (humanPlayer == null)
     {
@@ -3573,10 +3575,11 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
         humanPlayer.SetBotName(playerName);
     }
     
-    // Re-attach user controller for human players
+    // Re-attach user controller for human players (temporarily disable input so emerging animation plays without key interruption)
     if (user != null)
     {
         humanPlayer.SetUser(user);
+        humanPlayer.SetInputEnabled(false);
     }
     
     // Kill the titan player (leaving the titan corpse on the ground to steam)
@@ -3589,9 +3592,8 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
     humanMods.CurrentEnergy = humanMods.MaxEnergy;
     humanPlayer.SetModifiers(humanMods);
     
-    // Set facing direction
-    PlayerCommandFaceDirection faceDir = (titanFacing < 0) ? PlayerCommandFaceDirection.Left : PlayerCommandFaceDirection.Right;
-    humanPlayer.AddCommand(new PlayerCommand(PlayerCommandType.FaceAt, faceDir));
+    // Set facing direction directly without queuing a command that could cancel the emergence animation
+    humanPlayer.SetFaceDirection(titanFacing);
     
     // After 1000ms, restore the real behavior for both bots and human players
     Events.UpdateCallback.Start((float dt) =>
@@ -3614,6 +3616,7 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
             if (user != null)
             {
                 humanPlayer.SetUser(user);
+                humanPlayer.SetInputEnabled(true);
             }
         }
     }, 1000, 1);
