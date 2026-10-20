@@ -2849,7 +2849,7 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         }
         
         // Apply damage
-        float damage = ARMORED_RUSH_DAMAGE_BASE * titanMods.MeleeDamageDealtModifier * 6;
+        float damage = ARMORED_RUSH_DAMAGE_BASE * titanMods.MeleeDamageDealtModifier;
         target.DealDamage(damage);
         
         // Apply recoil if armor is OFF
@@ -2918,7 +2918,7 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         obj.SetLinearVelocity(new Vector2(titanFacing * throwVelocity, throwVelocity * ARMORED_RUSH_THROW_UP_RATIO));
         
         // Apply damage to object
-        float objDamage = ARMORED_RUSH_DAMAGE_BASE * titanMods.MeleeDamageDealtModifier;
+        float objDamage = ARMORED_RUSH_DAMAGE_BASE * titanMods.MeleeDamageDealtModifier * 3f;
         obj.DealDamage(objDamage);
 
         // Apply recoil if armor is OFF
