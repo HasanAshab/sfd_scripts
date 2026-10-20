@@ -173,6 +173,7 @@ public class RopeController
 
 	// Static list for pending fall releases (shared across all controllers)
 	private static List<PendingFallRelease> pendingFallReleases = new List<PendingFallRelease>(4); // Pre-allocate capacity
+	public static Dictionary<int, RopeController> Controllers = new Dictionary<int, RopeController>();
 
 	// Struct instead of class: entries live inline in the List's backing array
 	// instead of each being a separate heap allocation.
@@ -185,6 +186,7 @@ public class RopeController
 	public RopeController(IPlayer ply)
 	{
 		this.ply = ply;
+		Controllers[ply.UniqueID] = this;
 
 		// Apply custom clothing
 		IProfile profile = ply.GetProfile();
@@ -208,7 +210,7 @@ public class RopeController
 		lastSyncedGas = GAS_MAX_CAPACITY;
 	}
 
-	private void CancelRope(float now)
+	public void CancelRope(float now)
 	{
 		// Destroy all rope-related objects
 		if(distanceJoint != null) { distanceJoint.Destroy(); distanceJoint = null; }
@@ -228,7 +230,7 @@ public class RopeController
 		walkKeyHoldTime = now;
 	}
 
-	private void CancelAiming()
+	public void CancelAiming()
 	{
 		if(aimIndicator != null)
 		{
@@ -992,9 +994,17 @@ public class RopeController
 		target.SetInputEnabled(false);
 		target.ClearCommandQueue();
 		target.AddCommand(new PlayerCommand(PlayerCommandType.Fall));
+		target.AddCommand(new PlayerCommand(PlayerCommandType.StartCrouch));
 
 		float releaseTime = now + ROLL_HIT_FALL_INPUT_DISABLE_DURATION;
 		int targetUID = target.UniqueID;
+
+		RopeController targetController;
+		if(Controllers.TryGetValue(targetUID, out targetController) && targetController != null)
+		{
+			targetController.CancelAiming();
+			targetController.CancelRope(now);
+		}
 
 		// Find existing entry
 		int count = pendingFallReleases.Count;
@@ -1022,6 +1032,10 @@ public class RopeController
 			{
 				if(pending.Player != null && !pending.Player.IsRemoved)
 				{
+					if(!pending.Player.IsDead)
+					{
+						pending.Player.AddCommand(new PlayerCommand(PlayerCommandType.StopCrouch));
+					}
 					pending.Player.SetInputEnabled(true);
 				}
 				pendingFallReleases.RemoveAt(i);
@@ -1111,6 +1125,7 @@ public void OnShutdown()
 
 	ropeControllers.Clear();
 	controllersByPlayerId.Clear();
+	RopeController.Controllers.Clear();
 	handledStreetsweeperCrates.Clear();
 }
 
