@@ -218,10 +218,10 @@ public void SetupBots()
             Gender = Gender.Female,
             Skin = new IProfileClothingItem("Normal_fem", "Skin1", "ClothingBrown"),
             Head = new IProfileClothingItem("Buzzcut", "ClothingDarkGray"),
-            ChestUnder = new IProfileClothingItem("ShirtWithBowtie_fem", "ClothingLightGray", "ClothingLightGray"),
+            ChestUnder = new IProfileClothingItem("TShirt_fem", "ClothingLightGray"),
             Legs = new IProfileClothingItem("Skirt_fem", "ClothingBlue"),
-            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-            Accessory = new IProfileClothingItem("SantaMask", ""),
+            Feet = new IProfileClothingItem("HighHeels", "ClothingDarkGray"),
+            Accesory = new IProfileClothingItem("SantaMask", ""),
         });
     }
     
@@ -262,10 +262,11 @@ public void SetupBots()
             Name = "Xray",
             Gender = Gender.Female,
             Skin = new IProfileClothingItem("Normal_fem", "Skin1", "ClothingLightGreen"),
-            Head = new IProfileClothingItem("WoolCap", "ClothingLightGray"),
+            Head = new IProfileClothingItem("Buzzcut", "ClothingDarkGray"),
             ChestUnder = new IProfileClothingItem("SleevelessShirt_fem", "ClothingLightGray"),
             Legs = new IProfileClothingItem("Skirt_fem", "ClothingBlue"),
             Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+            Accesory = new IProfileClothingItem("Glasses", "ClothingLightGray", "ClothingLightGray"),
         });
     }
     
@@ -308,12 +309,12 @@ public void SetupBots()
         hakkuBot.SetProfile(new IProfile()
         {
             Name = "Hakku",
-            Gender = Gender.Female,
-            Skin = new IProfileClothingItem("Normal_fem", "Skin3", "ClothingLightGreen"),
-            ChestOver = new IProfileClothingItem("Robe_fem", "ClothingLightGray"),
-            Legs = new IProfileClothingItem("Skirt_fem", "ClothingLightGray"),
+            Gender = Gender.Male,
+            Skin = new IProfileClothingItem("Normal", "Skin3", "ClothingLightGreen"),
+            ChestUnder = new IProfileClothingItem("TShirt", "ClothingLightGray"),
+            Legs = new IProfileClothingItem("Skirt", "ClothingLightGray"),
             Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-            Accessory = new IProfileClothingItem("SantaMask", ""),
+            Accesory = new IProfileClothingItem("SantaMask", ""),
         });
     }
     botsCreated = true;
