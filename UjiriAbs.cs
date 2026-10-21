@@ -234,7 +234,7 @@ public void SetupBots()
         edurBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.CompanionC));
         edurBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
         PlayerModifiers mods = edurBot.GetModifiers();
-        mods.SizeModifier = 1.01f;
+        mods.SizeModifier = 0.99f;
         edurBot.SetModifiers(mods);
         edurBot.SetProfile(new IProfile()
         {
