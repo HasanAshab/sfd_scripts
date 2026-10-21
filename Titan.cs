@@ -1210,8 +1210,8 @@ private void TransformToArmoredTitan(IPlayer player, int playerId)
     
     player.SetBotBehaviorSet(bS);
     
-    // Initialize Armored Titan armor state to ON
-    armoredTitanArmorOn[playerId] = true;
+    // Initialize Armored Titan armor state to ON (via ApplyArmoredTitanArmor to ensure modifiers are applied)
+    ApplyArmoredTitanArmor(player, playerId, true);
     
     // Initialize rush hit tracking
     armoredTitanRushHitTimes[playerId] = new Dictionary<int, float>();
@@ -3011,7 +3011,8 @@ private void ToggleArmoredTitanArmor(IPlayer player, int playerId)
 
 private void ApplyArmoredTitanArmor(IPlayer player, int playerId, bool armorOn)
 {
-    bool oldArmorState = armoredTitanArmorOn.ContainsKey(playerId) ? armoredTitanArmorOn[playerId] : true;
+    // oldArmorState defaults to false when no key exists yet (meaning: no prior effects were applied)
+    bool oldArmorState = armoredTitanArmorOn.ContainsKey(playerId) ? armoredTitanArmorOn[playerId] : false;
     
     // Get modifiers
     PlayerModifiers mods = player.GetModifiers();
