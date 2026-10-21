@@ -219,6 +219,9 @@ private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, Tit
 // Track player name to ID mapping for storage/restoration
 private Dictionary<string, int> playerNameToId = new Dictionary<string, int>();
 
+// Stable group key cached at distribution/restore time (does not change when players die mid-match)
+private string cachedPlayerGroupKey = "";
+
 // Track titan type labels above players' heads
 private Dictionary<int, IObjectText> titanTypeLabels = new Dictionary<int, IObjectText>();
 
@@ -402,6 +405,16 @@ private string GetTodayDateString()
 // Helper method to get player group key (sorted list of non-bot player names)
 private string GetPlayerGroupKey()
 {
+    // If we have a cached key (set at distribution/restore time), always return it.
+    // This prevents the key from changing mid-match when players die (e.g. during extraction).
+    if (!string.IsNullOrEmpty(cachedPlayerGroupKey))
+        return cachedPlayerGroupKey;
+
+    return ComputePlayerGroupKey();
+}
+
+private string ComputePlayerGroupKey()
+{
     IPlayer[] allPlayers = Game.GetPlayers();
     List<string> playerNames = new List<string>();
     
@@ -471,6 +484,10 @@ public void DistributeTitanPowers(TriggerArgs args)
     // Create text labels above players' heads with their titan type
     CreateTitanTypeLabels(allPlayers);
     
+    // Cache the player group key NOW (while all players are alive) so it stays stable
+    // even if some players die mid-match (e.g. during power extraction).
+    cachedPlayerGroupKey = ComputePlayerGroupKey();
+    
     // Save assigned powers to SharedStorage for this player group
     SaveAssignedPowersToStorage();
     
@@ -518,8 +535,9 @@ private void RestoreAssignedPowersFromStorage()
 {
     IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
     
-    // Get player group key for this distribution set
-    string playerGroupKey = GetPlayerGroupKey();
+    // Cache the player group key while all players are alive at match start
+    cachedPlayerGroupKey = ComputePlayerGroupKey();
+    string playerGroupKey = cachedPlayerGroupKey;
     string powersKey = "POWERS_" + playerGroupKey;
     
     if (!persistentStorage.ContainsKey(powersKey))
