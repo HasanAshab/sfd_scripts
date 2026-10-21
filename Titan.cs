@@ -301,7 +301,7 @@ public void OnStartup()
     initTimer.Trigger();
 
     // strength boost
-    const float OTHERS_SCALE = 0.5f; // 1.0 = unchanged, 0.2 = others are 5x rarer
+    const float OTHERS_SCALE = 0.7f; // 1.0 = unchanged, 0.2 = others are 5x rarer
     short boost = (short)WeaponItem.STRENGTHBOOST;
 
     Dictionary<short, int> current = Game.GetWeaponSpawnChances();
@@ -2466,8 +2466,10 @@ public void OnUpdate(float elapsed)
             }
         }
         
-        // Disable default powerup usage on all bots on map (track by bot ID)
-        if (player.IsBot && !configuredBotPowerupUsage.Contains(playerId))
+        // Only disable PowerupUsage after a bot has picked up or received a strength boost
+        // (If disabled beforehand, bots won't seek/pick up strength boosts and default powerup usage won't work)
+        bool hasStrengthBoostItem = player.CurrentPowerupItem.WeaponItem == WeaponItem.STRENGTHBOOST;
+        if (player.IsBot && (hasStrengthBoostItem || player.GetStrengthBoostTime() > 0) && !configuredBotPowerupUsage.Contains(playerId))
         {
             BotBehaviorSet bS = player.GetBotBehaviorSet();
             bS.PowerupUsage = false;
