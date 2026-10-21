@@ -3303,7 +3303,7 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         // Apply recoil if armor is OFF
         if (!armorOn)
         {
-            player.DealDamage(objDamage * 0.5 * ARMORED_RUSH_RECOIL_RATIO);
+            player.DealDamage(objDamage * 0.5f * ARMORED_RUSH_RECOIL_RATIO);
         }
     }
     
