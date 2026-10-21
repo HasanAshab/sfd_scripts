@@ -2542,10 +2542,11 @@ public void OnUpdate(float elapsed)
             else if (titanType == TitanType.Armored)
             {
                 // Armored Titan updates
-                CheckArmoredTitanArmor(player, playerId, currentTime);
                 CheckArmoredTitanBotArmor(player, playerId, currentTime);
                 CheckArmoredTitanRush(player, playerId, currentTime);
                 CheckArmoredTitanBotRush(player, playerId, currentTime);
+                // No need this, it's already done in OnPlayerDamage
+                // CheckArmoredTitanArmor(player, playerId, currentTime);
                 
                 // Armored Titan also has exhaustion
                 CheckTitanExhaustion(player, playerId);
