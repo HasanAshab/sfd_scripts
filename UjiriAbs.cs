@@ -2,9 +2,11 @@
 private IPlayer timpaBot = null;
 private IPlayer bichiBot = null;
 private IPlayer kokolaBot = null;
+private IPlayer heitBot = null;
 private IPlayer edurBot = null;
 private IPlayer xrayBot = null;
 private IPlayer pakhiBot = null;
+private IPlayer hakkuBot = null;
 
 
 // Random number generator
@@ -13,6 +15,9 @@ private Random random = new Random();
 
 // Team assignments (fixed teams)
 private bool botsCreated = false;
+
+// Total number of bots to spawn
+private const int BOT_COUNT = 8;
 
 public void OnStartup()
 {
@@ -33,9 +38,9 @@ public void SetupBots()
         (path.GetPathNodeType() == PathNodeType.Ground || path.GetPathNodeType() == PathNodeType.Platform)
     ).ToArray();
     
-    Vector2[] spawnPositions = new Vector2[6];
+    Vector2[] spawnPositions = new Vector2[BOT_COUNT];
     
-    if (pathNodes.Length >= 6)
+    if (pathNodes.Length >= BOT_COUNT)
     {
         // Enough path nodes - use random unique positions
         List<IObjectPathNode> shuffledNodes = pathNodes.ToList();
@@ -47,7 +52,7 @@ public void SetupBots()
             shuffledNodes[j] = temp;
         }
         
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < BOT_COUNT; i++)
         {
             spawnPositions[i] = shuffledNodes[i].GetWorldPosition();
         }
@@ -90,8 +95,8 @@ public void SetupBots()
             // If neither player is on Team1 or Team2, use default assignment
             if (team1SpawnPos == Vector2.Zero && team2SpawnPos == Vector2.Zero)
             {
-                team1SpawnPos = p2.GetWorldPosition(); // Team1 bots spawn at P1
-                team2SpawnPos = p1.GetWorldPosition(); // Team2 bots spawn at P2
+                team1SpawnPos = p2.GetWorldPosition(); // Team1 bots spawn at P2
+                team2SpawnPos = p1.GetWorldPosition(); // Team2 bots spawn at P1
             }
             else if (team1SpawnPos == Vector2.Zero)
             {
@@ -117,16 +122,19 @@ public void SetupBots()
             team2SpawnPos = Vector2.Zero;
         }
         
-        // Assign spawn positions: Team1 bots (Timpa, Bichi, Kokola) and Team2 bots (Edur, Xray, Pakhi, Psythic)
+        // Assign spawn positions:
+        // Team1 bots (Timpa, Bichi, Kokola, Heit) and Team2 bots (Edur, Xray, Pakhi, Hakku)
         spawnPositions[0] = team1SpawnPos; // Timpa
         spawnPositions[1] = team1SpawnPos; // Bichi
         spawnPositions[2] = team1SpawnPos; // Kokola
         spawnPositions[3] = team2SpawnPos; // Edur
         spawnPositions[4] = team2SpawnPos; // Xray
         spawnPositions[5] = team2SpawnPos; // Pakhi
+        spawnPositions[6] = team1SpawnPos; // Heit
+        spawnPositions[7] = team2SpawnPos; // Hakku
     }
     
-    // Create Team1 bots (Normal AI): Timpa, Bichi, Kokola
+    // Create Team1 bots (Normal AI): Timpa, Bichi, Kokola, Heit
     timpaBot = Game.CreatePlayer(spawnPositions[0]);
     if (timpaBot != null)
     {
@@ -160,15 +168,15 @@ public void SetupBots()
         mods.SizeModifier = 0.92f;
         bichiBot.SetModifiers(mods);
         bichiBot.SetProfile(new IProfile()
-{
-    Name = "Bichi",
-    Gender = Gender.Male,
-    Skin = new IProfileClothingItem("Normal", "Skin3", "ClothingLightGreen"),
-    ChestUnder = new IProfileClothingItem("Sweater", "ClothingGreen"),
-    Hands = new IProfileClothingItem("GlovesBlack", "ClothingLightGray"),
-    Legs = new IProfileClothingItem("Skirt", "ClothingBlue"),
-    Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-});
+        {
+            Name = "Bichi",
+            Gender = Gender.Male,
+            Skin = new IProfileClothingItem("Normal", "Skin3", "ClothingLightGreen"),
+            ChestUnder = new IProfileClothingItem("Sweater", "ClothingGreen"),
+            Hands = new IProfileClothingItem("GlovesBlack", "ClothingLightGray"),
+            Legs = new IProfileClothingItem("Skirt", "ClothingBlue"),
+            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+        });
     }
     
     kokolaBot = Game.CreatePlayer(spawnPositions[2]);
@@ -182,18 +190,42 @@ public void SetupBots()
         mods.SizeModifier = 0.95f;
         kokolaBot.SetModifiers(mods);
         kokolaBot.SetProfile(new IProfile()
-{
-    Name = "Kokola",
-    Gender = Gender.Female,
-    Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGreen"),
-    Head = new IProfileClothingItem("Buzzcut", "ClothingDarkGray"),
-    ChestUnder = new IProfileClothingItem("SleevelessShirt_fem", "ClothingLightGray"),
-    Legs = new IProfileClothingItem("Skirt_fem", "ClothingBlue"),
-    Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-});
+        {
+            Name = "Kokola",
+            Gender = Gender.Female,
+            Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightGreen"),
+            Head = new IProfileClothingItem("Buzzcut", "ClothingDarkGray"),
+            ChestUnder = new IProfileClothingItem("SleevelessShirt_fem", "ClothingLightGray"),
+            Legs = new IProfileClothingItem("Skirt_fem", "ClothingBlue"),
+            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+        });
+    }
+
+    heitBot = Game.CreatePlayer(spawnPositions[6]);
+    if (heitBot != null)
+    {
+        heitBot.SetTeam(PlayerTeam.Team1);
+        heitBot.SetBotName("Heit");
+        heitBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
+        heitBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+        PlayerModifiers mods = heitBot.GetModifiers();
+        mods.SizeModifier = 1.01f;
+        mods.MeleeForceModifier = 0.7f;
+        heitBot.SetModifiers(mods);
+        heitBot.SetProfile(new IProfile()
+        {
+            Name = "Heit",
+            Gender = Gender.Female,
+            Skin = new IProfileClothingItem("Normal_fem", "Skin1", "ClothingBrown"),
+            Head = new IProfileClothingItem("Buzzcut", "ClothingDarkGray"),
+            ChestUnder = new IProfileClothingItem("ShirtWithBowtie_fem", "ClothingLightGray", "ClothingLightGray"),
+            Legs = new IProfileClothingItem("Skirt_fem", "ClothingBlue"),
+            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+            Accessory = new IProfileClothingItem("SantaMask", ""),
+        });
     }
     
-    // Create Team2 bots (Expert AI): Edur, Xray, Pakhi
+    // Create Team2 bots (Expert AI): Edur, Xray, Pakhi, Hakku
     edurBot = Game.CreatePlayer(spawnPositions[3]);
     if (edurBot != null)
     {
@@ -205,14 +237,14 @@ public void SetupBots()
         mods.SizeModifier = 1.01f;
         edurBot.SetModifiers(mods);
         edurBot.SetProfile(new IProfile()
-            {
-                Name = "Edur",
-                Gender = Gender.Male,
-                Skin = new IProfileClothingItem("Normal", "Skin3", "ClothingLightGreen"),
-                ChestUnder = new IProfileClothingItem("Shirt", "ClothingLightGray"),
-                Legs = new IProfileClothingItem("PantsBlack", "ClothingDarkGray"),
-                Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-            });
+        {
+            Name = "Edur",
+            Gender = Gender.Male,
+            Skin = new IProfileClothingItem("Normal", "Skin3", "ClothingLightGreen"),
+            ChestUnder = new IProfileClothingItem("Shirt", "ClothingLightGray"),
+            Legs = new IProfileClothingItem("PantsBlack", "ClothingDarkGray"),
+            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+        });
     }
 
     xrayBot = Game.CreatePlayer(spawnPositions[4]);
@@ -226,15 +258,15 @@ public void SetupBots()
         mods.SizeModifier = 0.98f;
         xrayBot.SetModifiers(mods);
         xrayBot.SetProfile(new IProfile()
-{
-    Name = "Xray",
-    Gender = Gender.Female,
-    Skin = new IProfileClothingItem("Normal_fem", "Skin1", "ClothingLightGreen"),
-    Head = new IProfileClothingItem("WoolCap", "ClothingLightGray"),
-    ChestUnder = new IProfileClothingItem("SleevelessShirt_fem", "ClothingLightGray"),
-    Legs = new IProfileClothingItem("Skirt_fem", "ClothingBlue"),
-    Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-});
+        {
+            Name = "Xray",
+            Gender = Gender.Female,
+            Skin = new IProfileClothingItem("Normal_fem", "Skin1", "ClothingLightGreen"),
+            Head = new IProfileClothingItem("WoolCap", "ClothingLightGray"),
+            ChestUnder = new IProfileClothingItem("SleevelessShirt_fem", "ClothingLightGray"),
+            Legs = new IProfileClothingItem("Skirt_fem", "ClothingBlue"),
+            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+        });
     }
     
     pakhiBot = Game.CreatePlayer(spawnPositions[5]);
@@ -250,16 +282,39 @@ public void SetupBots()
         pakhiBot.SetModifiers(mods);
 
         pakhiBot.SetProfile(new IProfile()
-{
-    Name = "pakhi",
-    Gender = Gender.Female,
-    Skin = new IProfileClothingItem("Normal_fem", "Skin2", "ClothingLightGreen"),
-    Head = new IProfileClothingItem("Buzzcut", "ClothingDarkGray"),
-    ChestOver = new IProfileClothingItem("Coat_fem", "ClothingLightGray", "ClothingLightGray"),
-    Hands = new IProfileClothingItem("Gloves", "ClothingLightPink"),
-    Legs = new IProfileClothingItem("Pants_fem", "ClothingDarkGray"),
-    Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
-});
+        {
+            Name = "pakhi",
+            Gender = Gender.Female,
+            Skin = new IProfileClothingItem("Normal_fem", "Skin2", "ClothingLightGreen"),
+            Head = new IProfileClothingItem("Buzzcut", "ClothingDarkGray"),
+            ChestOver = new IProfileClothingItem("Coat_fem", "ClothingLightGray", "ClothingLightGray"),
+            Hands = new IProfileClothingItem("Gloves", "ClothingLightPink"),
+            Legs = new IProfileClothingItem("Pants_fem", "ClothingDarkGray"),
+            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+        });
+    }
+
+    hakkuBot = Game.CreatePlayer(spawnPositions[7]);
+    if (hakkuBot != null)
+    {
+        hakkuBot.SetTeam(PlayerTeam.Team2);
+        hakkuBot.SetBotName("Hakku");
+        hakkuBot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.CompanionD));
+        hakkuBot.SetCameraSecondaryFocusMode(CameraFocusMode.Ignore);
+        PlayerModifiers mods = hakkuBot.GetModifiers();
+        mods.SizeModifier = 0.86f;
+        mods.MeleeForceModifier = 0.7f;
+        hakkuBot.SetModifiers(mods);
+        hakkuBot.SetProfile(new IProfile()
+        {
+            Name = "Hakku",
+            Gender = Gender.Female,
+            Skin = new IProfileClothingItem("Normal_fem", "Skin3", "ClothingLightGreen"),
+            ChestOver = new IProfileClothingItem("Robe_fem", "ClothingLightGray"),
+            Legs = new IProfileClothingItem("Skirt_fem", "ClothingLightGray"),
+            Feet = new IProfileClothingItem("ShoesBlack", "ClothingBrown"),
+            Accessory = new IProfileClothingItem("SantaMask", ""),
+        });
     }
     botsCreated = true;
 }
