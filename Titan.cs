@@ -98,6 +98,9 @@ private const float ARMORED_TITAN_SIZE = 1.300f; // Fixed size
 private const float ARMORED_ARMOR_OFF_SPEED_BONUS = 0.30f; // 30% speed increase
 private const float ARMORED_ARMOR_OFF_ENERGY_REGEN_BONUS = 0.15f; // 15% energy regen increase
 
+// Armored Titan armor mode penalties (when ON)
+private const float ARMORED_ARMOR_ON_ENERGY_REGEN_PENALTY = 0.20f; // 20% energy regen reduction while armor is active
+
 // Armored Titan armor mode triggers for bots
 private const float ARMORED_ARMOR_ON_TRIGGER_DISTANCE = 35f; // Distance to trigger armor on
 private const float ARMORED_ARMOR_ON_CHECK_INTERVAL = 1000f; // Check every 1 second
@@ -415,11 +418,18 @@ private string GetPlayerGroupKey()
         playerNames.Add(player.Name);
     }
     
-    // Sort alphabetically for consistent key generation
-    playerNames.Sort();
+    // Deduplicate, then sort alphabetically for consistent key generation
+    HashSet<string> seen = new HashSet<string>();
+    List<string> uniqueNames = new List<string>();
+    foreach (string name in playerNames)
+    {
+        if (seen.Add(name))
+            uniqueNames.Add(name);
+    }
+    uniqueNames.Sort();
     
     // Join with underscore to create unique key
-    return string.Join("_", playerNames.ToArray());
+    return string.Join("_", uniqueNames.ToArray());
 }
 
 public void DistributeTitanPowers(TriggerArgs args)
@@ -3014,6 +3024,11 @@ private void ApplyArmoredTitanArmor(IPlayer player, int playerId, bool armorOn)
         mods.SprintSpeedModifier /= (1f + ARMORED_ARMOR_OFF_SPEED_BONUS);
         mods.EnergyRechargeModifier /= (1f + ARMORED_ARMOR_OFF_ENERGY_REGEN_BONUS);
     }
+    else
+    {
+        // Was ON: remove energy regen penalty
+        mods.EnergyRechargeModifier *= (1f + ARMORED_ARMOR_ON_ENERGY_REGEN_PENALTY);
+    }
     
     // Apply new armor state effects
     if (!armorOn)
@@ -3037,7 +3052,10 @@ private void ApplyArmoredTitanArmor(IPlayer player, int playerId, bool armorOn)
     }
     else
     {
-        // Turning ON: set armor ON profile
+        // Turning ON: apply energy regen penalty
+        mods.EnergyRechargeModifier /= (1f + ARMORED_ARMOR_ON_ENERGY_REGEN_PENALTY);
+        
+        // Set armor ON profile
         player.SetProfile(new IProfile()
         {
             Gender = Gender.Male,
