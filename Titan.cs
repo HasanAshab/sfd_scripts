@@ -130,7 +130,7 @@ private const float ARMORED_MELEE_RANGE = 30f; // Melee threat detection range
 private const float ARMORED_MELEE_Y_TOLERANCE = 24f; // Vertical tolerance for melee
 private const float ARMORED_PROJ_LOOKAHEAD_SEC = 0.06f; // Projectile lookahead time
 private const float ARMORED_REFLECT_OFFSET = 6f; // Reflected projectile spawn offset
-private const float ARMORED_SHIELD_ENERGY_DRAIN_RATIO = 0.20f; // 20% of blocked damage drained from energy
+private const float ARMORED_SHIELD_ENERGY_DRAIN_RATIO = 0.50f; // 50% of blocked damage drained from energy
 
 // Titan size range
 private const float TITAN_MIN_SIZE = 0.8f;
