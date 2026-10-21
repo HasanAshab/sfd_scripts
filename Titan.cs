@@ -34,15 +34,14 @@ private const float PURE_TITAN_SPEED_PENALTY = 0.30f; // 30% speed reduction (0.
 
 // Attack Titan stats
 private const float ATTACK_TITAN_HP_BONUS = 0.40f; // 40% HP increase
-private const float ATTACK_TITAN_MELEE_DAMAGE_BONUS = 0.32f; // 32% melee damage increase
+private const float ATTACK_TITAN_MELEE_DAMAGE_BONUS = 0.20f; // 20% melee damage increase
 private const float ATTACK_TITAN_MELEE_FORCE_BONUS = 0.01f; // 1% melee force increase
 private const float ATTACK_TITAN_SPEED_PENALTY = 0.20f; // 20% speed reduction
 private const float ATTACK_TITAN_ENERGY_BONUS = 0.30f; // 30% energy increase
 
 // Attack Titan hardening costs and bonuses
 private const float HARDENING_ENERGY_COST_PER_SECOND = 0.14f; // 14% of max energy per second
-private const float HARDENING_OFFENSIVE_ENERGY_DRAIN = 25f; // Offensive hardening drains 25 energy on punch hit
-private const float HARDENING_OFFENSIVE_DAMAGE_BONUS = 0.25f; // 25% melee damage increase
+private const float HARDENING_OFFENSIVE_DAMAGE_BONUS = 0.35f; // 35% melee damage increase
 private const float HARDENING_DEFENSIVE_SPEED_PENALTY = 0.20f; // 20% speed reduction
 private const float HARDENING_DEFENSIVE_DEFENSE_BONUS = 0.75f; // 75% damage reduction
 private const float HARDENING_OFFENSIVE_TRIGGER_DISTANCE = 25f; // Distance to trigger offensive mode
@@ -88,8 +87,8 @@ private const int JAW_SHARP_CLAW_PUNCH_COUNT = 3; // 3rd punch breaks objects
 private const int JAW_SHARP_CLAW_PUNCH_WINDOW = 600; // 600ms window between punches
 
 // Armored Titan stats
-private const float ARMORED_TITAN_HP_BONUS = 0.15f; // 32% HP increase
-private const float ARMORED_TITAN_MELEE_DAMAGE_BONUS = 0.10f; // 10% melee damage increase
+private const float ARMORED_TITAN_HP_BONUS = 0.15f; // 15% HP increase
+private const float ARMORED_TITAN_MELEE_DAMAGE_BONUS = 0.23f; // 23% melee damage increase
 private const float ARMORED_TITAN_MELEE_FORCE_BONUS = 0.60f; // 60% melee force increase
 private const float ARMORED_TITAN_SPEED_PENALTY = 0.50f; // 50% speed reduction
 private const float ARMORED_TITAN_ENERGY_BONUS = 0f; // 0% energy increase
@@ -128,6 +127,7 @@ private const float ARMORED_MELEE_RANGE = 30f; // Melee threat detection range
 private const float ARMORED_MELEE_Y_TOLERANCE = 24f; // Vertical tolerance for melee
 private const float ARMORED_PROJ_LOOKAHEAD_SEC = 0.06f; // Projectile lookahead time
 private const float ARMORED_REFLECT_OFFSET = 6f; // Reflected projectile spawn offset
+private const float ARMORED_SHIELD_ENERGY_DRAIN_RATIO = 0.20f; // 20% of blocked damage drained from energy
 
 // Titan size range
 private const float TITAN_MIN_SIZE = 0.8f;
@@ -1638,15 +1638,6 @@ private void HandleAttackTitanMelee(IPlayer attackTitan, int attackTitanId, Play
     int currentPunchCount = attackTitanPunchCount.ContainsKey(attackTitanId) ? attackTitanPunchCount[attackTitanId] : 0;
     bool isSuperPunch = isPunch && currentPunchCount >= ATTACK_SUPER_PUNCH_COUNT;
     
-    // Check hardening mode
-    HardeningMode mode = HardeningMode.Neutral;
-    if (attackTitanHardeningMode.ContainsKey(attackTitanId))
-    {
-        mode = attackTitanHardeningMode[attackTitanId];
-    }
-    
-    bool hasOffensiveHardening = (mode == HardeningMode.Offensive);
-    
     // Process hit targets
     if (args != null && args.Length > 0)
     {
@@ -1661,16 +1652,7 @@ private void HandleAttackTitanMelee(IPlayer attackTitan, int attackTitanId, Play
             }
             if (hitPlayer == null || hitPlayer.IsDead) continue;
             
-            // 1. Offensive Hardening: always drain 25f energy on victim
-            if (hasOffensiveHardening)
-            {
-                PlayerModifiers victimMods = hitPlayer.GetModifiers();
-                victimMods.CurrentEnergy = Math.Max(0f, victimMods.CurrentEnergy - HARDENING_OFFENSIVE_ENERGY_DRAIN);
-                hitPlayer.SetModifiers(victimMods);
-                Game.PlaySound("ElectricSpark", hitPlayer.GetWorldPosition());
-            }
-            
-            // 2. Super Punch: on third punch, victim will always stagger
+            // Super Punch: on third punch, victim will always stagger
             if (isSuperPunch)
             {
                 QuickCommand(hitPlayer, new PlayerCommand(PlayerCommandType.Stagger));
@@ -2053,6 +2035,15 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
     if (hasSource && IsArmoredInFront(player, sourcePos))
     {
         player.SetHealth(player.GetHealth() + args.Damage);
+        
+        // Shield body absorbed damage: cut energy by 20% of the damage amount
+        if (args.Damage > 0f)
+        {
+            PlayerModifiers titanMods = player.GetModifiers();
+            float energyDrain = args.Damage * ARMORED_SHIELD_ENERGY_DRAIN_RATIO;
+            titanMods.CurrentEnergy = Math.Max(0f, titanMods.CurrentEnergy - energyDrain);
+            player.SetModifiers(titanMods);
+        }
         
         // Play Sparks effect on melee/projectile/explosion hit
         if (args.DamageType == PlayerDamageEventType.Melee || 
