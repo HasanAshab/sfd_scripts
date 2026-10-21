@@ -99,7 +99,7 @@ private const float ARMORED_ARMOR_OFF_SPEED_BONUS = 0.30f; // 30% speed increase
 private const float ARMORED_ARMOR_OFF_ENERGY_REGEN_BONUS = 0.15f; // 15% energy regen increase
 
 // Armored Titan armor mode penalties (when ON)
-private const float ARMORED_ARMOR_ON_ENERGY_REGEN_PENALTY = 0.20f; // 20% energy regen reduction while armor is active
+private const float ARMORED_ARMOR_ON_ENERGY_REGEN_PENALTY = 0.50f; // 50% energy regen reduction while armor is active
 
 // Armored Titan armor mode triggers for bots
 private const float ARMORED_ARMOR_ON_TRIGGER_DISTANCE = 35f; // Distance to trigger armor on
