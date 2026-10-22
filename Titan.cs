@@ -367,7 +367,7 @@ public void InitializeTitanDistribution(TriggerArgs args)
     }
     
     distributionMode = hasVip ? "A" : "B";
-    string storageName = (distributionMode == "A") ? "TitanPowerStorage_a" : "TitanPowerStorage_b";
+    string storageName = (distributionMode == "A") ? "TitanPowerStorageA" : "TitanPowerStorageB";
     IScriptStorage storage = Game.GetSharedStorage(storageName);
     
     string groupKey = cachedPlayerGroupKey;
@@ -681,7 +681,7 @@ private void DistributeScenarioB(IPlayer[] allPlayers)
     }
     
     // Save 30-minute expiry (stored as string to avoid boxing/cast issues with IScriptStorage)
-    string storageName = "TitanPowerStorage_b";
+    string storageName = "TitanPowerStorageB";
     IScriptStorage storage = Game.GetSharedStorage(storageName);
     string groupKey = ComputePlayerGroupKey(); // use ComputePlayerGroupKey — cachedPlayerGroupKey not set yet at this call point
     string expiryKey = "EXPIRY_" + groupKey;
@@ -690,7 +690,7 @@ private void DistributeScenarioB(IPlayer[] allPlayers)
 
 private void SaveAssignedPowersToStorage()
 {
-    string storageName = (distributionMode == "A") ? "TitanPowerStorage_a" : "TitanPowerStorage_b";
+    string storageName = (distributionMode == "A") ? "TitanPowerStorageA" : "TitanPowerStorageB";
     IScriptStorage persistentStorage = Game.GetSharedStorage(storageName);
     
     string playerGroupKey = GetPlayerGroupKey();
@@ -717,7 +717,7 @@ private void SaveAssignedPowersToStorage()
 
 private void RestoreAssignedPowersFromStorage()
 {
-    string storageName = (distributionMode == "A") ? "TitanPowerStorage_a" : "TitanPowerStorage_b";
+    string storageName = (distributionMode == "A") ? "TitanPowerStorageA" : "TitanPowerStorageB";
     IScriptStorage persistentStorage = Game.GetSharedStorage(storageName);
     
     // Cache the player group key while all players are alive at match start
@@ -768,7 +768,7 @@ private void RestoreAssignedPowersFromStorage()
 private void SaveExpiryToStorage()
 {
     if (distributionMode != "A") return;
-    IScriptStorage storage = Game.GetSharedStorage("TitanPowerStorage_a");
+    IScriptStorage storage = Game.GetSharedStorage("TitanPowerStorageA");
     string groupKey = GetPlayerGroupKey();
     
     // Serialize: "playerName=unixDay;playerName=unixDay;..."
@@ -782,7 +782,7 @@ private void SaveExpiryToStorage()
 private void LoadPlayerExpiryFromStorage()
 {
     if (distributionMode != "A") return;
-    IScriptStorage storage = Game.GetSharedStorage("TitanPowerStorage_a");
+    IScriptStorage storage = Game.GetSharedStorage("TitanPowerStorageA");
     string groupKey = GetPlayerGroupKey();
     string key = "EXPIRY_" + groupKey;
     
