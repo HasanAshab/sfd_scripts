@@ -1418,8 +1418,8 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
         
         foreach (VirtualKeyInfo keyInfo in keyInfos)
         {
-            // ACTIVATE key: Slowmo ability
-            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.ACTIVATE)
+            // DRAW_SPECIAL key: Slowmo ability
+            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.DRAW_SPECIAL)
             {
                 ActivateAttackTitanSlowmo(player, playerId);
             }
