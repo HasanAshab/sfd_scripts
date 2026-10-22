@@ -400,10 +400,16 @@ public void InitializeTitanDistribution(TriggerArgs args)
             string expiryKey = "EXPIRY_" + groupKey;
             if (storage.ContainsKey(expiryKey))
             {
-                long expiryMinute = (long)storage.GetItem(expiryKey);
-                long nowMinute = GetUnixMinute();
-                if (nowMinute < expiryMinute)
-                    expired = false;
+                // Expiry stored as string to avoid IScriptStorage long-cast NRE
+                string expiryRaw = "";
+                storage.TryGetItemString(expiryKey, out expiryRaw);
+                long expiryMinute;
+                if (long.TryParse(expiryRaw, out expiryMinute))
+                {
+                    long nowMinute = GetUnixMinute();
+                    if (nowMinute < expiryMinute)
+                        expired = false;
+                }
             }
         }
         
@@ -674,11 +680,12 @@ private void DistributeScenarioB(IPlayer[] allPlayers)
         }
     }
     
-    // Save 30-minute expiry
+    // Save 30-minute expiry (stored as string to avoid boxing/cast issues with IScriptStorage)
     string storageName = "TitanPowerStorage_b";
     IScriptStorage storage = Game.GetSharedStorage(storageName);
-    string expiryKey = "EXPIRY_" + cachedPlayerGroupKey;
-    storage.SetItem(expiryKey, GetUnixMinute() + 30L);
+    string groupKey = ComputePlayerGroupKey(); // use ComputePlayerGroupKey — cachedPlayerGroupKey not set yet at this call point
+    string expiryKey = "EXPIRY_" + groupKey;
+    storage.SetItem(expiryKey, (GetUnixMinute() + 30L).ToString());
 }
 
 private void SaveAssignedPowersToStorage()
