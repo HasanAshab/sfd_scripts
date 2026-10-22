@@ -4193,9 +4193,9 @@ private void QuickCommand(IPlayer player, PlayerCommand command)
 }
 
 
-// Checks if the given player is under a melee threat from ANY direction (before the hit lands).
+// Checks if the given player is under a melee threat from ANY direction (before the hit lands) of titans.
 // Only enemies count: players on a different team, or everyone if this player is Independent.
-private bool IsUnderMeleeThreat(IPlayer player)
+private bool IsUnderMeleeThreatOfTitan(IPlayer player)
 {
     Vector2 playerPos = player.GetWorldPosition();
     PlayerTeam playerTeam = player.GetTeam();
@@ -4203,7 +4203,7 @@ private bool IsUnderMeleeThreat(IPlayer player)
 
     foreach (IPlayer enemy in Game.GetPlayers())
     {
-        if (enemy == null || enemy.IsDead || enemy.UniqueID == playerId) continue;
+        if (enemy == null || enemy.IsDead || enemy.UniqueID == playerId || !titanPlayers.ContainsKey(enemy.UniqueID)) continue;
 
         // Skip teammates (Independent has no team, so everyone is an enemy)
         if (playerTeam != PlayerTeam.Independent && enemy.GetTeam() == playerTeam) continue;
