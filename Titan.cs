@@ -4191,3 +4191,35 @@ private void QuickCommand(IPlayer player, PlayerCommand command)
         }, 1, 1);
     }
 }
+
+
+// Checks if the given player is under a melee threat from ANY direction (before the hit lands).
+// Only enemies count: players on a different team, or everyone if this player is Independent.
+private bool IsUnderMeleeThreat(IPlayer player)
+{
+    Vector2 playerPos = player.GetWorldPosition();
+    PlayerTeam playerTeam = player.GetTeam();
+    int playerId = player.UniqueID;
+
+    foreach (IPlayer enemy in Game.GetPlayers())
+    {
+        if (enemy == null || enemy.IsDead || enemy.UniqueID == playerId) continue;
+
+        // Skip teammates (Independent has no team, so everyone is an enemy)
+        if (playerTeam != PlayerTeam.Independent && enemy.GetTeam() == playerTeam) continue;
+
+        // Enemy must be in a melee attack / kick animation
+        if (!enemy.IsMeleeAttacking && !enemy.IsKicking &&
+            !enemy.IsJumpAttacking && !enemy.IsJumpKicking) continue;
+
+        Vector2 d = enemy.GetWorldPosition() - playerPos;
+
+        if (Math.Abs(d.X) <= ARMORED_MELEE_RANGE &&
+            Math.Abs(d.Y) <= ARMORED_MELEE_Y_TOLERANCE)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
