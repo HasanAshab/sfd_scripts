@@ -75,7 +75,7 @@ private const float JAW_CLAW_BACK_MULTIPLIER = 4f; // Backstab multiplier
 private const float JAW_CLAW_GIB_THRESHOLD = 0.30f; // 30% overkill = gib
 
 // Jaw Titan hunt ability
-private const float JAW_HUNT_VICTIM_STUN_DURATION = 1000f; // 1 seconds input disable after hunt
+private const float JAW_HUNT_VICTIM_STUN_DURATION = 0f; // 0 seconds input disable after hunt
 
 // Jaw Titan bot backstab targeting
 private const float JAW_BOT_BACKSTAB_COMBAT_RANGE = 50f;   // Range for in-combat backstab check
@@ -2691,9 +2691,9 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
     
     if (currentTime >= jawTitanHuntDamageTime[jawTitanId])
     {
-        // Calculate damage (same as grab damage)
+        // Calculate damage (2.5x as grab damage)
         PlayerModifiers jawMods = jawTitan.GetModifiers();
-        float damagePerInterval = GRAB_DAMAGE_BASE * jawMods.MeleeDamageDealtModifier * GRAB_DAMAGE_MULTIPLIER;
+        float damagePerInterval = GRAB_DAMAGE_BASE * jawMods.MeleeDamageDealtModifier * (GRAB_DAMAGE_MULTIPLIER * 2.5f);
         
         // Check victim health before dealing damage
         PlayerModifiers victimMods = victim.GetModifiers();
