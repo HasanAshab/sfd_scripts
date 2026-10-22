@@ -1,3 +1,14 @@
-i got 2 bugs (not related or raised by your current change but a lot more ago).
+it works, now power distribution needs a update:
 
-1. Armorded titan when goes
+1. run the InitializeTitanDistribution after 1000ms instead of 500ms
+2. the new distribution algo will work in this way:
+    if any player with name Pakhi or Xray or Kokola or Bichi exists:
+        all the players will have 50% chance to get humanoid titan, rest of them will be pure titan. all humanoids should covered. 
+        give them with expiry of 2 days. when a humanoid expired, give it to another pure titan owner player of the same team and ShowPopupMessage (yellow) with e.g "Kokola's Jaw Titan expired. The next choosen inheritor is Daul!" and with fresh expiry (2 days)
+        (Show that expiry date with the titan label like [JAW:2])
+        Note: for this case, use TitanPowerStorage_a storage. and the distribution should be permanent (expired or power extracted can still edit it, permanent means will not redistributed)
+
+    else:
+        player 1 and 2 will get a random humanoid titan. rest of players will get remaining humanoid titan power randomly. only one kind of humanoid titan. try to cover all the humanoids if possible (players may be sometime less)
+        if Game.GetMapType() != MapType.Versus:
+        Note: for this case, use TitanPowerStorage_b. and it should expire after 30 minutes

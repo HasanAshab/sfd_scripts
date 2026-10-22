@@ -222,6 +222,20 @@ private Dictionary<string, int> playerNameToId = new Dictionary<string, int>();
 // Stable group key cached at distribution/restore time (does not change when players die mid-match)
 private string cachedPlayerGroupKey = "";
 
+// Distribution mode: "A" = VIP scenario (permanent, 2-day expiry), "B" = normal (30-min expiry)
+private string distributionMode = "";
+
+// VIP player names that trigger Scenario A
+private static readonly string[] VIP_PLAYER_NAMES = new string[] { "Pakhi", "Xray", "Kokola", "Bichi" };
+
+// Per-player expiry unix-day (Scenario A) or unix-minute (Scenario B)
+// Key = player name, Value = expiry timestamp
+private Dictionary<string, long> playerPowerExpiry = new Dictionary<string, long>();
+
+// Last time we checked expiry (every 30s is fine)
+private float lastExpiryCheckTime = 0f;
+private const float EXPIRY_CHECK_INTERVAL = 30000f; // 30 seconds
+
 // Track titan type labels above players' heads
 private Dictionary<int, IObjectText> titanTypeLabels = new Dictionary<int, IObjectText>();
 
@@ -326,48 +340,87 @@ public void OnStartup()
 
 public void InitializeTitanDistribution(TriggerArgs args)
 {
-    // Distribute titan powers using SharedStorage with player group tracking
-    // This runs 500ms after OnStartup to ensure all players are spawned
-    IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
-    string today = GetTodayDateString();
+    IPlayer[] allPlayers = Game.GetPlayers();
     
-    // Get current player group key (sorted list of non-bot player names)
-    string playerGroupKey = GetPlayerGroupKey();
+    // Build player name to ID mapping
+    playerNameToId.Clear();
+    foreach (IPlayer p in allPlayers)
+        if (p != null) playerNameToId[p.Name] = p.UniqueID;
     
-    Game.ShowChatMessage("Player Group Key: " + playerGroupKey, Color.Yellow);
+    // Cache group key while all players are alive
+    cachedPlayerGroupKey = ComputePlayerGroupKey();
     
-    // Storage key for this specific player group's distribution date
-    string dateKey = "DATE_" + playerGroupKey;
-    string lastDistributionDate = "";
-    
-    if (persistentStorage.ContainsKey(dateKey))
+    // Detect which scenario to use
+    bool hasVip = false;
+    foreach (IPlayer p in allPlayers)
     {
-        lastDistributionDate = (string)persistentStorage.GetItem(dateKey);
-        Game.ShowChatMessage("Last distribution for this group: " + lastDistributionDate, Color.Cyan);
+        if (p == null) continue;
+        foreach (string vip in VIP_PLAYER_NAMES)
+        {
+            if (p.Name.Equals(vip, System.StringComparison.OrdinalIgnoreCase))
+            {
+                hasVip = true;
+                break;
+            }
+        }
+        if (hasVip) break;
+    }
+    
+    distributionMode = hasVip ? "A" : "B";
+    string storageName = (distributionMode == "A") ? "TitanPowerStorage_a" : "TitanPowerStorage_b";
+    IScriptStorage storage = Game.GetSharedStorage(storageName);
+    
+    string groupKey = cachedPlayerGroupKey;
+    string powersKey = "POWERS_" + groupKey;
+    
+    Game.ShowChatMessage("[Titan] Mode " + distributionMode + " | Group: " + groupKey, Color.Yellow);
+    
+    if (distributionMode == "A")
+    {
+        // Scenario A: permanent. Only distribute once per player group; restore on subsequent matches.
+        if (storage.ContainsKey(powersKey))
+        {
+            Game.ShowChatMessage("[Titan] Restoring permanent distribution...", Color.Green);
+            RestoreAssignedPowersFromStorage();
+            LoadPlayerExpiryFromStorage();
+        }
+        else
+        {
+            Game.ShowChatMessage("[Titan] First-time distribution (Scenario A)...", Color.Green);
+            DistributeTitanPowers(args);
+        }
     }
     else
     {
-        Game.ShowChatMessage("No previous distribution found for this group", Color.Cyan);
-    }
-    
-    Game.ShowChatMessage("Today: " + today, Color.Cyan);
-    
-    if (lastDistributionDate != today)
-    {
-        // New day for this player group - distribute powers immediately
-        Game.ShowChatMessage("Distributing new powers...", Color.Green);
-        DistributeTitanPowers(args);
-    }
-    else
-    {
-        // Same day - restore from storage for this player group
-        Game.ShowChatMessage("Restoring powers from storage...", Color.Green);
-        RestoreAssignedPowersFromStorage();
+        // Scenario B: expires after 30 minutes.
+        bool expired = true;
+        if (storage.ContainsKey(powersKey))
+        {
+            // Check if 30 minutes have passed since distribution
+            string expiryKey = "EXPIRY_" + groupKey;
+            if (storage.ContainsKey(expiryKey))
+            {
+                long expiryMinute = (long)storage.GetItem(expiryKey);
+                long nowMinute = GetUnixMinute();
+                if (nowMinute < expiryMinute)
+                    expired = false;
+            }
+        }
         
-        // Recreate labels immediately
-        IPlayer[] allPlayers = Game.GetPlayers();
-        CreateTitanTypeLabels(allPlayers);
+        if (!expired)
+        {
+            Game.ShowChatMessage("[Titan] Restoring distribution (Scenario B)...", Color.Green);
+            RestoreAssignedPowersFromStorage();
+        }
+        else
+        {
+            Game.ShowChatMessage("[Titan] Distributing new powers (Scenario B)...", Color.Green);
+            DistributeTitanPowers(args);
+        }
     }
+    
+    // Create labels (with expiry info for Scenario A)
+    CreateTitanTypeLabels(allPlayers);
     
     // Give strength boost to all humanoid titan owners for this match
     GiveStrengthBoostToHumanoidTitans();
@@ -400,6 +453,37 @@ private string GetTodayDateString()
     return now.Year.ToString() + "-" + 
            now.Month.ToString("00") + "-" + 
            now.Day.ToString("00");
+}
+
+// Returns a human-readable power name for chat/popup messages
+private string GetTitanPowerName(TitanType titanType)
+{
+    if (titanType == TitanType.Attack) return "Attack Titan";
+    if (titanType == TitanType.Jaw)    return "Jaw Titan";
+    if (titanType == TitanType.Armored) return "Armored Titan";
+    return "Pure Titan";
+}
+
+// Returns current UTC time as unix day number (days since epoch)
+private long GetUnixDay()
+{
+    DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    return (long)(DateTime.UtcNow - epoch).TotalDays;
+}
+
+// Returns current UTC time as unix minute number (minutes since epoch)
+private long GetUnixMinute()
+{
+    DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    return (long)(DateTime.UtcNow - epoch).TotalMinutes;
+}
+
+// Returns days remaining until expiry unix-day (0 = expired or same day)
+private int DaysUntilExpiry(long expiryUnixDay)
+{
+    long now = GetUnixDay();
+    long diff = expiryUnixDay - now;
+    return (int)Math.Max(0, diff);
 }
 
 // Helper method to get player group key (sorted list of non-bot player names)
@@ -448,68 +532,164 @@ private string ComputePlayerGroupKey()
 public void DistributeTitanPowers(TriggerArgs args)
 {
     IPlayer[] allPlayers = Game.GetPlayers();
-    int totalPlayers = allPlayers.Length;
     
-    // Humanoid titans: Attack, Jaw, and Armored (currently 3 types)
-    const int HUMANOID_TITAN_COUNT = 3;
-    
-    if (totalPlayers == 0)
+    if (allPlayers.Length == 0)
     {
-        Game.ShowChatMessage("No players found for titan distribution!", Color.Red);
+        Game.ShowChatMessage("[Titan] No players found!", Color.Red);
         return;
     }
     
-    // Build player name to ID mapping
-    playerNameToId.Clear();
+    assignedTitanPowers.Clear();
+    playerPowerExpiry.Clear();
+    
+    if (distributionMode == "A")
+        DistributeScenarioA(allPlayers);
+    else
+        DistributeScenarioB(allPlayers);
+    
+    // Cache key while all players are alive
+    cachedPlayerGroupKey = ComputePlayerGroupKey();
+    
+    // Save to correct storage
+    SaveAssignedPowersToStorage();
+    
+    Game.ShowChatMessage("[Titan] Powers distributed! Pick up strength boost to transform.", Color.Cyan);
+}
+
+// --- Scenario A: VIP present. 50% humanoid per player, all types guaranteed, 2-day expiry ---
+private void DistributeScenarioA(IPlayer[] allPlayers)
+{
+    List<TitanType> humanoidPool = new List<TitanType> { TitanType.Attack, TitanType.Jaw, TitanType.Armored };
+    List<int> humanoidSlots = new List<int>(); // player IDs that got humanoid
+    
+    // First pass: 50% chance per player
     foreach (IPlayer player in allPlayers)
     {
-        if (player != null)
+        if (player == null || player.Name.ToLower() == TEMPORARY_PLAYER_NAME.ToLower()) continue;
+        int pid = player.UniqueID;
+        if (rnd.Next(0, 2) == 0)
         {
-            playerNameToId[player.Name] = player.UniqueID;
+            humanoidSlots.Add(pid);
+        }
+        else
+        {
+            assignedTitanPowers[pid] = TitanType.Pure;
         }
     }
     
-    // Determine which scenario to use
-    if (totalPlayers > HUMANOID_TITAN_COUNT)
+    // Ensure at least 3 humanoid slots (one per type)
+    if (humanoidSlots.Count < humanoidPool.Count)
     {
-        // Scenario 1: More players than humanoid titans - use original algorithm
-        DistributeWithOriginalAlgorithm(allPlayers);
+        // Pull from pure players randomly until we have enough
+        List<int> pureIds = new List<int>();
+        foreach (var kvp in assignedTitanPowers)
+            if (kvp.Value == TitanType.Pure) pureIds.Add(kvp.Key);
+        
+        // Shuffle pures
+        for (int i = pureIds.Count - 1; i > 0; i--)
+        {
+            int j = rnd.Next(0, i + 1);
+            int tmp = pureIds[i]; pureIds[i] = pureIds[j]; pureIds[j] = tmp;
+        }
+        
+        int need = humanoidPool.Count - humanoidSlots.Count;
+        for (int i = 0; i < need && i < pureIds.Count; i++)
+        {
+            assignedTitanPowers.Remove(pureIds[i]);
+            humanoidSlots.Add(pureIds[i]);
+        }
     }
-    else
+    
+    // Shuffle humanoid pool and assign, cycling through all 3 types
+    for (int i = humanoidPool.Count - 1; i > 0; i--)
     {
-        // Scenario 2: Players <= humanoid titans - split half humanoid, half pure
-        DistributeWithHalfSplit(allPlayers);
+        int j = rnd.Next(0, i + 1);
+        TitanType tmp = humanoidPool[i]; humanoidPool[i] = humanoidPool[j]; humanoidPool[j] = tmp;
     }
     
-    // Create text labels above players' heads with their titan type
-    CreateTitanTypeLabels(allPlayers);
+    // Shuffle humanoid slots
+    for (int i = humanoidSlots.Count - 1; i > 0; i--)
+    {
+        int j = rnd.Next(0, i + 1);
+        int tmp = humanoidSlots[i]; humanoidSlots[i] = humanoidSlots[j]; humanoidSlots[j] = tmp;
+    }
     
-    // Cache the player group key NOW (while all players are alive) so it stays stable
-    // even if some players die mid-match (e.g. during power extraction).
-    cachedPlayerGroupKey = ComputePlayerGroupKey();
+    for (int i = 0; i < humanoidSlots.Count; i++)
+    {
+        // Cycle through all 3 humanoid types to guarantee full coverage
+        TitanType assignedType = humanoidPool[i % humanoidPool.Count];
+        assignedTitanPowers[humanoidSlots[i]] = assignedType;
+    }
     
-    // Save assigned powers to SharedStorage for this player group
-    SaveAssignedPowersToStorage();
+    // Assign 2-day expiry to all humanoid players
+    long expiryDay = GetUnixDay() + 2;
+    IPlayer[] allPlayersFresh = Game.GetPlayers();
+    foreach (int pid in humanoidSlots)
+    {
+        IPlayer p = Game.GetPlayer(pid);
+        if (p != null)
+            playerPowerExpiry[p.Name] = expiryDay;
+    }
     
-    // Save distribution date to SharedStorage for this player group
-    IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
-    string playerGroupKey = GetPlayerGroupKey();
-    string dateKey = "DATE_" + playerGroupKey;
-    persistentStorage.SetItem(dateKey, GetTodayDateString());
+    // Save expiry to storage
+    SaveExpiryToStorage();
+}
+
+// --- Scenario B: No VIP. Player 1+2 get humanoid, rest get remaining types, 30-min expiry ---
+private void DistributeScenarioB(IPlayer[] allPlayers)
+{
+    // Shuffle all players
+    List<IPlayer> players = new List<IPlayer>();
+    foreach (IPlayer p in allPlayers)
+        if (p != null && p.Name.ToLower() != TEMPORARY_PLAYER_NAME.ToLower()) players.Add(p);
     
-    Game.ShowChatMessage("Titan powers distributed! Transform by picking up strength boost.", Color.Cyan);
+    for (int i = players.Count - 1; i > 0; i--)
+    {
+        int j = rnd.Next(0, i + 1);
+        IPlayer tmp = players[i]; players[i] = players[j]; players[j] = tmp;
+    }
+    
+    // Create shuffled humanoid pool (cycle through all 3)
+    List<TitanType> humanoidTypes = new List<TitanType> { TitanType.Attack, TitanType.Jaw, TitanType.Armored };
+    for (int i = humanoidTypes.Count - 1; i > 0; i--)
+    {
+        int j = rnd.Next(0, i + 1);
+        TitanType tmp = humanoidTypes[i]; humanoidTypes[i] = humanoidTypes[j]; humanoidTypes[j] = tmp;
+    }
+    
+    // Player 1 and 2 (index 0, 1) get humanoid titans
+    // Rest get remaining humanoid types cycling, or Pure if all 3 types are already assigned
+    for (int i = 0; i < players.Count; i++)
+    {
+        int pid = players[i].UniqueID;
+        if (i < humanoidTypes.Count)
+        {
+            // First N players (up to 3) each get a different humanoid type
+            assignedTitanPowers[pid] = humanoidTypes[i];
+        }
+        else
+        {
+            // Remaining players cycle through humanoid types (cover all if possible)
+            assignedTitanPowers[pid] = humanoidTypes[i % humanoidTypes.Count];
+        }
+    }
+    
+    // Save 30-minute expiry
+    string storageName = "TitanPowerStorage_b";
+    IScriptStorage storage = Game.GetSharedStorage(storageName);
+    string expiryKey = "EXPIRY_" + cachedPlayerGroupKey;
+    storage.SetItem(expiryKey, GetUnixMinute() + 30L);
 }
 
 private void SaveAssignedPowersToStorage()
 {
-    IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
+    string storageName = (distributionMode == "A") ? "TitanPowerStorage_a" : "TitanPowerStorage_b";
+    IScriptStorage persistentStorage = Game.GetSharedStorage(storageName);
     
-    // Get player group key for this distribution set
     string playerGroupKey = GetPlayerGroupKey();
     string powersKey = "POWERS_" + playerGroupKey;
     
-    // Serialize assignedTitanPowers dictionary to a string format: "playerName:titanType;playerName:titanType;..."
-    // Skip temporary players
+    // Serialize assignedTitanPowers: "playerName:titanType;..."
     List<string> powerEntries = new List<string>();
     
     foreach (var kvp in assignedTitanPowers)
@@ -517,13 +697,10 @@ private void SaveAssignedPowersToStorage()
         int playerId = kvp.Key;
         IPlayer player = Game.GetPlayer(playerId);
         
-        // Skip if player not found or player is temporary
         if (player == null || player.Name.ToLower() == TEMPORARY_PLAYER_NAME.ToLower())
-        {
             continue;
-        }
         
-        int titanTypeInt = (int)kvp.Value; // 0=Pure, 1=Attack, 2=Jaw
+        int titanTypeInt = (int)kvp.Value;
         powerEntries.Add(player.Name + ":" + titanTypeInt.ToString());
     }
     
@@ -533,41 +710,31 @@ private void SaveAssignedPowersToStorage()
 
 private void RestoreAssignedPowersFromStorage()
 {
-    IScriptStorage persistentStorage = Game.GetSharedStorage("TitanPowerStorage");
+    string storageName = (distributionMode == "A") ? "TitanPowerStorage_a" : "TitanPowerStorage_b";
+    IScriptStorage persistentStorage = Game.GetSharedStorage(storageName);
     
     // Cache the player group key while all players are alive at match start
     cachedPlayerGroupKey = ComputePlayerGroupKey();
     string playerGroupKey = cachedPlayerGroupKey;
     string powersKey = "POWERS_" + playerGroupKey;
     
-    if (!persistentStorage.ContainsKey(powersKey))
-    {
-        return;
-    }
+    if (!persistentStorage.ContainsKey(powersKey)) return;
     
     string serialized = (string)persistentStorage.GetItem(powersKey);
-    
     if (string.IsNullOrEmpty(serialized)) return;
     
-    // Build player name to ID mapping first
+    // Build player name to ID mapping
     IPlayer[] allPlayers = Game.GetPlayers();
     playerNameToId.Clear();
     foreach (IPlayer player in allPlayers)
-    {
-        if (player != null)
-        {
-            playerNameToId[player.Name] = player.UniqueID;
-        }
-    }
+        if (player != null) playerNameToId[player.Name] = player.UniqueID;
     
-    // Deserialize: "playerName:titanType;playerName:titanType;..."
     assignedTitanPowers.Clear();
     
     string[] powerEntries = serialized.Split(';');
     foreach (string entry in powerEntries)
     {
         if (string.IsNullOrEmpty(entry)) continue;
-        
         string[] parts = entry.Split(':');
         if (parts.Length != 2) continue;
         
@@ -575,198 +742,161 @@ private void RestoreAssignedPowersFromStorage()
         int titanTypeInt = int.Parse(parts[1]);
         TitanType titanType = (TitanType)titanTypeInt;
         
-        // Find player by name and assign power
         if (playerNameToId.ContainsKey(playerName))
-        {
-            int playerId = playerNameToId[playerName];
-            assignedTitanPowers[playerId] = titanType;
-        }
+            assignedTitanPowers[playerNameToId[playerName]] = titanType;
     }
     
-    // For players without stored powers (new players or temporary players), assign randomly
+    // Players without stored power get Pure
     foreach (IPlayer player in allPlayers)
     {
         if (player == null) continue;
-        
         int playerId = player.UniqueID;
         if (!assignedTitanPowers.ContainsKey(playerId))
-        {
-            // Assign Pure Titan to new players/temporary players
             assignedTitanPowers[playerId] = TitanType.Pure;
-        }
-    }
-}
-private void DistributeWithOriginalAlgorithm(IPlayer[] allPlayers)
-{
-    bool hasAttackTitan = false;
-    bool hasJawTitan = false;
-    bool hasArmoredTitan = false;
-    
-    // First pass: Assign powers randomly
-    foreach (IPlayer player in allPlayers)
-    {
-        if (player == null) continue;
-        
-        int playerId = player.UniqueID;
-        TitanType assignedType;
-        
-        // 50% chance to get Pure Titan
-        if (rnd.Next(0, 2) == 0)
-        {
-            assignedType = TitanType.Pure;
-        }
-        else
-        {
-            // 50% chance for Attack, Jaw, or Armored (but only one of each total)
-            int roll = rnd.Next(0, 3); // 0=Attack, 1=Jaw, 2=Armored
-            
-            if (roll == 0 && !hasAttackTitan)
-            {
-                assignedType = TitanType.Attack;
-                hasAttackTitan = true;
-            }
-            else if (roll == 1 && !hasJawTitan)
-            {
-                assignedType = TitanType.Jaw;
-                hasJawTitan = true;
-            }
-            else if (roll == 2 && !hasArmoredTitan)
-            {
-                assignedType = TitanType.Armored;
-                hasArmoredTitan = true;
-            }
-            else
-            {
-                // All special titans assigned or this roll was taken, try others
-                if (!hasAttackTitan)
-                {
-                    assignedType = TitanType.Attack;
-                    hasAttackTitan = true;
-                }
-                else if (!hasJawTitan)
-                {
-                    assignedType = TitanType.Jaw;
-                    hasJawTitan = true;
-                }
-                else if (!hasArmoredTitan)
-                {
-                    assignedType = TitanType.Armored;
-                    hasArmoredTitan = true;
-                }
-                else
-                {
-                    // All special titans assigned, this player gets Pure
-                    assignedType = TitanType.Pure;
-                }
-            }
-        }
-        
-        assignedTitanPowers[playerId] = assignedType;
-    }
-    
-    // Second pass: Ensure we have at least one of each type
-    if (!hasAttackTitan || !hasJawTitan || !hasArmoredTitan)
-    {
-        // Find Pure Titan players to convert
-        List<int> pureTitanPlayers = new List<int>();
-        foreach (var kvp in assignedTitanPowers)
-        {
-            if (kvp.Value == TitanType.Pure)
-            {
-                pureTitanPlayers.Add(kvp.Key);
-            }
-        }
-        
-        // Randomly assign missing types from Pure players
-        if (pureTitanPlayers.Count > 0)
-        {
-            int index = 0;
-            if (!hasAttackTitan && index < pureTitanPlayers.Count)
-            {
-                assignedTitanPowers[pureTitanPlayers[index]] = TitanType.Attack;
-                hasAttackTitan = true;
-                index++;
-            }
-            if (!hasJawTitan && index < pureTitanPlayers.Count)
-            {
-                assignedTitanPowers[pureTitanPlayers[index]] = TitanType.Jaw;
-                hasJawTitan = true;
-                index++;
-            }
-            if (!hasArmoredTitan && index < pureTitanPlayers.Count)
-            {
-                assignedTitanPowers[pureTitanPlayers[index]] = TitanType.Armored;
-                hasArmoredTitan = true;
-            }
-        }
     }
 }
 
-private void DistributeWithHalfSplit(IPlayer[] allPlayers)
+// --- Expiry helpers ---
+
+private void SaveExpiryToStorage()
 {
-    int totalPlayers = allPlayers.Length;
-    int humanoidCount = totalPlayers / 2; // Half will be humanoid
-    int pureCount = totalPlayers - humanoidCount; // Rest will be pure
+    if (distributionMode != "A") return;
+    IScriptStorage storage = Game.GetSharedStorage("TitanPowerStorage_a");
+    string groupKey = GetPlayerGroupKey();
     
-    // Create a shuffled list of players
-    List<IPlayer> shuffledPlayers = new List<IPlayer>(allPlayers);
+    // Serialize: "playerName=unixDay;playerName=unixDay;..."
+    List<string> entries = new List<string>();
+    foreach (var kvp in playerPowerExpiry)
+        entries.Add(kvp.Key + "=" + kvp.Value.ToString());
     
-    // Shuffle the player list
-    for (int i = shuffledPlayers.Count - 1; i > 0; i--)
+    storage.SetItem("EXPIRY_" + groupKey, string.Join(";", entries.ToArray()));
+}
+
+private void LoadPlayerExpiryFromStorage()
+{
+    if (distributionMode != "A") return;
+    IScriptStorage storage = Game.GetSharedStorage("TitanPowerStorage_a");
+    string groupKey = GetPlayerGroupKey();
+    string key = "EXPIRY_" + groupKey;
+    
+    playerPowerExpiry.Clear();
+    if (!storage.ContainsKey(key)) return;
+    
+    string raw = (string)storage.GetItem(key);
+    if (string.IsNullOrEmpty(raw)) return;
+    
+    foreach (string entry in raw.Split(';'))
     {
-        int j = rnd.Next(0, i + 1);
-        IPlayer temp = shuffledPlayers[i];
-        shuffledPlayers[i] = shuffledPlayers[j];
-        shuffledPlayers[j] = temp;
+        if (string.IsNullOrEmpty(entry)) continue;
+        string[] parts = entry.Split('=');
+        if (parts.Length != 2) continue;
+        long unixDay;
+        if (long.TryParse(parts[1], out unixDay))
+            playerPowerExpiry[parts[0]] = unixDay;
+    }
+}
+
+// Check expiry for all humanoid-power players. Called in OnUpdate every 30s.
+private void CheckPowerExpiry(float currentTime)
+{
+    if (currentTime - lastExpiryCheckTime < EXPIRY_CHECK_INTERVAL) return;
+    lastExpiryCheckTime = currentTime;
+    
+    if (distributionMode == "A")
+    {
+        CheckScenarioAExpiry();
+    }
+    // Scenario B expiry is handled at match-start (RestoreAssignedPowersFromStorage path),
+    // no mid-match inheritance needed.
+}
+
+private void CheckScenarioAExpiry()
+{
+    long nowDay = GetUnixDay();
+    IPlayer[] allPlayers = Game.GetPlayers();
+    
+    // Build name→player map
+    Dictionary<string, IPlayer> nameToPlayer = new Dictionary<string, IPlayer>();
+    foreach (IPlayer p in allPlayers)
+        if (p != null && !p.IsDead) nameToPlayer[p.Name] = p;
+    
+    // Find expired humanoid powers
+    List<string> expiredNames = new List<string>();
+    foreach (var kvp in playerPowerExpiry)
+    {
+        if (nowDay >= kvp.Value)
+            expiredNames.Add(kvp.Key);
     }
     
-    // Assign humanoid titans (Attack, Jaw, and Armored) to first half
-    List<TitanType> humanoidTypes = new List<TitanType>();
-    
-    // Fill humanoid types list with equal distribution of Attack, Jaw, and Armored
-    for (int i = 0; i < humanoidCount; i++)
+    foreach (string expiredName in expiredNames)
     {
-        if (i % 3 == 0)
+        // Find the expired player's ID and power
+        if (!nameToPlayer.ContainsKey(expiredName)) continue;
+        IPlayer expiredPlayer = nameToPlayer[expiredName];
+        int expiredId = expiredPlayer.UniqueID;
+        if (!assignedTitanPowers.ContainsKey(expiredId)) continue;
+        
+        TitanType expiredPower = assignedTitanPowers[expiredId];
+        if (expiredPower == TitanType.Pure) continue; // Already pure, skip
+        
+        string powerName = GetTitanPowerName(expiredPower);
+        
+        // Find a Pure Titan teammate to inherit
+        IPlayer inheritor = null;
+        PlayerTeam expiredTeam = expiredPlayer.GetTeam();
+        List<IPlayer> candidates = new List<IPlayer>();
+        
+        foreach (IPlayer p in allPlayers)
         {
-            humanoidTypes.Add(TitanType.Attack);
+            if (p == null || p.IsDead || p.UniqueID == expiredId) continue;
+            if (!assignedTitanPowers.ContainsKey(p.UniqueID)) continue;
+            if (assignedTitanPowers[p.UniqueID] != TitanType.Pure) continue;
+            // Same team (or both independent)
+            if (p.GetTeam() != expiredTeam && expiredTeam != PlayerTeam.Independent) continue;
+            candidates.Add(p);
         }
-        else if (i % 3 == 1)
+        
+        if (candidates.Count > 0)
+            inheritor = candidates[rnd.Next(0, candidates.Count)];
+        
+        // Transfer power
+        assignedTitanPowers[expiredId] = TitanType.Pure;
+        playerPowerExpiry.Remove(expiredName);
+        
+        if (inheritor != null)
         {
-            humanoidTypes.Add(TitanType.Jaw);
+            int inheritorId = inheritor.UniqueID;
+            assignedTitanPowers[inheritorId] = expiredPower;
+            playerPowerExpiry[inheritor.Name] = GetUnixDay() + 2; // Fresh 2-day expiry
+            
+            // Update labels
+            CreateLabelForPlayer(expiredPlayer, expiredId, TitanType.Pure);
+            CreateLabelForPlayer(inheritor, inheritorId, expiredPower);
+            
+            // Show popup
+            int daysLeft = DaysUntilExpiry(playerPowerExpiry[inheritor.Name]);
+            Game.ShowPopupMessage(expiredName + "'s " + powerName + " expired. The next chosen inheritor is " + inheritor.Name + "!");
+            Game.ShowChatMessage(expiredName + "'s " + powerName + " expired. Inherited by " + inheritor.Name + "!", Color.Yellow);
         }
         else
         {
-            humanoidTypes.Add(TitanType.Armored);
+            // No inheritor available — power lost
+            CreateLabelForPlayer(expiredPlayer, expiredId, TitanType.Pure);
+            Game.ShowChatMessage(expiredName + "'s " + powerName + " expired with no inheritor available.", Color.Yellow);
         }
-    }
-    
-    // Shuffle humanoid types for random assignment
-    for (int i = humanoidTypes.Count - 1; i > 0; i--)
-    {
-        int j = rnd.Next(0, i + 1);
-        TitanType temp = humanoidTypes[i];
-        humanoidTypes[i] = humanoidTypes[j];
-        humanoidTypes[j] = temp;
-    }
-    
-    // Assign humanoid titans to first half of players
-    for (int i = 0; i < humanoidCount; i++)
-    {
-        if (shuffledPlayers[i] != null)
-        {
-            assignedTitanPowers[shuffledPlayers[i].UniqueID] = humanoidTypes[i];
-        }
-    }
-    
-    // Assign Pure Titan to remaining players
-    for (int i = humanoidCount; i < shuffledPlayers.Count; i++)
-    {
-        if (shuffledPlayers[i] != null)
-        {
-            assignedTitanPowers[shuffledPlayers[i].UniqueID] = TitanType.Pure;
-        }
+        
+        // Save updated state
+        SaveAssignedPowersToStorage();
+        SaveExpiryToStorage();
     }
 }
+// Retired: replaced by DistributeScenarioA and DistributeScenarioB
+private void DistributeWithOriginalAlgorithm(IPlayer[] allPlayers) { }
+
+
+// Retired: replaced by DistributeScenarioA and DistributeScenarioB
+private void DistributeWithHalfSplit(IPlayer[] allPlayers) { }
+
 
 private void CreateTitanTypeLabels(IPlayer[] allPlayers)
 {
@@ -789,13 +919,10 @@ private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanT
     {
         IObjectText existingLabel = titanTypeLabels[playerId];
         if (existingLabel != null && !existingLabel.IsRemoved)
-        {
             existingLabel.Remove();
-        }
         titanTypeLabels.Remove(playerId);
     }
     
-    // Only create labels for humanoid titans (Attack, Jaw, and Armored)
     if (titanType == TitanType.Pure) return;
     
     string labelText = "";
@@ -803,35 +930,39 @@ private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanT
     
     if (titanType == TitanType.Attack)
     {
-        labelText = "[ATK]";
-        labelColor = new Color(255, 100, 100); // Red
+        labelText = "[ATK";
+        labelColor = new Color(255, 100, 100);
     }
     else if (titanType == TitanType.Jaw)
     {
-        labelText = "[JAW]";
-        labelColor = new Color(100, 255, 100); // Green
+        labelText = "[JAW";
+        labelColor = new Color(100, 255, 100);
     }
     else if (titanType == TitanType.Armored)
     {
-        labelText = "[ARM]";
-        labelColor = new Color(255, 255, 0); // Yellow
+        labelText = "[ARM";
+        labelColor = new Color(255, 255, 0);
     }
-    else
+    else return;
+    
+    // Append expiry info for Scenario A
+    if (distributionMode == "A" && playerPowerExpiry.ContainsKey(player.Name))
     {
-        return;
+        int daysLeft = DaysUntilExpiry(playerPowerExpiry[player.Name]);
+        labelText += ":" + daysLeft.ToString();
     }
     
-    // Create text label above player's head
+    labelText += "]";
+    
     Vector2 playerPos = player.GetWorldPosition();
-    IObjectText label = (IObjectText)Game.CreateObject("Text", 
-        new Vector2(playerPos.X, playerPos.Y + 20f)); // 20 units above head
+    IObjectText label = (IObjectText)Game.CreateObject("Text",
+        new Vector2(playerPos.X, playerPos.Y + 20f));
     
     label.SetText(labelText);
     label.SetTextAlignment(TextAlignment.Middle);
     label.SetTextScale(0.4f);
     label.SetTextColor(labelColor);
     
-    // Store the label reference
     titanTypeLabels[playerId] = label;
 }
 
@@ -2477,6 +2608,9 @@ public void OnUpdate(float elapsed)
     
     // Update titan type labels to follow players
     UpdateTitanTypeLabels();
+    
+    // Check power expiry (Scenario A: 2-day; Scenario B: handled at match start)
+    CheckPowerExpiry(currentTime);
     
     foreach (IPlayer player in allPlayers)
     {
