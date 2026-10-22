@@ -2590,6 +2590,18 @@ public void OnUpdate(float elapsed)
                 // Human detach check: hold walk for 800ms
                 CheckHumanDetach(player, playerId, currentTime);
             }
+            
+            // Melee stun immunity: titans can stun each other but remain immune to regular players
+            // If another titan is actively meleeing this titan in range → vulnerable (0)
+            // Otherwise → immune (1)
+            bool underTitanMeleeThreat = IsUnderMeleeThreatOfTitan(player);
+            PlayerModifiers threatMods = player.GetModifiers();
+            int desiredImmunity = underTitanMeleeThreat ? 0 : 1;
+            if (threatMods.MeleeStunImmunity != desiredImmunity)
+            {
+                threatMods.MeleeStunImmunity = desiredImmunity;
+                player.SetModifiers(threatMods);
+            }
         }
         
         // Update facing direction for all players (every update tick for accurate backstab detection)
