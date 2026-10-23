@@ -4,9 +4,8 @@
 //
 //  - Every finished match (battle) is credited to Team 1 or Team 2 (nobody else
 //    is tracked; draws are not counted).
-//  - A war is BATTLES_PER_WAR battles: the first team to win a majority of them
-//    (WINS_TO_TAKE_WAR, i.e. 6 of 10) wins the WAR. That adds one to its
-//    WAR WIN COUNT and the battle tally starts again from 0.
+//  - The first team to win WINS_TO_TAKE_WAR battles (5) wins the WAR. That adds
+//    one to its WAR WIN COUNT and the battle tally starts again from 0.
 //  - War win counts (and the running battle tally) persist in a shared storage,
 //    so they survive round restarts, map changes and server restarts, and can
 //    be shared between maps that contain this script and use the same
@@ -23,8 +22,7 @@
 // ============================================================================
 
 // ------------------------------- CONFIG -------------------------------------
-private const int    BATTLES_PER_WAR = 10;                 // a war is a best-of-this-many; first team to a majority wins it
-private const int    WINS_TO_TAKE_WAR = BATTLES_PER_WAR / 2 + 1;   // 6 when BATTLES_PER_WAR is 10
+private const int    WINS_TO_TAKE_WAR = 5;                 // the first team to win this many battles wins the war
 private const string TEAM1_NAME      = "Marley";           // PlayerTeam.Team1
 private const string TEAM2_NAME      = "Paradis";          // PlayerTeam.Team2
 
