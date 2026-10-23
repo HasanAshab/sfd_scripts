@@ -95,10 +95,16 @@ private void SpawnStationaryGuard()
         return;
     }
 
-    PlayerModifiers guardmods = guard.GetModifiers();
-    guardmods.MaxHealth = 1000;
-    guardmods.CurrentHealth = 1000;
-    guard.SetModifiers(guardmods);
+    PlayerModifiers mods = guard.GetModifiers();
+    mods.ExplosionDamageTakenModifier       = 0f;
+    mods.ProjectileDamageTakenModifier       = 0f;
+    mods.ProjectileCritChanceTakenModifier   = 0f;
+    mods.FireDamageTakenModifier             = 0f;
+    mods.MeleeDamageTakenModifier            = 0f;
+    mods.ImpactDamageTakenModifier           = 0f;
+    mods.CanBurn                             = 0; // can't be ignited
+    mods.MeleeStunImmunity                   = 1; // can't be stunned
+    guard.SetModifiers(mods);
 
     guard.SetTeam(PlayerTeam.Team2);
     guard.SetBotBehavior(new BotBehavior(false, PredefinedAIType.None)); // No AI at all - never moves
