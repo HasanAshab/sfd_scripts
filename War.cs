@@ -22,7 +22,7 @@
 // ============================================================================
 
 // ------------------------------- CONFIG -------------------------------------
-private const int    WINS_TO_TAKE_WAR = 5;                 // the first team to win this many battles wins the war
+private const int    WINS_TO_TAKE_WAR = 3;                 // the first team to win this many battles wins the war
 private const string TEAM1_NAME      = "Marley";           // PlayerTeam.Team1
 private const string TEAM2_NAME      = "Paradis";          // PlayerTeam.Team2
 
