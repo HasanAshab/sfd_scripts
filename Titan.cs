@@ -107,7 +107,6 @@ private const float ARMORED_ARMOR_ON_CHECK_INTERVAL = 1000f; // Check every 1 se
 
 // Armored Titan rush ability
 private const float ARMORED_RUSH_DAMAGE_BASE = 7f;
-private const float ARMORED_RUSH_RECOIL_RATIO = 0.5f; // 50% recoil damage
 private const float ARMORED_RUSH_TARGET_FORCE_WEIGHT = 0.5f; // Target force multiplier
 private const float ARMORED_RUSH_BALANCER_MOD = 0.02f; // balance stab
 private const float ARMORED_RUSH_THROW_SCALE = 300f; // Velocity scaling
@@ -3461,8 +3460,9 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
     // Only process if player is sprinting
     if (!player.IsSprinting) return;
     
-    // Check if armor is on (no recoil if armor is on)
+    // Rush ability is only available when armor is ON
     bool armorOn = armoredTitanArmorOn.ContainsKey(playerId) ? armoredTitanArmorOn[playerId] : true;
+    if (!armorOn) return;
     
     // Get titan stats
     PlayerModifiers titanMods = player.GetModifiers();
@@ -3525,12 +3525,6 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         // Apply damage
         float damage = ARMORED_RUSH_DAMAGE_BASE * titanMods.MeleeDamageDealtModifier;
         target.DealDamage(damage);
-        
-        // Apply recoil if armor is OFF
-        if (!armorOn)
-        {
-            player.DealDamage(damage * ARMORED_RUSH_RECOIL_RATIO);
-        }
     }
     
     // Check all objects for collisions and throw them
@@ -3594,12 +3588,6 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         // Apply damage to object
         float objDamage = ARMORED_RUSH_DAMAGE_BASE * titanMods.MeleeDamageDealtModifier * 5f;
         obj.DealDamage(objDamage);
-
-        // Apply recoil if armor is OFF
-        if (!armorOn)
-        {
-            player.DealDamage(objDamage * 0.5f * ARMORED_RUSH_RECOIL_RATIO);
-        }
     }
     
     // Store updated hit times
@@ -3610,6 +3598,15 @@ private void CheckArmoredTitanBotRush(IPlayer player, int playerId, float curren
 {
     // Only for bots
     if (!player.IsBot) return;
+    
+    // Rush ability is only available when armor is ON
+    bool armorOn = armoredTitanArmorOn.ContainsKey(playerId) ? armoredTitanArmorOn[playerId] : true;
+    if (!armorOn)
+    {
+        if (armoredTitanIsRushing.ContainsKey(playerId))
+            armoredTitanIsRushing[playerId] = false;
+        return;
+    }
     
     PlayerModifiers mods = player.GetModifiers();
     float energyPercent = mods.CurrentEnergy / (float)mods.MaxEnergy;
