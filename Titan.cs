@@ -1420,7 +1420,7 @@ private void TransformToArmoredTitan(IPlayer player, int playerId)
     IProfile titanProfile = new IProfile()
     {
         Gender = Gender.Male,
-        Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGreen"),
+        Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGray"),
         Head = new IProfileClothingItem("Buzzcut", "ClothingLightGray"),
         ChestUnder = new IProfileClothingItem("BodyArmor", "ClothingLightGray"),
         Hands = new IProfileClothingItem("Gloves", "ClothingLightGray"),
@@ -3336,12 +3336,8 @@ private void ApplyArmoredTitanArmor(IPlayer player, int playerId, bool armorOn)
         player.SetProfile(new IProfile()
         {
             Gender = Gender.Male,
-            Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGreen"),
+            Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGray"),
             Head = new IProfileClothingItem("Buzzcut", "ClothingLightGray"),
-            Hands = new IProfileClothingItem("Gloves", "ClothingLightGray"),
-            Legs = new IProfileClothingItem("Pants", "ClothingLightGray"),
-            Feet = new IProfileClothingItem("Boots", "ClothingLightGray"),
-            Accesory = new IProfileClothingItem("ClownMakeup", "ClothingLightGray"),
         });
     }
     else
@@ -3353,7 +3349,7 @@ private void ApplyArmoredTitanArmor(IPlayer player, int playerId, bool armorOn)
         player.SetProfile(new IProfile()
         {
             Gender = Gender.Male,
-            Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGreen"),
+            Skin = new IProfileClothingItem("Normal", "Skin5", "ClothingLightGray"),
             Head = new IProfileClothingItem("Buzzcut", "ClothingLightGray"),
             ChestUnder = new IProfileClothingItem("BodyArmor", "ClothingLightGray"),
             Hands = new IProfileClothingItem("Gloves", "ClothingLightGray"),
