@@ -1,47 +1,10 @@
-// ============================================================================
-// TITANS MOD - Superfighters Deluxe Script
-// ============================================================================
-// Paste this directly into a Script tab in the Map Editor (same format as
-// your SuperDS.cs - just fields + methods, no "using"/class wrapper needed,
-// the editor already inherits GameScriptInterface for you).
-//
-// What it does:
-//  - Spawns randomized giant "Titan" bots (Team2) on the map's spawn nodes
-//    ("PlayerSpawnArea" tiles). Interval starts at 40s and gradually shrinks
-//    as the game goes on (progressive difficulty ramp).
-//  - Each titan gets a fully random appearance (gender/skin/clothes/colors -
-//    pulled live from the game's own clothing lists, so it's always valid),
-//    a random size (1.02x - 1.8x), random HP (70 - 350), and aggressive
-//    melee AI.
-//  - Also spawns one stationary Team2 "guard" bot on a spawn node at
-//    startup with no bot behavior at all, so it never moves.
-//  - When a titan dies, it evaporates into steam a few seconds later
-//    instead of leaving a corpse.
-//  - Tracks and displays how many titans P1 and P2 have each killed.
-//
-// Tweak the constants below to taste.
-// ============================================================================
 
 // ----- Spawn interval ramp -----
 private const float SPAWN_INTERVAL_START_MS = 50000f; // Interval at game start (40s)
 private const float SPAWN_INTERVAL_MIN_MS = 10000f;   // Interval never drops below this (10s)
 private const float SPAWN_INTERVAL_DECAY_PER_MIN = 2000f; // Interval shrinks by this much per minute elapsed
 
-// ----- Titan stats -----
-private const float TITAN_SIZE_MIN = 1.02f;
-private const float TITAN_SIZE_MAX = 1.8f;
-private const int TITAN_HP_MIN = 40;
-private const int TITAN_HP_MAX = 250;
 private const float EVAPORATE_DELAY_MS = 3500f; // Delay before a dead titan's corpse vanishes
-
-// Pool of predefined AI types to pick from for titan behavior (weighted by repetition).
-private static readonly PredefinedAIType[] TitanAITypes = new PredefinedAIType[]
-{
-    PredefinedAIType.Hulk,
-    PredefinedAIType.Hulk,
-    PredefinedAIType.MeleeB,
-    PredefinedAIType.Grunt,
-};
 
 private Random titanRnd = new Random();
 private List<IPlayer> titans = new List<IPlayer>();
@@ -119,7 +82,7 @@ private Vector2 GetRandomSpawnNodePosition()
 }
 
 // ----------------------------------------------------------------------
-// Stationary Team2 guard bot
+// Stationary Team2 guard bot (to prevent auto restart)
 // ----------------------------------------------------------------------
 
 private void SpawnStationaryGuard()
@@ -131,6 +94,11 @@ private void SpawnStationaryGuard()
     {
         return;
     }
+
+    PlayerModifiers guardmods = guard.GetModifiers();
+    guardmods.MaxHealth = 1000;
+    guardmods.CurrentHealth = 1000;
+    guard.SetModifiers(guardmods);
 
     guard.SetTeam(PlayerTeam.Team2);
     guard.SetBotBehavior(new BotBehavior(false, PredefinedAIType.None)); // No AI at all - never moves
@@ -174,22 +142,11 @@ public void SpawnTitan(float elapsed)
     titanCounter++;
 
     titan.SetTeam(PlayerTeam.Team2);
-    titan.SetProfile(GenerateRandomTitanProfile());
-    titan.SetBotName("Titan #" + titanCounter);
-    titan.SetNametagVisible(true);
+    titan.SetNametagVisible(false);
 
-    PredefinedAIType aiType = TitanAITypes[titanRnd.Next(TitanAITypes.Length)];
-    titan.SetBotBehavior(new BotBehavior(true, aiType));
-
-    PlayerModifiers mods = titan.GetModifiers();
-    mods.SizeModifier = TITAN_SIZE_MIN + (float)titanRnd.NextDouble() * (TITAN_SIZE_MAX - TITAN_SIZE_MIN);
-    mods.MaxHealth = titanRnd.Next(TITAN_HP_MIN, TITAN_HP_MAX + 1);
-    mods.CurrentHealth = mods.MaxHealth;
-    mods.MeleeDamageDealtModifier = 2.5f + (float)titanRnd.NextDouble() * 1.5f; // 2.5x - 4x melee damage
-    mods.MeleeForceModifier = 3f;
-    mods.RunSpeedModifier = 0.8f;
-    mods.SprintSpeedModifier = 0.8f;
-    titan.SetModifiers(mods);
+    // Strength boost: give the powerup, then make the titan use it
+    titan.GiveWeaponItem(WeaponItem.STRENGTHBOOST);
+    titan.AddCommand(new PlayerCommand(PlayerCommandType.DrawPowerup));
 
     titans.Add(titan);
 
