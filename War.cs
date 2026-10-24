@@ -3,7 +3,8 @@
 //  Superfighters Deluxe map script (paste into the map editor's script window)
 //
 //  - Every finished match (battle) is credited to Team 1 or Team 2 (nobody else
-//    is tracked; draws are not counted).
+//    is tracked; draws are not counted, and neither is a match ended by a
+//    GameOverTrigger whose text is NOBODY_WIN_TEXT, "NOBODY WIN!").
 //  - The first team to win WINS_TO_TAKE_WAR battles (5) wins the WAR. That adds
 //    one to its WAR WIN COUNT and the battle tally starts again from 0.
 //  - War win counts (and the running battle tally) persist in a shared storage,
@@ -22,9 +23,12 @@
 // ============================================================================
 
 // ------------------------------- CONFIG -------------------------------------
-private const int    WINS_TO_TAKE_WAR = 3;                 // the first team to win this many battles wins the war
+private const int    WINS_TO_TAKE_WAR = 2;                 // the first team to win this many battles wins the war
 private const string TEAM1_NAME      = "Marley";           // PlayerTeam.Team1
 private const string TEAM2_NAME      = "Paradis";          // PlayerTeam.Team2
+
+// A match ended by a GameOverTrigger with this text is never counted (case-insensitive).
+private const string NOBODY_WIN_TEXT = "NOBODY WIN!";
 
 // Shared storage name. API rule: letters only, no spaces, 3-40 characters.
 private const string STORAGE_NAME    = "MarleyParadisWar";
@@ -55,6 +59,7 @@ private Events.UpdateCallback m_updateCallback;
 private Events.UserMessageCallback m_messageCallback;
 
 private bool   m_roundCounted;        // this match already credited (or must never be credited)
+private bool   m_nobodyWin;           // a "NOBODY WIN!" GameOverTrigger fired this match
 private bool   m_warDecided;          // a war was won last match, so this match plays the declaration
 private PlayerTeam m_warWinner = PlayerTeam.Independent;
 private PlayerTeam m_warLoser  = PlayerTeam.Independent;
@@ -77,6 +82,9 @@ public void OnStartup()
 
     // Never credit a match that was already over before this script began.
     m_roundCounted = Game.IsGameOver;
+
+    m_nobodyWin = false;
+    HookNobodyWinTriggers();
 
     // A war won in the previous match is declared in this one. The marker is
     // cleared right away so the declaration only ever happens once per war.
@@ -159,6 +167,8 @@ public void OnUserMessage(UserMessageCallbackArgs args)
 // battle tally restarts and the declaration is queued for the next match.
 private void CountRound()
 {
+    if (m_nobodyWin) return;                        // ended by a "NOBODY WIN!" trigger: not counted
+
     PlayerTeam winner = FindRoundWinner();
     if (winner == PlayerTeam.Independent) return;   // draw / not a Team1-Team2 result
 
@@ -202,6 +212,46 @@ private PlayerTeam FindRoundWinner()
     if (team1Alive && !team2Alive) return PlayerTeam.Team1;
     if (team2Alive && !team1Alive) return PlayerTeam.Team2;
     return PlayerTeam.Independent;
+}
+
+// ====================== "NOBODY WIN!" GAME OVER =============================
+
+// The API can't tell which GameOverTrigger ended the match, but a trigger runs
+// its script method when it fires. So every GameOverTrigger whose text is
+// NOBODY_WIN_TEXT is pointed at OnNobodyWin(), which marks the match as not
+// countable. You can also set that trigger's "Script method" to OnNobodyWin in
+// the editor yourself.
+private void HookNobodyWinTriggers()
+{
+    foreach (IObjectGameOverTrigger trigger in Game.GetObjects<IObjectGameOverTrigger>())
+    {
+        if (trigger == null || !IsNobodyWinText(trigger.GetGameOverText())) continue;
+
+        string method = trigger.GetScriptMethod();
+        if (string.IsNullOrEmpty(method))
+        {
+            trigger.SetScriptMethod("OnNobodyWin");
+        }
+        else if (method != "OnNobodyWin")
+        {
+            // Don't override a method the map already uses; it has to call OnNobodyWin(args) itself.
+            Game.WriteToConsole("War script: the '" + NOBODY_WIN_TEXT + "' trigger already runs '" + method
+                + "'. Call OnNobodyWin(args) from that method so the match is not counted.");
+        }
+    }
+}
+
+public void OnNobodyWin(TriggerArgs args)
+{
+    IObjectGameOverTrigger trigger = (args == null) ? null : args.Caller as IObjectGameOverTrigger;
+    if (trigger != null && !IsNobodyWinText(trigger.GetGameOverText())) return;   // some other game over trigger
+
+    m_nobodyWin = true;
+}
+
+private bool IsNobodyWinText(string text)
+{
+    return text != null && string.Equals(text.Trim(), NOBODY_WIN_TEXT, System.StringComparison.OrdinalIgnoreCase);
 }
 
 // ============================== STORAGE =====================================
