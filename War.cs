@@ -2,9 +2,11 @@
 //  MARLEY vs PARADIS  -  WAR TRACKER
 //  Superfighters Deluxe map script (paste into the map editor's script window)
 //
-//  - Every finished match (battle) is credited to Team 1 or Team 2 (nobody else
-//    is tracked; draws are not counted, and neither is a match ended by a
-//    GameOverTrigger whose text is NOBODY_WIN_TEXT, "NOBODY WIN!").
+//  - Every finished match (battle) is credited to Team 1 or Team 2 (players on
+//    any other team are ignored). Not counted: draws, and matches that the
+//    co-op script (COOPGAMEOVER.cs) restarted with the /gameover command.
+//  - One chat line after every match says whether it was counted and why
+//    (ANNOUNCE_RESULTS).
 //  - The first team to win WINS_TO_TAKE_WAR battles (5) wins the WAR. That adds
 //    one to its WAR WIN COUNT and the battle tally starts again from 0.
 //  - War win counts (and the running battle tally) persist in a shared storage,
@@ -23,12 +25,21 @@
 // ============================================================================
 
 // ------------------------------- CONFIG -------------------------------------
-private const int    WINS_TO_TAKE_WAR = 2;                 // the first team to win this many battles wins the war
+private const int    WINS_TO_TAKE_WAR = 4;                 // the first team to win this many battles wins the war
 private const string TEAM1_NAME      = "Marley";           // PlayerTeam.Team1
 private const string TEAM2_NAME      = "Paradis";          // PlayerTeam.Team2
 
-// A match ended by a GameOverTrigger with this text is never counted (case-insensitive).
-private const string NOBODY_WIN_TEXT = "NOBODY WIN!";
+// Skip matches that COOPGAMEOVER.cs ended with /gameover. That script's commands can't be
+// seen from here, so its two conditions are mirrored instead (see CoopScriptWouldRestart):
+//   - no living human (non-bot) player exists, or
+//   - a human player died within COOP_EARLY_DEATH_WINDOW_MS of the match start.
+private const bool   SKIP_COOP_GAMEOVER         = true;
+private const string COOP_STORAGE_NAME         = "SuperDSCoopSync";   // the storage COOPGAMEOVER.cs reads
+private const float  COOP_CHECK_INTERVAL_MS    = 500f;                // how often COOPGAMEOVER.cs checks
+private const float  COOP_EARLY_DEATH_WINDOW_MS = 10000f;             // its "died too early" window
+
+// One chat line after every match: counted or not, and why.
+private const bool   ANNOUNCE_RESULTS          = true;
 
 // Shared storage name. API rule: letters only, no spaces, 3-40 characters.
 private const string STORAGE_NAME    = "MarleyParadisWar";
@@ -57,9 +68,13 @@ private const int PHASE_DONE   = 2;   // losers are crouching, everything stays 
 private IScriptStorage m_storage;
 private Events.UpdateCallback m_updateCallback;
 private Events.UserMessageCallback m_messageCallback;
+private Events.PlayerDeathCallback m_deathCallback;
+private IScriptStorage m_coopStorage;
 
 private bool   m_roundCounted;        // this match already credited (or must never be credited)
-private bool   m_nobodyWin;           // a "NOBODY WIN!" GameOverTrigger fired this match
+private bool   m_coopLatched;         // COOPGAMEOVER.cs has restarted (or is about to restart) this match
+private float  m_coopHoldMs;          // how long its "no living human" condition has held
+private float  m_startTime;           // Game.TotalElapsedGameTime when this match started
 private bool   m_warDecided;          // a war was won last match, so this match plays the declaration
 private PlayerTeam m_warWinner = PlayerTeam.Independent;
 private PlayerTeam m_warLoser  = PlayerTeam.Independent;
@@ -83,8 +98,14 @@ public void OnStartup()
     // Never credit a match that was already over before this script began.
     m_roundCounted = Game.IsGameOver;
 
-    m_nobodyWin = false;
-    HookNobodyWinTriggers();
+    m_startTime = Game.TotalElapsedGameTime;
+    m_coopLatched = false;
+    m_coopHoldMs = 0f;
+    if (SKIP_COOP_GAMEOVER)
+    {
+        m_coopStorage = Game.GetSharedStorage(COOP_STORAGE_NAME);   // open it now, see GetSharedStorage docs
+        m_deathCallback = Events.PlayerDeathCallback.Start(OnPlayerDeath);
+    }
 
     // A war won in the previous match is declared in this one. The marker is
     // cleared right away so the declaration only ever happens once per war.
@@ -115,6 +136,7 @@ public void OnShutdown()
 
     if (m_updateCallback != null)  { m_updateCallback.Stop();  m_updateCallback = null; }
     if (m_messageCallback != null) { m_messageCallback.Stop(); m_messageCallback = null; }
+    if (m_deathCallback != null)   { m_deathCallback.Stop();   m_deathCallback = null; }
 }
 
 public void OnUpdate(float elapsed)
@@ -123,10 +145,17 @@ public void OnUpdate(float elapsed)
     {
         UpdateDeclaration(elapsed);
     }
-    else if (!m_roundCounted && Game.IsGameOver)
+    else if (!m_roundCounted)
     {
-        m_roundCounted = true;
-        CountRound();
+        if (Game.IsGameOver)
+        {
+            m_roundCounted = true;
+            CountRound();
+        }
+        else
+        {
+            TrackCoopRestart(elapsed);
+        }
     }
 
     if (POPUP_REFRESH_MS > 0f)
@@ -167,10 +196,19 @@ public void OnUserMessage(UserMessageCallbackArgs args)
 // battle tally restarts and the declaration is queued for the next match.
 private void CountRound()
 {
-    if (m_nobodyWin) return;                        // ended by a "NOBODY WIN!" trigger: not counted
+    // Matches that COOPGAMEOVER.cs restarted with /gameover are never counted.
+    if (SKIP_COOP_GAMEOVER && (m_coopLatched || CoopScriptWouldRestart()))
+    {
+        Announce("WAR: match not counted (restarted by the co-op game over script)");
+        return;
+    }
 
     PlayerTeam winner = FindRoundWinner();
-    if (winner == PlayerTeam.Independent) return;   // draw / not a Team1-Team2 result
+    if (winner == PlayerTeam.Independent)
+    {
+        Announce("WAR: match not counted (no single winning team)");
+        return;
+    }
 
     int battles = GetBattleWins(winner) + 1;
     if (battles >= WINS_TO_TAKE_WAR)
@@ -179,24 +217,32 @@ private void CountRound()
         SetBattleWins(PlayerTeam.Team1, 0);
         SetBattleWins(PlayerTeam.Team2, 0);
         SetPendingWinner(winner);
+        Announce("WAR: " + TeamName(winner) + " wins the battle and takes the WAR! (declaration next match)");
     }
     else
     {
         SetBattleWins(winner, battles);
+        Announce("WAR: " + TeamName(winner) + " wins the battle  |  " + TEAM1_NAME + " " + GetBattleWins(PlayerTeam.Team1)
+            + " : " + GetBattleWins(PlayerTeam.Team2) + " " + TEAM2_NAME + "  (first to " + WINS_TO_TAKE_WAR + " takes the war)");
     }
 
     m_popupTimer = 0f;
     ShowStats();
 }
 
+private void Announce(string message)
+{
+    if (ANNOUNCE_RESULTS) Game.ShowChatMessage(message);
+}
+
 // The API has no "who won" value, so the winner is the tracked team that still
-// has living players when the game is over. A draw (nobody alive, or both teams
-// alive, or any other team still alive) returns PlayerTeam.Independent.
+// has living players when the game is over. Only Team1 and Team2 are tracked:
+// living players on any other team are ignored. If both tracked teams (or
+// neither) still have living players, there is no winner: PlayerTeam.Independent.
 private PlayerTeam FindRoundWinner()
 {
     bool team1Alive = false;
     bool team2Alive = false;
-    bool otherAlive = false;
 
     foreach (IPlayer player in Game.GetPlayers())
     {
@@ -205,53 +251,70 @@ private PlayerTeam FindRoundWinner()
         PlayerTeam team = player.GetTeam();
         if (team == PlayerTeam.Team1) team1Alive = true;
         else if (team == PlayerTeam.Team2) team2Alive = true;
-        else otherAlive = true;
     }
 
-    if (otherAlive) return PlayerTeam.Independent;
     if (team1Alive && !team2Alive) return PlayerTeam.Team1;
     if (team2Alive && !team1Alive) return PlayerTeam.Team2;
     return PlayerTeam.Independent;
 }
 
-// ====================== "NOBODY WIN!" GAME OVER =============================
+// ================== MATCHES RESTARTED BY COOPGAMEOVER.cs ====================
 
-// The API can't tell which GameOverTrigger ended the match, but a trigger runs
-// its script method when it fires. So every GameOverTrigger whose text is
-// NOBODY_WIN_TEXT is pointed at OnNobodyWin(), which marks the match as not
-// countable. You can also set that trigger's "Script method" to OnNobodyWin in
-// the editor yourself.
-private void HookNobodyWinTriggers()
+// COOPGAMEOVER.cs ends the match with /gameover when
+//   (A) no living human (non-bot) player exists - it checks every 500 ms and
+//       skips the check while SuperDS.cs is splitting P2 (shared storage keys
+//       P2_SPLITTING / P2_SPLIT_TIME), or
+//   (B) a human player dies within 10 s of the match start.
+// Scripts can't observe that command, so the same two conditions are mirrored
+// here. m_coopLatched becomes true as soon as either one has held long enough
+// for COOPGAMEOVER.cs to have acted on it.
+
+// Condition (A) at this very moment. Same test as COOPGAMEOVER.cs.CheckForHumanPlayers.
+private bool CoopScriptWouldRestart()
 {
-    foreach (IObjectGameOverTrigger trigger in Game.GetObjects<IObjectGameOverTrigger>())
-    {
-        if (trigger == null || !IsNobodyWinText(trigger.GetGameOverText())) continue;
+    bool splitting;
+    float splitEndTime;
+    if (m_coopStorage != null
+        && m_coopStorage.TryGetItemBool("P2_SPLITTING", out splitting) && splitting
+        && m_coopStorage.TryGetItemFloat("P2_SPLIT_TIME", out splitEndTime)
+        && Game.TotalElapsedGameTime < splitEndTime)
+        return false;                                // P2 is being split: that script waits
 
-        string method = trigger.GetScriptMethod();
-        if (string.IsNullOrEmpty(method))
-        {
-            trigger.SetScriptMethod("OnNobodyWin");
-        }
-        else if (method != "OnNobodyWin")
-        {
-            // Don't override a method the map already uses; it has to call OnNobodyWin(args) itself.
-            Game.WriteToConsole("War script: the '" + NOBODY_WIN_TEXT + "' trigger already runs '" + method
-                + "'. Call OnNobodyWin(args) from that method so the match is not counted.");
-        }
+    IPlayer[] players = Game.GetPlayers();
+    if (players.Length == 0) return false;
+
+    foreach (IPlayer player in players)
+    {
+        if (player != null && !player.IsBot && !player.IsDead) return false;   // a living human exists
+    }
+    return true;
+}
+
+// Called every update while the match is still running. Condition (A) has to
+// hold for a bit longer than that script's check interval, so a blink at the
+// very start of a match (humans not spawned yet) can't flag a normal match.
+private void TrackCoopRestart(float elapsed)
+{
+    if (!SKIP_COOP_GAMEOVER || m_coopLatched) return;
+
+    if (CoopScriptWouldRestart())
+    {
+        m_coopHoldMs += elapsed;
+        if (m_coopHoldMs >= COOP_CHECK_INTERVAL_MS + 100f) m_coopLatched = true;
+    }
+    else
+    {
+        m_coopHoldMs = 0f;
     }
 }
 
-public void OnNobodyWin(TriggerArgs args)
+// Condition (B): a human died (or was removed) shortly after the match started.
+public void OnPlayerDeath(IPlayer player)
 {
-    IObjectGameOverTrigger trigger = (args == null) ? null : args.Caller as IObjectGameOverTrigger;
-    if (trigger != null && !IsNobodyWinText(trigger.GetGameOverText())) return;   // some other game over trigger
+    if (!SKIP_COOP_GAMEOVER || m_coopLatched || player == null || player.IsBot) return;
 
-    m_nobodyWin = true;
-}
-
-private bool IsNobodyWinText(string text)
-{
-    return text != null && string.Equals(text.Trim(), NOBODY_WIN_TEXT, System.StringComparison.OrdinalIgnoreCase);
+    if (Game.TotalElapsedGameTime - m_startTime <= COOP_EARLY_DEATH_WINDOW_MS)
+        m_coopLatched = true;
 }
 
 // ============================== STORAGE =====================================
