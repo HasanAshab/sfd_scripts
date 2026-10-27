@@ -4766,8 +4766,8 @@ private void CartTitanCreateGunPlayer(IPlayer cartTitan, int cartTitanId)
     });
     
     // Hide name and status bar
-    gunPlayer.SetNameVisibility(false);
-    gunPlayer.SetStatusBarsVisibility(false);
+    gunPlayer.SetNametagVisible(false);
+    gunPlayer.SetStatusBarsVisible(false);
     
     // Infinite ammo modifier
     PlayerModifiers gunMods = gunPlayer.GetModifiers();
@@ -5047,7 +5047,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     // Aim the gun player toward the stored Y
     float storedAimY = cartTitanGunAimY[playerId];
     float aimTargetX = gunPos.X + player.FacingDirection * 200f;
-    gp.SetAimVector(new Vector2(aimTargetX, storedAimY));
+    gp.SetForcedAimPosition(new Vector2(aimTargetX, storedAimY));
     
     // Update crosshair position
     if (cartTitanCrosshair.ContainsKey(playerId))
@@ -5069,7 +5069,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     if (attackHeld && !blockHeld)
     {
         // Fire by commanding gun player
-        gp.AddCommand(new PlayerCommand(PlayerCommandType.StartMeleeAttack)); // triggers weapon fire
+        gp.AddCommand(new PlayerCommand(PlayerCommandType.Attack)); // triggers weapon fire
         
         // Throttle energy drain (1 drain per 100ms for M60, 500ms for sniper)
         bool isSniper = cartTitanGunIsSniper.ContainsKey(playerId) && cartTitanGunIsSniper[playerId];
