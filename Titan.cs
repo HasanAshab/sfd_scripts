@@ -254,7 +254,7 @@ private Dictionary<int, float> cartTitanLiftNextCostTime = new Dictionary<int, f
 private Dictionary<int, IObject> cartTitanGunPipe = new Dictionary<int, IObject>(); // BgRailing02A gun pipe (Offensive)
 private Dictionary<int, bool> cartTitanGunIsSniper = new Dictionary<int, bool>(); // true=Sniper, false=M60
 private Dictionary<int, bool> cartTitanBlockHeld = new Dictionary<int, bool>(); // Is block currently held?
-private Dictionary<int, float> cartTitanGunAimY = new Dictionary<int, float>(); // Stored aim Y for gun
+private Dictionary<int, float> cartTitanGunAimAngle = new Dictionary<int, float>(); // Stored aim angle offset in radians (relative to forward)
 private Dictionary<int, IObjectText> cartTitanCrosshair = new Dictionary<int, IObjectText>(); // '+' crosshair text
 private Dictionary<int, float> cartTitanLastBulletFireTime = new Dictionary<int, float>(); // Throttle bullet fire & energy cost
 
@@ -4609,7 +4609,7 @@ private void TransformToCartTitan(IPlayer player, int playerId)
     cartTitanForm[playerId] = CartTitanForm.Rescue;
     cartTitanGunIsSniper[playerId] = false;
     cartTitanBlockHeld[playerId] = false;
-    cartTitanGunAimY[playerId] = 0f;
+    cartTitanGunAimAngle[playerId] = 0f;
     
     // Attach backpack object for Rescue form
     CartTitanAttachBackObject(player, playerId, CartTitanForm.Rescue);
@@ -4756,10 +4756,10 @@ private void CartTitanCreateGunPipe(IPlayer cartTitan, int cartTitanId)
     }
     
     cartTitanGunIsSniper[cartTitanId] = false;
-    cartTitanGunAimY[cartTitanId] = spawnPos.Y;
+    cartTitanGunAimAngle[cartTitanId] = 0f;
     
     // Create crosshair '+' text object
-    CartTitanCreateCrosshair(cartTitanId, spawnPos);
+    CartTitanCreateCrosshair(cartTitanId, spawnPos + new Vector2(cartTitan.FacingDirection * CART_GUN_AIM_DISTANCE, 0f));
 }
 
 private void CartTitanDestroyGunPipe(int cartTitanId)
@@ -4963,40 +4963,31 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     bool blockHeld = cartTitanBlockHeld.ContainsKey(playerId) && cartTitanBlockHeld[playerId];
     if (blockHeld)
     {
-        float aimY = cartTitanGunAimY.ContainsKey(playerId) ? cartTitanGunAimY[playerId] : gunPos.Y;
+        float currentAngle = cartTitanGunAimAngle.ContainsKey(playerId) ? cartTitanGunAimAngle[playerId] : 0f;
+        // JUMP aims up (+Y in SFD), CROUCH aims down (-Y in SFD)
         if (player.KeyPressed(VirtualKey.JUMP))
-            aimY += 1.5f;
+            currentAngle += 0.035f;
         if (player.KeyPressed(VirtualKey.CROUCH_ROLL_DIVE))
-            aimY -= 1.5f;
-        cartTitanGunAimY[playerId] = aimY;
-    }
-    else
-    {
-        // Not in block mode: aim forward (same Y as gun)
-        if (!cartTitanGunAimY.ContainsKey(playerId))
-            cartTitanGunAimY[playerId] = gunPos.Y;
+            currentAngle -= 0.035f;
+            
+        // Clamp to avoid aiming completely backwards into the cart titan
+        currentAngle = MathHelper.Clamp(currentAngle, -(float)(Math.PI * 0.45), (float)(Math.PI * 0.45));
+        cartTitanGunAimAngle[playerId] = currentAngle;
     }
     
-    // Calculate aim target and direction
-    float storedAimY = cartTitanGunAimY[playerId];
-    float aimTargetX = gunPos.X + player.FacingDirection * CART_GUN_AIM_DISTANCE;
-    Vector2 aimTarget = new Vector2(aimTargetX, storedAimY);
-    Vector2 aimDirection = aimTarget - gunPos;
-    float aimDistance = aimDirection.Length();
-    if (aimDistance > 0.001f)
-    {
-        aimDirection /= aimDistance;
-    }
-    else
-    {
-        aimDirection = new Vector2(player.FacingDirection, 0f);
-    }
+    // Calculate aim direction and target relative to current gunPos along a circle
+    float aimAngleOffset = cartTitanGunAimAngle.ContainsKey(playerId) ? cartTitanGunAimAngle[playerId] : 0f;
+    float cosAngle = (float)Math.Cos(aimAngleOffset);
+    float sinAngle = (float)Math.Sin(aimAngleOffset);
+    // When facing right (+1): direction is (cos, sin). When facing left (-1): direction is (-cos, sin)
+    Vector2 aimDirection = new Vector2(player.FacingDirection * cosAngle, sinAngle);
+    Vector2 aimTarget = gunPos + aimDirection * CART_GUN_AIM_DISTANCE;
     
     // Rotate gun pipe based on aim + default rotation offset
     float angle = (float)Math.Atan2(aimDirection.Y, aimDirection.X) + CART_GUN_PIPE_DEFAULT_ROTATION;
     pipeObj.SetAngle(angle);
     
-    // Update crosshair position
+    // Update crosshair position (moves with the titan)
     if (cartTitanCrosshair.ContainsKey(playerId))
     {
         IObjectText ch = cartTitanCrosshair[playerId];
@@ -5011,11 +5002,11 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         }
     }
     
-    // ATTACK fire: drain energy per bullet and spawn projectile
+    // ATTACK fire: drain energy per bullet and spawn projectile (can fire while adjusting aim / block held)
     bool attackHeld = player.KeyPressed(VirtualKey.ATTACK);
     bool isSniper = cartTitanGunIsSniper.ContainsKey(playerId) && cartTitanGunIsSniper[playerId];
     float fireInterval = isSniper ? 500f : 100f;
-    bool canFire = attackHeld && !blockHeld &&
+    bool canFire = attackHeld &&
         (!cartTitanLastBulletFireTime.ContainsKey(playerId) || currentTime - cartTitanLastBulletFireTime[playerId] >= fireInterval);
         
     if (canFire)
@@ -5075,7 +5066,7 @@ private void CleanupCartTitanData(int playerId)
     cartTitanForm.Remove(playerId);
     cartTitanGunIsSniper.Remove(playerId);
     cartTitanBlockHeld.Remove(playerId);
-    cartTitanGunAimY.Remove(playerId);
+    cartTitanGunAimAngle.Remove(playerId);
     cartTitanLastBulletFireTime.Remove(playerId);
 }
 
