@@ -159,7 +159,7 @@ private const float CART_GUN_OFFSET_Y = 18f;
 private const float CART_GUN_AIM_DISTANCE = 30f;
 
 // Cart Titan aim angle limits in radians (MIN = max down limit, MAX = max up limit)
-private const float CART_GUN_AIM_MIN_ANGLE = -0.30f; // Maximum down aim limit (adjustable)
+private const float CART_GUN_AIM_MIN_ANGLE = -0.55f; // Maximum down aim limit (adjustable)
 private const float CART_GUN_AIM_MAX_ANGLE = (float)(Math.PI * 0.45); // Maximum up aim limit
 
 // Cart Titan gun pipe (BgRailing02A) default rotation offset in radians (adjustable)
@@ -4979,9 +4979,9 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         float currentAngle = cartTitanGunAimAngle.ContainsKey(playerId) ? cartTitanGunAimAngle[playerId] : 0f;
         // JUMP aims up (+Y in SFD), CROUCH aims down (-Y in SFD)
         if (player.KeyPressed(VirtualKey.JUMP))
-            currentAngle += 0.035f;
+            currentAngle += 0.07f;
         if (player.KeyPressed(VirtualKey.CROUCH_ROLL_DIVE))
-            currentAngle -= 0.035f;
+            currentAngle -= 0.07f;
             
         // Clamp to avoid aiming completely backwards or beyond down limit
         currentAngle = MathHelper.Clamp(currentAngle, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
