@@ -155,6 +155,12 @@ private const float CART_GUN_ENERGY_PER_BULLET_SNIPER = 0.06f;  // 6% per bullet
 // Cart Titan uphead gun attach offset (above titan head)
 private const float CART_GUN_OFFSET_Y = 18f;
 
+// Cart Titan aim distance from gun (crosshair distance)
+private const float CART_GUN_AIM_DISTANCE = 50f;
+
+// Cart Titan gun pipe (BgRailing02A) default rotation offset in radians (adjustable)
+private const float CART_GUN_PIPE_DEFAULT_ROTATION = 0f;
+
 // Cart Titan aim crosshair update interval
 private const float CART_AIM_UPDATE_INTERVAL = 50f; // 50ms
 
@@ -4700,7 +4706,7 @@ private void ApplyCartTitanForm(IPlayer player, int playerId, CartTitanForm newF
         
         // Reset block mode
         cartTitanBlockHeld[playerId] = false;
-        if (!player.IsInputEnabled) player.SetInputEnabled(true);
+        player.SetInputMode(PlayerInputMode.Enabled);
     }
     else // oldForm == Rescue
     {
@@ -4790,7 +4796,7 @@ private void CartTitanSetBlockMode(IPlayer cartTitan, int cartTitanId, bool bloc
     else
     {
         // Re-enable input
-        cartTitan.SetInputEnabled(true);
+        cartTitan.SetInputMode(PlayerInputMode.Enabled);
     }
 }
 
@@ -4973,7 +4979,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     
     // Calculate aim target and direction
     float storedAimY = cartTitanGunAimY[playerId];
-    float aimTargetX = gunPos.X + player.FacingDirection * 200f;
+    float aimTargetX = gunPos.X + player.FacingDirection * CART_GUN_AIM_DISTANCE;
     Vector2 aimTarget = new Vector2(aimTargetX, storedAimY);
     Vector2 aimDirection = aimTarget - gunPos;
     float aimDistance = aimDirection.Length();
@@ -4986,8 +4992,8 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         aimDirection = new Vector2(player.FacingDirection, 0f);
     }
     
-    // Rotate gun pipe based on aim
-    float angle = (float)Math.Atan2(aimDirection.Y, aimDirection.X);
+    // Rotate gun pipe based on aim + default rotation offset
+    float angle = (float)Math.Atan2(aimDirection.Y, aimDirection.X) + CART_GUN_PIPE_DEFAULT_ROTATION;
     pipeObj.SetAngle(angle);
     
     // Update crosshair position
