@@ -4785,7 +4785,7 @@ private void CartTitanSetBlockMode(IPlayer cartTitan, int cartTitanId, bool bloc
     if (blockHeld)
     {
         // Enter read-only: disable cart titan input so JUMP/CROUCH adjust aim instead
-        cartTitan.SetInputEnabled(false);
+        cartTitan.SetInputMode(PlayerInputMode.ReadOnly);
     }
     else
     {
