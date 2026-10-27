@@ -156,10 +156,10 @@ private const float CART_GUN_ENERGY_PER_BULLET_SNIPER = 0.06f;  // 6% per bullet
 private const float CART_GUN_OFFSET_Y = 18f;
 
 // Cart Titan aim distance from gun (crosshair distance)
-private const float CART_GUN_AIM_DISTANCE = 50f;
+private const float CART_GUN_AIM_DISTANCE = 30f;
 
 // Cart Titan gun pipe (BgRailing02A) default rotation offset in radians (adjustable)
-private const float CART_GUN_PIPE_DEFAULT_ROTATION = 0f;
+private const float CART_GUN_PIPE_DEFAULT_ROTATION = 7.9f;
 
 // Cart Titan aim crosshair update interval
 private const float CART_AIM_UPDATE_INTERVAL = 50f; // 50ms
@@ -4849,7 +4849,7 @@ private void CartTitanCreateCrosshair(int cartTitanId, Vector2 pos)
     {
         ch.SetText("+");
         ch.SetTextAlignment(TextAlignment.Middle);
-        ch.SetTextScale(0.5f);
+        ch.SetTextScale(0.95f);
         ch.SetTextColor(new Color(255, 255, 100));
         cartTitanCrosshair[cartTitanId] = ch;
     }
