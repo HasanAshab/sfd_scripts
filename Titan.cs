@@ -168,6 +168,16 @@ private const float CART_GUN_PIPE_DEFAULT_ROTATION = 7.9f;
 // Cart Titan aim crosshair update interval
 private const float CART_AIM_UPDATE_INTERVAL = 50f; // 50ms
 
+// Cart Titan bot constants
+private const float CRT_BOT_MODE_CHECK_INTERVAL  = 1500f; // How often (ms) to re-evaluate Rescue vs Offensive mode
+private const float CRT_BOT_BEH_CHECK_INTERVAL   = 2500f; // How often (ms) to flip avoid/fight roll in Offensive mode
+private const float CRT_BOT_RESCUE_HP_TRIGGER     = 0.20f; // Ally HP% to trigger Rescue mode
+private const float CRT_BOT_RESCUE_HP_RELEASE     = 0.80f; // Ally HP% to leave Rescue mode
+private const float CRT_BOT_AVOID_ENEMY_RANGE     = 80f;   // Enemy detection radius for path-node avoidance
+private const float CRT_BOT_OFFENSIVE_FIRE_CHANCE = 0.70f; // 70% → fire, 30% → avoid
+private const float CRT_BOT_FIRE_ACCURACY         = 0.80f; // 80% accuracy (random aim spread when missing)
+private const float CRT_BOT_AIM_SPREAD_MAX        = 0.45f; // Max aim angle error (radians) at 0% accuracy
+
 // Titan size range
 private const float TITAN_MIN_SIZE = 0.8f;
 private const float TITAN_MAX_SIZE = 1.25f;
@@ -261,6 +271,14 @@ private Dictionary<int, bool> cartTitanBlockHeld = new Dictionary<int, bool>(); 
 private Dictionary<int, float> cartTitanGunAimAngle = new Dictionary<int, float>(); // Stored aim angle offset in radians (relative to forward)
 private Dictionary<int, IObjectText> cartTitanCrosshair = new Dictionary<int, IObjectText>(); // '+' crosshair text
 private Dictionary<int, float> cartTitanLastBulletFireTime = new Dictionary<int, float>(); // Throttle bullet fire & energy cost
+
+// Cart Titan bot AI state
+private enum CrtBotMode { None, Rescue, Offensive }
+private Dictionary<int, CrtBotMode> cartTitanBotMode = new Dictionary<int, CrtBotMode>(); // Current bot mode
+private Dictionary<int, IPlayer> cartTitanBotRescueTarget = new Dictionary<int, IPlayer>(); // Ally chosen for rescue
+private Dictionary<int, float> cartTitanBotLastModeCheck = new Dictionary<int, float>(); // Rate-limit mode evaluation
+private Dictionary<int, float> cartTitanBotLastBehCheck = new Dictionary<int, float>(); // Rate-limit behaviour switch (avoid/fight)
+private Dictionary<int, bool> cartTitanBotIsAvoiding = new Dictionary<int, bool>(); // Is currently avoiding (vs firing)?
 
 // Track assigned titan powers (does not mean transformed, just assigned power)
 private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, TitanType>();
@@ -4902,6 +4920,12 @@ private void CartTitanUpdate(IPlayer player, int playerId, float currentTime)
         }
     }
     
+    // ---- Bot AI: mode switch and behaviour ----
+    if (player.IsBot)
+    {
+        CartTitanBotUpdate(player, playerId, currentTime, playerPos, form);
+    }
+    
     if (form == CartTitanForm.Rescue)
     {
         CartTitanUpdateRescue(player, playerId, currentTime, playerPos);
@@ -5045,6 +5069,371 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     }
 }
 
+// ============================================================
+// CART TITAN BOT AI
+// ============================================================
+
+/// <summary>
+/// Main bot update: runs every tick and orchestrates mode-switch, form-toggle, and behaviour.
+/// </summary>
+private void CartTitanBotUpdate(IPlayer bot, int botId, float currentTime, Vector2 botPos, CartTitanForm currentForm)
+{
+    // --- 1. Periodic mode evaluation ---
+    bool modeCheckDue = !cartTitanBotLastModeCheck.ContainsKey(botId) ||
+                        currentTime - cartTitanBotLastModeCheck[botId] >= CRT_BOT_MODE_CHECK_INTERVAL;
+    if (modeCheckDue)
+    {
+        cartTitanBotLastModeCheck[botId] = currentTime;
+        CrtBotMode newMode = CrtBotEvaluateMode(bot, botId, currentTime, botPos);
+        CrtBotApplyMode(bot, botId, currentTime, currentForm, newMode);
+    }
+    
+    CrtBotMode mode = cartTitanBotMode.ContainsKey(botId) ? cartTitanBotMode[botId] : CrtBotMode.Offensive;
+    
+    // --- 2. Behaviour tick ---
+    if (mode == CrtBotMode.Rescue)
+    {
+        CrtBotTickRescue(bot, botId, currentTime, botPos);
+    }
+    else
+    {
+        CrtBotTickOffensive(bot, botId, currentTime, botPos);
+    }
+}
+
+/// <summary>
+/// Decide whether to be in Rescue or Offensive mode.
+/// Rescue: at least one ally exists with HP &lt;= 20%.
+/// </summary>
+private CrtBotMode CrtBotEvaluateMode(IPlayer bot, int botId, float currentTime, Vector2 botPos)
+{
+    PlayerTeam team = bot.GetTeam();
+    
+    // Check for rescue target already in progress — only release when ally is at >80% HP
+    CrtBotMode current = cartTitanBotMode.ContainsKey(botId) ? cartTitanBotMode[botId] : CrtBotMode.Offensive;
+    if (current == CrtBotMode.Rescue && cartTitanBotRescueTarget.ContainsKey(botId))
+    {
+        IPlayer existingTarget = cartTitanBotRescueTarget[botId];
+        if (existingTarget != null && !existingTarget.IsDead && !existingTarget.IsRemoved)
+        {
+            PlayerModifiers tm = existingTarget.GetModifiers();
+            float hpPct = (float)existingTarget.GetHealth() / (float)tm.MaxHealth;
+            if (hpPct < CRT_BOT_RESCUE_HP_RELEASE)
+            {
+                // Keep rescuing until healed
+                return CrtBotMode.Rescue;
+            }
+        }
+        // Target healed or gone — fall through to fresh evaluation
+        cartTitanBotRescueTarget.Remove(botId);
+    }
+    
+    // Find best rescue candidate
+    IPlayer bestCandidate = null;
+    int bestScore = -1;
+    
+    foreach (IPlayer p in Game.GetPlayers())
+    {
+        if (p == null || p.IsDead || p.IsRemoved) continue;
+        if (p.UniqueID == botId) continue;
+        // Must be allied
+        PlayerTeam pt = p.GetTeam();
+        if (team != PlayerTeam.Independent && pt != team) continue;
+        
+        // Must be low HP
+        PlayerModifiers pm = p.GetModifiers();
+        float hp = (float)p.GetHealth() / (float)pm.MaxHealth;
+        if (hp > CRT_BOT_RESCUE_HP_TRIGGER) continue;
+        
+        // Score:
+        int score = 0;
+        // Closest (4 pts)
+        float dist = Vector2.Distance(botPos, p.GetWorldPosition());
+        if (dist <= Vector2.Distance(botPos, (bestCandidate != null ? bestCandidate.GetWorldPosition() : botPos + new Vector2(99999f, 0f))))
+            score += 4;
+        // Is P1 or P2 (2 pts) — UserIdentifier 1 = P1, 2 = P2 (0 = no user / bot)
+        if (p.UserIdentifier == 1 || p.UserIdentifier == 2)
+            score += 2;
+        // Is titan owner (3 pts)
+        if (assignedTitanPowers.ContainsKey(p.UniqueID) && assignedTitanPowers[p.UniqueID] != TitanType.Pure)
+            score += 3;
+        // Is Armored titan (2 pts) — also still a titan power holder
+        if (assignedTitanPowers.ContainsKey(p.UniqueID) && assignedTitanPowers[p.UniqueID] == TitanType.Armored)
+            score += 2;
+        
+        if (score > bestScore || bestScore < 0)
+        {
+            bestScore = score;
+            bestCandidate = p;
+        }
+    }
+    
+    if (bestCandidate != null)
+    {
+        cartTitanBotRescueTarget[botId] = bestCandidate;
+        return CrtBotMode.Rescue;
+    }
+    
+    return CrtBotMode.Offensive;
+}
+
+/// <summary>
+/// Apply a new bot mode: toggle Cart Titan form if needed, set bot behavior set.
+/// </summary>
+private void CrtBotApplyMode(IPlayer bot, int botId, float currentTime, CartTitanForm currentForm, CrtBotMode newMode)
+{
+    CrtBotMode oldMode = cartTitanBotMode.ContainsKey(botId) ? cartTitanBotMode[botId] : CrtBotMode.None;
+    
+    // Toggle form if mode changed
+    if (newMode == CrtBotMode.Rescue && currentForm != CartTitanForm.Rescue)
+    {
+        // Switch to Rescue form
+        ToggleCartTitanForm(bot, botId);
+    }
+    else if (newMode == CrtBotMode.Offensive && currentForm != CartTitanForm.Offensive)
+    {
+        // Switch to Offensive form
+        ToggleCartTitanForm(bot, botId);
+    }
+    
+    cartTitanBotMode[botId] = newMode;
+    
+    // Apply BotBehavior and BotBehaviorSet
+    bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
+    BotBehaviorSet bS = bot.GetBotBehaviorSet();
+    bS.SearchItems = 0;
+    bS.MeleeUsage = false;
+    if (newMode == CrtBotMode.Rescue)
+    {
+        bS.EliminateEnemies = false;
+        bS.RangedWeaponUsage = false;
+        bS.MeleeWeaponUsage = false;
+    }
+    else
+    {
+        // Offensive: EliminateEnemies = true, but melee off — AI will chase/engage normally
+        bS.EliminateEnemies = true;
+        bS.RangedWeaponUsage = false; // We handle ranged manually
+        bS.MeleeWeaponUsage = false;
+    }
+    bot.SetBotBehaviorSet(bS);
+}
+
+/// <summary>
+/// Helper: find a path node far from a threat position, favouring the opposite side.
+/// Mirrors the pattern from Bot_Avoid_Explosives.cs.
+/// </summary>
+private IObjectPathNode CrtBotFindFleeNode(IPlayer bot, Vector2 threatPos)
+{
+    Vector2 botPos = bot.GetWorldPosition();
+    Area searchArea = new Area(botPos - new Vector2(80f, 70f), botPos + new Vector2(80f, 70f));
+    
+    // Find nearest blocked node (obstacle side)
+    IObjectPathNode blockedNearNode = (from P in Game.GetObjectsByArea<IObjectPathNode>(searchArea, PhysicsLayer.Background)
+        orderby Vector2.Distance(P.GetWorldPosition(), botPos) ascending
+        where P != null && (P.GetNodeEnabled() == false ||
+            (from O in P.GetPathNodeConnections() where O.GetConnectionEnabled() == false || O.GetConnectionBlockedByPathZone() select O).FirstOrDefault() != null) &&
+            Vector2.Distance(P.GetWorldPosition(), botPos) <= 22
+        select P).FirstOrDefault();
+    
+    // Pick a valid node as far as possible from the threat, same side as blocked-node-relative to bot
+    IObjectPathNode node = (from Q in Game.GetObjectsByArea<IObjectPathNode>(searchArea, PhysicsLayer.Background)
+        orderby Vector2.Distance(Q.GetWorldPosition(), threatPos) descending
+        where Q != null && Q.GetNodeEnabled() &&
+            (from N in Q.GetPathNodeConnections() where N.GetConnectionEnabled() == false || N.GetConnectionBlockedByPathZone() select N).FirstOrDefault() == null &&
+            !Q.IsRemoved &&
+            (blockedNearNode == null ||
+                ((botPos.X - blockedNearNode.GetWorldPosition().X) >= 0
+                    ? (Q.GetWorldPosition().X - blockedNearNode.GetWorldPosition().X) >= 0
+                    : (Q.GetWorldPosition().X - blockedNearNode.GetWorldPosition().X) < 0))
+        select Q).FirstOrDefault();
+    
+    return node;
+}
+
+/// <summary>
+/// Run-away from enemies (bot Rescue behaviour tick).
+/// </summary>
+private void CrtBotTickRescue(IPlayer bot, int botId, float currentTime, Vector2 botPos)
+{
+    // Find closest enemy
+    IPlayer closestEnemy = (from p in Game.GetPlayers()
+        let pt = p.GetTeam()
+        let bt = bot.GetTeam()
+        where p != null && !p.IsDead && !p.IsRemoved && p.UniqueID != botId &&
+              (bt == PlayerTeam.Independent ? true : pt != bt)
+        orderby Vector2.Distance(p.GetWorldPosition(), botPos) ascending
+        select p).FirstOrDefault();
+    
+    if (closestEnemy == null || Vector2.Distance(closestEnemy.GetWorldPosition(), botPos) > CRT_BOT_AVOID_ENEMY_RANGE)
+    {
+        // No nearby enemy — let AI roam/guard naturally toward rescue target
+        if (cartTitanBotRescueTarget.ContainsKey(botId))
+        {
+            IPlayer target = cartTitanBotRescueTarget[botId];
+            if (target != null && !target.IsDead && !target.IsRemoved)
+            {
+                // Guard toward ally
+                if (!(bot.GetGuardTarget() is IPlayer) || bot.GetGuardTarget() != (IObject)target)
+                    bot.SetGuardTarget(target);
+            }
+        }
+        return;
+    }
+    
+    // Enemy is close — flee to path node furthest from enemy
+    IObjectPathNode fleeNode = CrtBotFindFleeNode(bot, closestEnemy.GetWorldPosition());
+    if (fleeNode != null)
+    {
+        BotBehaviorSet bS = bot.GetBotBehaviorSet();
+        bS.EliminateEnemies = false;
+        bS.RangedWeaponUsage = false;
+        bS.MeleeWeaponUsage = false;
+        bS.MeleeUsage = false;
+        bS.ChaseRange = 20;
+        bS.GuardRange = 9;
+        bS.ChokePointPlayerCountThreshold = 0;
+        bot.SetBotBehaviorSet(bS);
+        bot.SetGuardTarget(fleeNode);
+    }
+}
+
+/// <summary>
+/// Offensive mode bot tick: 70% fire, 30% avoid. Handles bullet selection and aim.
+/// </summary>
+private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vector2 botPos)
+{
+    // Decide avoid vs fight (re-roll periodically)
+    bool behCheckDue = !cartTitanBotLastBehCheck.ContainsKey(botId) ||
+                       currentTime - cartTitanBotLastBehCheck[botId] >= CRT_BOT_BEH_CHECK_INTERVAL;
+    if (behCheckDue)
+    {
+        cartTitanBotLastBehCheck[botId] = currentTime;
+        cartTitanBotIsAvoiding[botId] = rnd.NextDouble() > CRT_BOT_OFFENSIVE_FIRE_CHANCE; // 30% avoid
+    }
+    
+    bool isAvoiding = cartTitanBotIsAvoiding.ContainsKey(botId) && cartTitanBotIsAvoiding[botId];
+    
+    // Find closest enemy
+    IPlayer closestEnemy = (from p in Game.GetPlayers()
+        let bt = bot.GetTeam()
+        let pt = p.GetTeam()
+        where p != null && !p.IsDead && !p.IsRemoved && p.UniqueID != botId &&
+              (bt == PlayerTeam.Independent ? true : pt != bt)
+        orderby Vector2.Distance(p.GetWorldPosition(), botPos) ascending
+        select p).FirstOrDefault();
+    
+    if (isAvoiding)
+    {
+        // Flee from closest enemy
+        if (closestEnemy != null && Vector2.Distance(closestEnemy.GetWorldPosition(), botPos) <= CRT_BOT_AVOID_ENEMY_RANGE)
+        {
+            IObjectPathNode fleeNode = CrtBotFindFleeNode(bot, closestEnemy.GetWorldPosition());
+            if (fleeNode != null)
+            {
+                BotBehaviorSet bS = bot.GetBotBehaviorSet();
+                bS.EliminateEnemies = false;
+                bS.RangedWeaponUsage = false;
+                bS.MeleeWeaponUsage = false;
+                bS.MeleeUsage = false;
+                bS.ChaseRange = 20;
+                bS.GuardRange = 9;
+                bS.ChokePointPlayerCountThreshold = 0;
+                bot.SetBotBehaviorSet(bS);
+                bot.SetGuardTarget(fleeNode);
+            }
+        }
+        return;
+    }
+    
+    // --- Fire mode ---
+    if (closestEnemy == null) return;
+    
+    // Ensure bot behavior allows normal movement toward target
+    BotBehaviorSet firebS = bot.GetBotBehaviorSet();
+    if (!firebS.EliminateEnemies)
+    {
+        firebS.EliminateEnemies = true;
+        firebS.ChaseRange = 0;
+        firebS.GuardRange = 0;
+        firebS.ChokePointPlayerCountThreshold = 1;
+        bot.SetBotBehaviorSet(firebS);
+        bot.SetGuardTarget(null);
+    }
+    
+    // Determine bullet type based on enemy size modifier
+    float enemySize = 1.0f;
+    if (titanSizes.ContainsKey(closestEnemy.UniqueID))
+        enemySize = titanSizes[closestEnemy.UniqueID];
+    else
+    {
+        PlayerModifiers em = closestEnemy.GetModifiers();
+        enemySize = em.SizeModifier;
+    }
+    
+    // Formula: M60 chance scales from 5% (size=1.7) to 95% (size=0.5), linearly.
+    // At size=0.5: M60=5%, Sniper=95%. At size=1.7: M60=95%, Sniper=5%.
+    float sizeMin = 0.5f;  float sizeMax = 1.7f;
+    float t = MathHelper.Clamp((enemySize - sizeMin) / (sizeMax - sizeMin), 0f, 1f);
+    float m60Chance = 0.05f + t * (0.90f); // 0.05 to 0.95
+    bool useSniper = rnd.NextDouble() > (double)m60Chance;
+    
+    // Switch gun if needed
+    bool currentSniper = cartTitanGunIsSniper.ContainsKey(botId) && cartTitanGunIsSniper[botId];
+    if (useSniper != currentSniper)
+        CartTitanSwitchGun(botId, useSniper);
+    
+    // Check fire interval
+    bool isSniper = cartTitanGunIsSniper.ContainsKey(botId) && cartTitanGunIsSniper[botId];
+    float fireInterval = isSniper ? 500f : 100f;
+    if (cartTitanLastBulletFireTime.ContainsKey(botId) &&
+        currentTime - cartTitanLastBulletFireTime[botId] < fireInterval)
+        return;
+    
+    // Check energy
+    PlayerModifiers crtMods = bot.GetModifiers();
+    float energyCost = isSniper
+        ? crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_SNIPER
+        : crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_M60;
+    if (crtMods.CurrentEnergy < energyCost) return;
+    
+    // Calculate aim: gun position
+    Vector2 gunPos = botPos + new Vector2(0f, CART_GUN_OFFSET_Y);
+    Vector2 enemyPos = closestEnemy.GetWorldPosition() + new Vector2(0f, 10f); // Aim at torso
+    Vector2 aimDir = enemyPos - gunPos;
+    if (aimDir == Vector2.Zero) return;
+    float aimLen = (float)Math.Sqrt(aimDir.X * aimDir.X + aimDir.Y * aimDir.Y);
+    aimDir = aimDir / aimLen;
+    
+    // Apply accuracy spread (80% accurate → 20% get random angle offset)
+    if (rnd.NextDouble() > CRT_BOT_FIRE_ACCURACY)
+    {
+        float spread = (float)((rnd.NextDouble() * 2.0 - 1.0) * CRT_BOT_AIM_SPREAD_MAX);
+        float cosS = (float)Math.Cos(spread);
+        float sinS = (float)Math.Sin(spread);
+        aimDir = new Vector2(aimDir.X * cosS - aimDir.Y * sinS, aimDir.X * sinS + aimDir.Y * cosS);
+    }
+    
+    // Update stored aim angle so the gun pipe visual tracks (optional cosmetic)
+    float aimAngle = (float)Math.Atan2(aimDir.Y, aimDir.X);
+    // Convert to local offset angle (0 = forward relative to facing)
+    float facingAngle = (float)Math.Atan2(0f, bot.FacingDirection * 1f);
+    float localAngle = aimAngle - facingAngle;
+    localAngle = MathHelper.Clamp(localAngle, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
+    cartTitanGunAimAngle[botId] = localAngle;
+    
+    // Fire!
+    cartTitanLastBulletFireTime[botId] = currentTime;
+    Vector2 muzzlePos = gunPos + aimDir * 10f;
+    if (isSniper)
+        Game.SpawnProjectile(ProjectileItem.SNIPER, muzzlePos, aimDir, ProjectilePowerup.Fire);
+    else
+        Game.SpawnProjectile(ProjectileItem.M60, muzzlePos, aimDir);
+    
+    crtMods.CurrentEnergy = Math.Max(0f, crtMods.CurrentEnergy - energyCost);
+    bot.SetModifiers(crtMods);
+}
+
 private void CleanupCartTitanData(int playerId)
 {
     // Release lifted ally (restore modifiers)
@@ -5087,6 +5476,13 @@ private void CleanupCartTitanData(int playerId)
     cartTitanBlockHeld.Remove(playerId);
     cartTitanGunAimAngle.Remove(playerId);
     cartTitanLastBulletFireTime.Remove(playerId);
+    
+    // Cart Titan bot state
+    cartTitanBotMode.Remove(playerId);
+    cartTitanBotRescueTarget.Remove(playerId);
+    cartTitanBotLastModeCheck.Remove(playerId);
+    cartTitanBotLastBehCheck.Remove(playerId);
+    cartTitanBotIsAvoiding.Remove(playerId);
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)
