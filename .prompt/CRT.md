@@ -57,8 +57,5 @@ Size = 0.920f
                     - when ATTACK is pressed keep firing the gun of uphead player until released and cut energy 1.5% if M60 or 6% if sniper, per bullet.
                     - when block is pressed the titan will go readonly input mode and using up (JUMP) and down (CROUCH_ROLL_DIVE) virtual key, the titan can adjust the aim of uphead players aim, when released, set input mode enabled again and uphead bots aim will remain there same
                     - always show a '+' text object at the aim of uphead players aim
-
-
-    - on death animation: create a crate of same team and place it on titan back
     
                     
