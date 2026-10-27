@@ -150,7 +150,7 @@ private const float CART_RESCUE_ALLY_DMG_REDUCTION = 0.50f; // 50% all damage re
 
 // Cart Titan uphead gun energy costs
 private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.015f;    // 1.5% per bullet
-private const float CART_GUN_ENERGY_PER_BULLET_SNIPER = 0.12f;  // 12% per bullet
+private const float CART_GUN_ENERGY_PER_BULLET_SNIPER = 0.25f;  // 25% per bullet
 
 // Cart Titan uphead gun attach offset (above titan head)
 private const float CART_GUN_OFFSET_Y = 18f;
@@ -4672,8 +4672,8 @@ private void CartTitanAttachBackObject(IPlayer player, int playerId, CartTitanFo
         cartTitanBackObject.Remove(playerId);
     }
     
-    string objName = (form == CartTitanForm.Rescue) ? "BgFence01G" : "Drone";
-    IObject backObj = Game.CreateObject(objName, player.GetWorldPosition());
+    string objName = (form == CartTitanForm.Rescue) ? "BgFence01G" : "BgElectric02C";
+    IObject backObj = Game.CreateObject(objName, player.GetWorldPosition() + new Vector2(0f, 3f));
     if (backObj != null)
     {
         cartTitanBackObject[playerId] = backObj;
