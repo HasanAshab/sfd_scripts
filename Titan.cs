@@ -5047,7 +5047,8 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     // Aim the gun player toward the stored Y
     float storedAimY = cartTitanGunAimY[playerId];
     float aimTargetX = gunPos.X + player.FacingDirection * 200f;
-    gp.SetForcedAimPosition(new Vector2(aimTargetX, storedAimY));
+    Vector2 aimTarget = new Vector2(aimTargetX, storedAimY);
+    PlayerCommandFaceDirection faceDir = player.FacingDirection > 0 ? PlayerCommandFaceDirection.Right : PlayerCommandFaceDirection.Left;
     
     // Update crosshair position
     if (cartTitanCrosshair.ContainsKey(playerId))
@@ -5055,38 +5056,46 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         IObjectText ch = cartTitanCrosshair[playerId];
         if (ch != null && !ch.IsRemoved)
         {
-            ch.SetWorldPosition(new Vector2(aimTargetX, storedAimY));
+            ch.SetWorldPosition(aimTarget);
         }
         else
         {
             cartTitanCrosshair.Remove(playerId);
-            CartTitanCreateCrosshair(playerId, new Vector2(aimTargetX, storedAimY));
+            CartTitanCreateCrosshair(playerId, aimTarget);
         }
     }
     
     // ATTACK fire: drain energy per bullet
     bool attackHeld = player.KeyPressed(VirtualKey.ATTACK);
-    if (attackHeld && !blockHeld)
+    bool isSniper = cartTitanGunIsSniper.ContainsKey(playerId) && cartTitanGunIsSniper[playerId];
+    float fireInterval = isSniper ? 500f : 100f;
+    bool canFire = attackHeld && !blockHeld &&
+        (!cartTitanLastBulletFireTime.ContainsKey(playerId) || currentTime - cartTitanLastBulletFireTime[playerId] >= fireInterval);
+        
+    if (canFire)
     {
-        // Fire by commanding gun player
-        gp.AddCommand(new PlayerCommand(PlayerCommandType.Attack)); // triggers weapon fire
+        cartTitanLastBulletFireTime[playerId] = currentTime;
         
-        // Throttle energy drain (1 drain per 100ms for M60, 500ms for sniper)
-        bool isSniper = cartTitanGunIsSniper.ContainsKey(playerId) && cartTitanGunIsSniper[playerId];
-        float fireInterval = isSniper ? 500f : 100f;
+        gp.ClearCommandQueue();
+        if (gp.CurrentWeaponDrawn != WeaponItemType.Rifle)
+            gp.AddCommand(new PlayerCommand(PlayerCommandType.DrawRifle));
+        gp.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimTarget, faceDir));
+        gp.AddCommand(new PlayerCommand(PlayerCommandType.AttackOnce));
         
-        if (!cartTitanLastBulletFireTime.ContainsKey(playerId) ||
-            currentTime - cartTitanLastBulletFireTime[playerId] >= fireInterval)
-        {
-            cartTitanLastBulletFireTime[playerId] = currentTime;
-            
-            PlayerModifiers crtMods = player.GetModifiers();
-            float energyCost = isSniper
-                ? crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_SNIPER
-                : crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_M60;
-            crtMods.CurrentEnergy = Math.Max(0f, crtMods.CurrentEnergy - energyCost);
-            player.SetModifiers(crtMods);
-        }
+        PlayerModifiers crtMods = player.GetModifiers();
+        float energyCost = isSniper
+            ? crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_SNIPER
+            : crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_M60;
+        crtMods.CurrentEnergy = Math.Max(0f, crtMods.CurrentEnergy - energyCost);
+        player.SetModifiers(crtMods);
+    }
+    else if (!attackHeld)
+    {
+        // When not firing, keep aim updated smoothly
+        gp.ClearCommandQueue();
+        if (gp.CurrentWeaponDrawn != WeaponItemType.Rifle)
+            gp.AddCommand(new PlayerCommand(PlayerCommandType.DrawRifle));
+        gp.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimTarget, faceDir));
     }
 }
 
