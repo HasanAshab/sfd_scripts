@@ -279,6 +279,8 @@ private Dictionary<int, IPlayer> cartTitanBotRescueTarget = new Dictionary<int, 
 private Dictionary<int, float> cartTitanBotLastModeCheck = new Dictionary<int, float>(); // Rate-limit mode evaluation
 private Dictionary<int, float> cartTitanBotLastBehCheck = new Dictionary<int, float>(); // Rate-limit behaviour switch (avoid/fight)
 private Dictionary<int, bool> cartTitanBotIsAvoiding = new Dictionary<int, bool>(); // Is currently avoiding (vs firing)?
+private Dictionary<int, int> cartTitanBotLockedEnemy = new Dictionary<int, int>(); // Locked target ID for bullet-type decision
+private Dictionary<int, bool> cartTitanBotLockedIsSniper = new Dictionary<int, bool>(); // Locked bullet type for current target
 
 // Track assigned titan powers (does not mean transformed, just assigned power)
 private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, TitanType>();
@@ -4998,14 +5000,17 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     
     // Block/aim-adjust mode: JUMP = aim up, CROUCH_ROLL_DIVE = aim down
     bool blockHeld = cartTitanBlockHeld.ContainsKey(playerId) && cartTitanBlockHeld[playerId];
+    bool isSniper = cartTitanGunIsSniper.ContainsKey(playerId) && cartTitanGunIsSniper[playerId];
     if (blockHeld)
     {
         float currentAngle = cartTitanGunAimAngle.ContainsKey(playerId) ? cartTitanGunAimAngle[playerId] : 0f;
+        // Sniper aims slower (0.07), M60 faster (0.12)
+        float aimSpeed = isSniper ? 0.07f : 0.12f;
         // JUMP aims up (+Y in SFD), CROUCH aims down (-Y in SFD)
         if (player.KeyPressed(VirtualKey.JUMP))
-            currentAngle += 0.12f;
+            currentAngle += aimSpeed;
         if (player.KeyPressed(VirtualKey.CROUCH_ROLL_DIVE))
-            currentAngle -= 0.12f;
+            currentAngle -= aimSpeed;
             
         // Clamp to avoid aiming completely backwards or beyond down limit
         currentAngle = MathHelper.Clamp(currentAngle, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
@@ -5041,10 +5046,21 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     
     // ATTACK fire: drain energy per bullet and spawn projectile (can fire while adjusting aim / block held)
     bool attackHeld = player.KeyPressed(VirtualKey.ATTACK);
-    bool isSniper = cartTitanGunIsSniper.ContainsKey(playerId) && cartTitanGunIsSniper[playerId];
-    float fireInterval = isSniper ? 500f : 100f;
+    // M60 = 500ms between shots, Sniper = 2000ms
+    float fireInterval = isSniper ? 2000f : 500f;
     bool canFire = attackHeld &&
         (!cartTitanLastBulletFireTime.ContainsKey(playerId) || currentTime - cartTitanLastBulletFireTime[playerId] >= fireInterval);
+    
+    // Energy check (fix #1): do not fire if not enough energy
+    if (canFire)
+    {
+        PlayerModifiers crtMods = player.GetModifiers();
+        float energyCost = isSniper
+            ? crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_SNIPER
+            : crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_M60;
+        if (crtMods.CurrentEnergy < energyCost)
+            canFire = false;
+    }
         
     if (canFire)
     {
@@ -5060,12 +5076,12 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
             Game.SpawnProjectile(ProjectileItem.M60, muzzlePos, aimDirection);
         }
         
-        PlayerModifiers crtMods = player.GetModifiers();
-        float energyCost = isSniper
-            ? crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_SNIPER
-            : crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_M60;
-        crtMods.CurrentEnergy = Math.Max(0f, crtMods.CurrentEnergy - energyCost);
-        player.SetModifiers(crtMods);
+        PlayerModifiers fireMods = player.GetModifiers();
+        float fireCost = isSniper
+            ? fireMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_SNIPER
+            : fireMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_M60;
+        fireMods.CurrentEnergy = Math.Max(0f, fireMods.CurrentEnergy - fireCost);
+        player.SetModifiers(fireMods);
     }
 }
 
@@ -5361,49 +5377,103 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
         bot.SetGuardTarget(null);
     }
     
-    // Determine bullet type based on enemy size modifier
-    float enemySize = 1.0f;
-    if (titanSizes.ContainsKey(closestEnemy.UniqueID))
-        enemySize = titanSizes[closestEnemy.UniqueID];
+    // Determine bullet type based on enemy size modifier — locked per target, re-evaluated only on enemy change
+    int currentEnemyId = closestEnemy.UniqueID;
+    bool lockedEnemy = cartTitanBotLockedEnemy.ContainsKey(botId) && cartTitanBotLockedEnemy[botId] == currentEnemyId;
+    bool useSniper;
+    if (lockedEnemy && cartTitanBotLockedIsSniper.ContainsKey(botId))
+    {
+        // Same enemy: keep locked bullet type
+        useSniper = cartTitanBotLockedIsSniper[botId];
+    }
     else
     {
-        PlayerModifiers em = closestEnemy.GetModifiers();
-        enemySize = em.SizeModifier;
+        // New/different enemy: roll bullet type based on size
+        float enemySize = 1.0f;
+        if (titanSizes.ContainsKey(closestEnemy.UniqueID))
+            enemySize = titanSizes[closestEnemy.UniqueID];
+        else
+        {
+            PlayerModifiers em = closestEnemy.GetModifiers();
+            enemySize = em.SizeModifier;
+        }
+        float sizeMin = 0.5f; float sizeMax = 1.7f;
+        float t = MathHelper.Clamp((enemySize - sizeMin) / (sizeMax - sizeMin), 0f, 1f);
+        float m60Chance = 0.05f + t * 0.90f; // 0.05 at size=0.5, 0.95 at size=1.7
+        useSniper = rnd.NextDouble() > (double)m60Chance;
+        // Lock it
+        cartTitanBotLockedEnemy[botId] = currentEnemyId;
+        cartTitanBotLockedIsSniper[botId] = useSniper;
     }
-    
-    // Formula: M60 chance scales from 5% (size=1.7) to 95% (size=0.5), linearly.
-    // At size=0.5: M60=5%, Sniper=95%. At size=1.7: M60=95%, Sniper=5%.
-    float sizeMin = 0.5f;  float sizeMax = 1.7f;
-    float t = MathHelper.Clamp((enemySize - sizeMin) / (sizeMax - sizeMin), 0f, 1f);
-    float m60Chance = 0.05f + t * (0.90f); // 0.05 to 0.95
-    bool useSniper = rnd.NextDouble() > (double)m60Chance;
     
     // Switch gun if needed
     bool currentSniper = cartTitanGunIsSniper.ContainsKey(botId) && cartTitanGunIsSniper[botId];
     if (useSniper != currentSniper)
         CartTitanSwitchGun(botId, useSniper);
     
-    // Check fire interval
+    // Check fire interval — M60=500ms, Sniper=2000ms (matching player)
     bool isSniper = cartTitanGunIsSniper.ContainsKey(botId) && cartTitanGunIsSniper[botId];
-    float fireInterval = isSniper ? 500f : 100f;
+    float fireInterval = isSniper ? 2000f : 500f;
     if (cartTitanLastBulletFireTime.ContainsKey(botId) &&
         currentTime - cartTitanLastBulletFireTime[botId] < fireInterval)
         return;
     
-    // Check energy
+    // Energy check (#1): don't fire if not enough
     PlayerModifiers crtMods = bot.GetModifiers();
     float energyCost = isSniper
         ? crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_SNIPER
         : crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_M60;
     if (crtMods.CurrentEnergy < energyCost) return;
     
-    // Calculate aim: gun position
+    // Calculate exact aim direction toward enemy torso
     Vector2 gunPos = botPos + new Vector2(0f, CART_GUN_OFFSET_Y);
     Vector2 enemyPos = closestEnemy.GetWorldPosition() + new Vector2(0f, 10f); // Aim at torso
     Vector2 aimDir = enemyPos - gunPos;
     if (aimDir == Vector2.Zero) return;
     float aimLen = (float)Math.Sqrt(aimDir.X * aimDir.X + aimDir.Y * aimDir.Y);
     aimDir = aimDir / aimLen;
+    
+    // Compute local aim angle for clamping (#6: respect min/max)
+    float rawAimAngle = (float)Math.Atan2(aimDir.Y, aimDir.X);
+    // In SFD facing right = 0 rad, facing left = pi rad.
+    float forwardAngle = (bot.FacingDirection > 0) ? 0f : (float)Math.PI;
+    float localAimAngle = rawAimAngle - forwardAngle;
+    // Normalise to [-pi, pi]
+    while (localAimAngle > Math.PI)  localAimAngle -= (float)(2 * Math.PI);
+    while (localAimAngle < -Math.PI) localAimAngle += (float)(2 * Math.PI);
+    
+    // If target is outside the gun's arc, skip firing this tick
+    if (localAimAngle < CART_GUN_AIM_MIN_ANGLE || localAimAngle > CART_GUN_AIM_MAX_ANGLE)
+        return;
+    
+    // Friendly-fire check (#4): raycast from muzzle toward enemy; abort if an ally is in between
+    Vector2 muzzlePos = gunPos + aimDir * 10f;
+    bool friendlyInWay = false;
+    PlayerTeam botTeam = bot.GetTeam();
+    foreach (IPlayer ally in Game.GetPlayers())
+    {
+        if (ally == null || ally.IsDead || ally.IsRemoved) continue;
+        if (ally.UniqueID == botId || ally.UniqueID == closestEnemy.UniqueID) continue;
+        // Must be an ally
+        PlayerTeam at = ally.GetTeam();
+        if (botTeam != PlayerTeam.Independent && at != botTeam) continue;
+        // Check if ally is roughly between the muzzle and the enemy
+        Vector2 allyPos = ally.GetWorldPosition();
+        Vector2 toAlly = allyPos - muzzlePos;
+        float dotAlly = toAlly.X * aimDir.X + toAlly.Y * aimDir.Y;
+        if (dotAlly <= 0f) continue; // ally is behind the gun
+        float dotEnemy = (enemyPos - muzzlePos).X * aimDir.X + (enemyPos - muzzlePos).Y * aimDir.Y;
+        if (dotAlly >= dotEnemy) continue; // ally is beyond the enemy
+        // Perpendicular distance from aim line
+        Vector2 rejection = new Vector2(toAlly.X - aimDir.X * dotAlly, toAlly.Y - aimDir.Y * dotAlly);
+        float perpDist = (float)Math.Sqrt(rejection.X * rejection.X + rejection.Y * rejection.Y);
+        if (perpDist <= 12f) // ~half player width threshold
+        {
+            friendlyInWay = true;
+            break;
+        }
+    }
+    if (friendlyInWay) return;
     
     // Apply accuracy spread (80% accurate → 20% get random angle offset)
     if (rnd.NextDouble() > CRT_BOT_FIRE_ACCURACY)
@@ -5414,17 +5484,36 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
         aimDir = new Vector2(aimDir.X * cosS - aimDir.Y * sinS, aimDir.X * sinS + aimDir.Y * cosS);
     }
     
-    // Update stored aim angle so the gun pipe visual tracks (optional cosmetic)
-    float aimAngle = (float)Math.Atan2(aimDir.Y, aimDir.X);
-    // Convert to local offset angle (0 = forward relative to facing)
-    float facingAngle = (float)Math.Atan2(0f, bot.FacingDirection * 1f);
-    float localAngle = aimAngle - facingAngle;
-    localAngle = MathHelper.Clamp(localAngle, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
-    cartTitanGunAimAngle[botId] = localAngle;
+    // Update stored aim angle so the gun pipe visual + crosshair track the target (#5)
+    cartTitanGunAimAngle[botId] = MathHelper.Clamp(localAimAngle, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
+    
+    // Update gun pipe rotation visually
+    if (cartTitanGunPipe.ContainsKey(botId))
+    {
+        IObject pipeObj = cartTitanGunPipe[botId];
+        if (pipeObj != null && !pipeObj.IsRemoved)
+        {
+            float pipeAngle = (float)Math.Atan2(aimDir.Y, aimDir.X) + CART_GUN_PIPE_DEFAULT_ROTATION;
+            pipeObj.SetAngle(pipeAngle);
+        }
+    }
+    
+    // Update crosshair position (#5)
+    Vector2 aimTarget = gunPos + aimDir * CART_GUN_AIM_DISTANCE;
+    if (cartTitanCrosshair.ContainsKey(botId))
+    {
+        IObjectText ch = cartTitanCrosshair[botId];
+        if (ch != null && !ch.IsRemoved)
+            ch.SetWorldPosition(aimTarget);
+        else
+        {
+            cartTitanCrosshair.Remove(botId);
+            CartTitanCreateCrosshair(botId, aimTarget);
+        }
+    }
     
     // Fire!
     cartTitanLastBulletFireTime[botId] = currentTime;
-    Vector2 muzzlePos = gunPos + aimDir * 10f;
     if (isSniper)
         Game.SpawnProjectile(ProjectileItem.SNIPER, muzzlePos, aimDir, ProjectilePowerup.Fire);
     else
@@ -5483,6 +5572,8 @@ private void CleanupCartTitanData(int playerId)
     cartTitanBotLastModeCheck.Remove(playerId);
     cartTitanBotLastBehCheck.Remove(playerId);
     cartTitanBotIsAvoiding.Remove(playerId);
+    cartTitanBotLockedEnemy.Remove(playerId);
+    cartTitanBotLockedIsSniper.Remove(playerId);
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)
