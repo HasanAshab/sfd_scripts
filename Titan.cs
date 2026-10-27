@@ -136,7 +136,7 @@ private const float ARMORED_SHIELD_ENERGY_DRAIN_RATIO = 0.50f; // 50% of blocked
 private const float CART_TITAN_HP_BONUS = -0.40f;           // -40% HP
 private const float CART_TITAN_MELEE_DAMAGE_BONUS = 0.0f;   // +0% melee damage
 private const float CART_TITAN_MELEE_FORCE_BONUS = 0.0f;    // +0% melee force
-private const float CART_TITAN_SPEED_BONUS = 0.30f;         // +30% speed
+private const float CART_TITAN_SPEED_BONUS = 0.50f;         // +50% speed
 private const float CART_TITAN_ENERGY_BONUS = 2.0f;         // +200% energy
 private const float CART_TITAN_SIZE = 0.920f;               // Fixed size
 
@@ -159,7 +159,7 @@ private const float CART_GUN_OFFSET_Y = 18f;
 private const float CART_GUN_AIM_DISTANCE = 30f;
 
 // Cart Titan aim angle limits in radians (MIN = max down limit, MAX = max up limit)
-private const float CART_GUN_AIM_MIN_ANGLE = -0.55f; // Maximum down aim limit (adjustable)
+private const float CART_GUN_AIM_MIN_ANGLE = -0.9f; // Maximum down aim limit (adjustable)
 private const float CART_GUN_AIM_MAX_ANGLE = (float)(Math.PI * 0.45); // Maximum up aim limit
 
 // Cart Titan gun pipe (BgRailing02A) default rotation offset in radians (adjustable)
@@ -4673,7 +4673,7 @@ private void CartTitanAttachBackObject(IPlayer player, int playerId, CartTitanFo
     }
     
     string objName = (form == CartTitanForm.Rescue) ? "BgFence01G" : "BgElectric02C";
-    IObject backObj = Game.CreateObject(objName, player.GetWorldPosition() + new Vector2(0f, 3f));
+    IObject backObj = Game.CreateObject(objName, player.GetWorldPosition());
     if (backObj != null)
     {
         cartTitanBackObject[playerId] = backObj;
@@ -5003,9 +5003,9 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         float currentAngle = cartTitanGunAimAngle.ContainsKey(playerId) ? cartTitanGunAimAngle[playerId] : 0f;
         // JUMP aims up (+Y in SFD), CROUCH aims down (-Y in SFD)
         if (player.KeyPressed(VirtualKey.JUMP))
-            currentAngle += 0.07f;
+            currentAngle += 0.12f;
         if (player.KeyPressed(VirtualKey.CROUCH_ROLL_DIVE))
-            currentAngle -= 0.07f;
+            currentAngle -= 0.12f;
             
         // Clamp to avoid aiming completely backwards or beyond down limit
         currentAngle = MathHelper.Clamp(currentAngle, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
