@@ -11,7 +11,8 @@ private enum TitanType
     Pure,
     Attack,
     Jaw,
-    Armored
+    Armored,
+    Cart
 }
 
 // Attack Titan hardening mode enum
@@ -131,6 +132,32 @@ private const float ARMORED_PROJ_LOOKAHEAD_SEC = 0.06f; // Projectile lookahead 
 private const float ARMORED_REFLECT_OFFSET = 6f; // Reflected projectile spawn offset
 private const float ARMORED_SHIELD_ENERGY_DRAIN_RATIO = 0.50f; // 50% of blocked damage drained from energy
 
+// Cart Titan stats
+private const float CART_TITAN_HP_BONUS = -0.40f;           // -40% HP
+private const float CART_TITAN_MELEE_DAMAGE_BONUS = 0.0f;   // +0% melee damage
+private const float CART_TITAN_MELEE_FORCE_BONUS = 0.0f;    // +0% melee force
+private const float CART_TITAN_SPEED_BONUS = 0.30f;         // +30% speed
+private const float CART_TITAN_ENERGY_BONUS = 2.0f;         // +200% energy
+private const float CART_TITAN_SIZE = 0.920f;               // Fixed size
+
+// Cart Titan Offensive form stat modifiers (applied on top of base CRT)
+private const float CART_OFFENSIVE_SPEED_PENALTY = 0.40f;   // -40% speed
+private const float CART_OFFENSIVE_HP_BONUS = 0.40f;        // +40% HP
+
+// Cart Titan rescue ally mechanics
+private const float CART_RESCUE_LIFT_COST_PER_SEC = 0.005f; // 0.5% of max energy per second
+private const float CART_RESCUE_ALLY_DMG_REDUCTION = 0.50f; // 50% all damage reduction while lifted
+
+// Cart Titan uphead gun energy costs
+private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.015f;    // 1.5% per bullet
+private const float CART_GUN_ENERGY_PER_BULLET_SNIPER = 0.06f;  // 6% per bullet
+
+// Cart Titan uphead gun attach offset (above titan head)
+private const float CART_GUN_OFFSET_Y = 18f;
+
+// Cart Titan aim crosshair update interval
+private const float CART_AIM_UPDATE_INTERVAL = 50f; // 50ms
+
 // Titan size range
 private const float TITAN_MIN_SIZE = 0.8f;
 private const float TITAN_MAX_SIZE = 1.25f;
@@ -211,6 +238,19 @@ private Dictionary<int, float> armoredTitanLastPunchTime = new Dictionary<int, f
 
 // Track player facing directions for Jaw Titan backstab detection
 private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
+
+// Track Cart Titan specific data
+private enum CartTitanForm { Rescue, Offensive }
+private Dictionary<int, CartTitanForm> cartTitanForm = new Dictionary<int, CartTitanForm>();
+private Dictionary<int, IObject> cartTitanBackObject = new Dictionary<int, IObject>(); // BgFence01G (Rescue) or drone (Offensive)
+private Dictionary<int, IPlayer> cartTitanLiftedAlly = new Dictionary<int, IPlayer>(); // Ally on backpack (Rescue)
+private Dictionary<int, float> cartTitanLiftNextCostTime = new Dictionary<int, float>(); // Next energy drain tick for lift
+private Dictionary<int, IPlayer> cartTitanGunPlayer = new Dictionary<int, IPlayer>(); // Uphead gun phantom player (Offensive)
+private Dictionary<int, bool> cartTitanGunIsSniper = new Dictionary<int, bool>(); // true=Sniper, false=M60
+private Dictionary<int, bool> cartTitanBlockHeld = new Dictionary<int, bool>(); // Is block currently held?
+private Dictionary<int, float> cartTitanGunAimY = new Dictionary<int, float>(); // Stored aim Y for uphead gun
+private Dictionary<int, IObjectText> cartTitanCrosshair = new Dictionary<int, IObjectText>(); // '+' crosshair text
+private Dictionary<int, float> cartTitanLastBulletFireTime = new Dictionary<int, float>(); // Throttle bullet energy cost
 
 // Track assigned titan powers (does not mean transformed, just assigned power)
 private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, TitanType>();
@@ -437,9 +477,10 @@ private string GetTodayDateString()
 // Returns a human-readable power name for chat/popup messages
 private string GetTitanPowerName(TitanType titanType)
 {
-    if (titanType == TitanType.Attack) return "Attack Titan";
-    if (titanType == TitanType.Jaw)    return "Jaw Titan";
+    if (titanType == TitanType.Attack)  return "Attack Titan";
+    if (titanType == TitanType.Jaw)     return "Jaw Titan";
     if (titanType == TitanType.Armored) return "Armored Titan";
+    if (titanType == TitanType.Cart)    return "Cart Titan";
     return "Pure Titan";
 }
 
@@ -566,10 +607,10 @@ public void DistributeTitanPowers(TriggerArgs args)
     Game.ShowChatMessage("[Titan] Powers distributed! Pick up strength boost to transform.", Color.Cyan);
 }
 
-// --- Scenario A: VIP present. 50% humanoid per player, all 3 types guaranteed, NO DUPLICATION, 2-day expiry ---
+// --- Scenario A: VIP present. 50% humanoid per player, all 4 types guaranteed, NO DUPLICATION, 2-day expiry ---
 private void DistributeScenarioA(IPlayer[] allPlayers)
 {
-    List<TitanType> humanoidPool = new List<TitanType> { TitanType.Attack, TitanType.Jaw, TitanType.Armored };
+    List<TitanType> humanoidPool = new List<TitanType> { TitanType.Attack, TitanType.Jaw, TitanType.Armored, TitanType.Cart };
     
     // Shuffle humanoid pool
     for (int i = humanoidPool.Count - 1; i > 0; i--)
@@ -721,7 +762,7 @@ private void HandleScenarioBDistribution(IPlayer[] allPlayers)
     }
     
     // 3. Find which humanoid titans are MISSING among present players
-    List<TitanType> allHumanoidTypes = new List<TitanType> { TitanType.Attack, TitanType.Jaw, TitanType.Armored };
+    List<TitanType> allHumanoidTypes = new List<TitanType> { TitanType.Attack, TitanType.Jaw, TitanType.Armored, TitanType.Cart };
     List<TitanType> missingHumanoids = new List<TitanType>();
     foreach (TitanType t in allHumanoidTypes)
     {
@@ -816,6 +857,7 @@ private bool HasDuplicateHumanoids(IPlayer[] allPlayers)
     int atkCount = 0;
     int jawCount = 0;
     int armCount = 0;
+    int crtCount = 0;
     
     foreach (IPlayer p in eligible)
     {
@@ -825,9 +867,10 @@ private bool HasDuplicateHumanoids(IPlayer[] allPlayers)
         if (t == TitanType.Attack) atkCount++;
         else if (t == TitanType.Jaw) jawCount++;
         else if (t == TitanType.Armored) armCount++;
+        else if (t == TitanType.Cart) crtCount++;
     }
     
-    return (atkCount > 1 || jawCount > 1 || armCount > 1);
+    return (atkCount > 1 || jawCount > 1 || armCount > 1 || crtCount > 1);
 }
 
 private void SaveAssignedPowersToStorage()
@@ -1066,6 +1109,11 @@ private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanT
         labelText = "[ARM";
         labelColor = new Color(255, 255, 0);
     }
+    else if (titanType == TitanType.Cart)
+    {
+        labelText = "[CRT";
+        labelColor = new Color(100, 200, 255);
+    }
     else return;
     
     // Append expiry info for Scenario A
@@ -1169,6 +1217,10 @@ private void TransformToTitan(IPlayer player)
     {
         TransformToJawTitan(player, playerId);
     }
+    else if (titanType == TitanType.Cart)
+    {
+        TransformToCartTitan(player, playerId);
+    }
     else
     {
         TransformToArmoredTitan(player, playerId);
@@ -1193,6 +1245,10 @@ private void TransformToTitan(IPlayer player)
     else if (titanType == TitanType.Jaw)
     {
         titanTypeName = "JAW TITAN";
+    }
+    else if (titanType == TitanType.Cart)
+    {
+        titanTypeName = "CART TITAN";
     }
     else
     {
@@ -1701,6 +1757,48 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
                 ToggleArmoredTitanArmor(player, playerId);
             }
         }
+        return;
+    }
+    
+    // Check if player is a Cart Titan
+    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Cart)
+    {
+        // Only allow human players to use abilities
+        if (player.IsBot) return;
+        
+        foreach (VirtualKeyInfo keyInfo in keyInfos)
+        {
+            // SHEATHE key: Toggle form (Rescue <-> Offensive)
+            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.SHEATHE)
+            {
+                ToggleCartTitanForm(player, playerId);
+            }
+            
+            // DRAW_SPECIAL: Release lifted ally (Rescue form)
+            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.DRAW_SPECIAL)
+            {
+                CartTitanReleaseAlly(player, playerId);
+            }
+            
+            // DRAW_RIFLE: Switch to sniper (Offensive form)
+            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.DRAW_RIFLE)
+            {
+                CartTitanSwitchGun(playerId, true);
+            }
+            
+            // DRAW_HANDGUN: Switch to M60 (Offensive form)
+            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.DRAW_HANDGUN)
+            {
+                CartTitanSwitchGun(playerId, false);
+            }
+            
+            // BLOCK: Enter/exit aim-adjust mode (Offensive form)
+            if (keyInfo.Key == VirtualKey.BLOCK)
+            {
+                bool blockHeld = (keyInfo.Event == VirtualKeyEvent.Pressed);
+                CartTitanSetBlockMode(player, playerId, blockHeld);
+            }
+        }
     }
 }
 
@@ -1870,6 +1968,13 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
     if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Armored)
     {
         HandleArmoredTitanMelee(player, playerId, args, currentTime);
+        return;
+    }
+    
+    // Cart Titan: Rescue form - catch dives on allies
+    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Cart)
+    {
+        CartTitanCheckDiveCatch(player, playerId, args, currentTime);
         return;
     }
     
@@ -2840,6 +2945,14 @@ public void OnUpdate(float elapsed)
                 // CheckArmoredTitanArmor(player, playerId, currentTime);
                 
                 // Armored Titan also has exhaustion
+                CheckTitanExhaustion(player, playerId);
+            }
+            else if (titanType == TitanType.Cart)
+            {
+                // Cart Titan updates
+                CartTitanUpdate(player, playerId, currentTime);
+                
+                // Cart Titan also has exhaustion
                 CheckTitanExhaustion(player, playerId);
             }
             
@@ -4428,6 +4541,9 @@ private void CleanupTitanData(int titanPlayerId)
     armoredTitanPunchCount.Remove(titanPlayerId);
     armoredTitanLastPunchTime.Remove(titanPlayerId);
     
+    // Clean up Cart Titan data
+    CleanupCartTitanData(titanPlayerId);
+    
     // Clean up bot detach check
     botLastDetachCheck.Remove(titanPlayerId);
     botLastStrengthBoostCheck.Remove(titanPlayerId);
@@ -4440,6 +4556,582 @@ private void CleanupTitanData(int titanPlayerId)
     
     // Clean up walk key press tracking
     walkKeyPressStartTime.Remove(titanPlayerId);
+}
+
+// ============================================================
+// CART TITAN IMPLEMENTATION
+// ============================================================
+
+private void TransformToCartTitan(IPlayer player, int playerId)
+{
+    // Clear all items FIRST before profile change
+    player.RemoveWeaponItemType(WeaponItemType.Rifle);
+    player.RemoveWeaponItemType(WeaponItemType.Handgun);
+    player.RemoveWeaponItemType(WeaponItemType.Melee);
+    player.RemoveWeaponItemType(WeaponItemType.Thrown);
+    player.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
+    // Set Cart Titan Rescue profile (default form)
+    player.SetProfile(GetCartTitanRescueProfile());
+    
+    // Remove strength boost
+    player.SetStrengthBoostTime(0);
+    
+    // Get modifiers
+    PlayerModifiers mods = player.GetModifiers();
+    
+    // Apply Cart Titan base stats
+    int newMaxHealth = (int)(mods.MaxHealth * (1f + CART_TITAN_HP_BONUS));
+    newMaxHealth = Math.Max(1, newMaxHealth);
+    mods.MaxHealth = newMaxHealth;
+    mods.CurrentHealth = newMaxHealth;
+    
+    mods.MeleeDamageDealtModifier *= (1f + CART_TITAN_MELEE_DAMAGE_BONUS);
+    mods.MeleeForceModifier       *= (1f + CART_TITAN_MELEE_FORCE_BONUS);
+    mods.RunSpeedModifier          *= (1f + CART_TITAN_SPEED_BONUS);
+    mods.SprintSpeedModifier       *= (1f + CART_TITAN_SPEED_BONUS);
+    
+    // +200% energy
+    mods.MaxEnergy = (int)(mods.MaxEnergy * (1f + CART_TITAN_ENERGY_BONUS));
+    mods.CurrentEnergy = mods.MaxEnergy;
+    
+    mods.SizeModifier = CART_TITAN_SIZE;
+    mods.ItemDropMode = 1;
+    
+    player.SetModifiers(mods);
+    
+    // Bot behaviour
+    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
+    BotBehaviorSet bS = player.GetBotBehaviorSet();
+    bS.SearchItems = 0;
+    player.SetBotBehaviorSet(bS);
+    
+    // Initialise state (Rescue form)
+    cartTitanForm[playerId] = CartTitanForm.Rescue;
+    cartTitanGunIsSniper[playerId] = false;
+    cartTitanBlockHeld[playerId] = false;
+    cartTitanGunAimY[playerId] = 0f;
+    
+    // Attach backpack object for Rescue form
+    CartTitanAttachBackObject(player, playerId, CartTitanForm.Rescue);
+    
+    // Store titan size
+    titanSizes[playerId] = CART_TITAN_SIZE;
+}
+
+private IProfile GetCartTitanRescueProfile()
+{
+    return new IProfile()
+    {
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightPink"),
+        Accesory = new IProfileClothingItem("SunGlasses", "", "ClothingLightRed"),
+    };
+}
+
+private IProfile GetCartTitanOffensiveProfile()
+{
+    return new IProfile()
+    {
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("Normal_fem", "Skin4", "ClothingLightPink"),
+        Head = new IProfileClothingItem("WeldingHelmet", "ClothingLightGray"),
+        Accesory = new IProfileClothingItem("SunGlasses", "", "ClothingLightRed"),
+    };
+}
+
+// Attach/replace the back-attached object (BgFence01G for Rescue, drone for Offensive)
+private void CartTitanAttachBackObject(IPlayer player, int playerId, CartTitanForm form)
+{
+    // Remove old back object if it exists
+    if (cartTitanBackObject.ContainsKey(playerId))
+    {
+        IObject old = cartTitanBackObject[playerId];
+        if (old != null && !old.IsRemoved) old.Remove();
+        cartTitanBackObject.Remove(playerId);
+    }
+    
+    string objName = (form == CartTitanForm.Rescue) ? "BgFence01G" : "Drone";
+    IObject backObj = Game.CreateObject(objName, player.GetWorldPosition());
+    if (backObj != null)
+    {
+        cartTitanBackObject[playerId] = backObj;
+    }
+}
+
+// Toggle between Rescue and Offensive form
+private void ToggleCartTitanForm(IPlayer player, int playerId)
+{
+    CartTitanForm currentForm = cartTitanForm.ContainsKey(playerId) ? cartTitanForm[playerId] : CartTitanForm.Rescue;
+    CartTitanForm newForm = (currentForm == CartTitanForm.Rescue) ? CartTitanForm.Offensive : CartTitanForm.Rescue;
+    
+    // Death kneel + sound as mode switch animation
+    QuickCommand(player, new PlayerCommand(PlayerCommandType.DeathKneelInfinite));
+    Game.PlaySound("ShotgunReload", player.GetWorldPosition());
+    
+    // Apply new form after brief kneel
+    int pid = playerId;
+    Events.UpdateCallback.Start((float dt) =>
+    {
+        IPlayer p = Game.GetPlayer(pid);
+        if (p == null || p.IsDead || p.IsRemoved) return;
+        if (!titanPlayers.ContainsKey(pid) || titanPlayers[pid] != TitanType.Cart) return;
+        
+        QuickCommand(p, new PlayerCommand(PlayerCommandType.StopDeathKneel));
+        ApplyCartTitanForm(p, pid, newForm);
+    }, 600, 1);
+}
+
+private void ApplyCartTitanForm(IPlayer player, int playerId, CartTitanForm newForm)
+{
+    CartTitanForm oldForm = cartTitanForm.ContainsKey(playerId) ? cartTitanForm[playerId] : CartTitanForm.Rescue;
+    if (oldForm == newForm) return;
+    
+    PlayerModifiers mods = player.GetModifiers();
+    
+    // Remove old form modifiers
+    if (oldForm == CartTitanForm.Offensive)
+    {
+        // Remove offensive speed penalty and HP bonus
+        mods.RunSpeedModifier    /= (1f - CART_OFFENSIVE_SPEED_PENALTY);
+        mods.SprintSpeedModifier /= (1f - CART_OFFENSIVE_SPEED_PENALTY);
+        int hpRemove = (int)(mods.MaxHealth * CART_OFFENSIVE_HP_BONUS / (1f + CART_OFFENSIVE_HP_BONUS));
+        mods.MaxHealth -= hpRemove;
+        mods.CurrentHealth = Math.Min(mods.CurrentHealth, mods.MaxHealth);
+        
+        // Kill and clean up the uphead gun player
+        CartTitanDestroyGunPlayer(playerId);
+        
+        // Remove crosshair
+        CartTitanDestroyCrosshair(playerId);
+        
+        // Reset block mode
+        cartTitanBlockHeld[playerId] = false;
+        if (!player.IsInputEnabled) player.SetInputEnabled(true);
+    }
+    else // oldForm == Rescue
+    {
+        // Release ally if carried
+        CartTitanReleaseAlly(player, playerId);
+    }
+    
+    // Apply new form
+    if (newForm == CartTitanForm.Offensive)
+    {
+        // Apply speed penalty and HP bonus
+        mods.RunSpeedModifier    *= (1f - CART_OFFENSIVE_SPEED_PENALTY);
+        mods.SprintSpeedModifier *= (1f - CART_OFFENSIVE_SPEED_PENALTY);
+        int hpAdd = (int)(mods.MaxHealth * CART_OFFENSIVE_HP_BONUS);
+        mods.MaxHealth += hpAdd;
+        mods.CurrentHealth = Math.Min(mods.CurrentHealth + hpAdd, mods.MaxHealth);
+        
+        player.SetProfile(GetCartTitanOffensiveProfile());
+        player.SetModifiers(mods);
+        
+        // Create uphead gun player
+        CartTitanCreateGunPlayer(player, playerId);
+    }
+    else // newForm == Rescue
+    {
+        player.SetProfile(GetCartTitanRescueProfile());
+        player.SetModifiers(mods);
+    }
+    
+    cartTitanForm[playerId] = newForm;
+    
+    // Swap back object
+    CartTitanAttachBackObject(player, playerId, newForm);
+}
+
+// Create the transparent uphead-gun player for Offensive form
+private void CartTitanCreateGunPlayer(IPlayer cartTitan, int cartTitanId)
+{
+    // Remove old gun player if any
+    CartTitanDestroyGunPlayer(cartTitanId);
+    
+    Vector2 spawnPos = cartTitan.GetWorldPosition() + new Vector2(0f, CART_GUN_OFFSET_Y);
+    IPlayer gunPlayer = Game.CreatePlayer(spawnPos);
+    if (gunPlayer == null) return;
+    
+    int gunPlayerId = gunPlayer.UniqueID;
+    
+    // Set team same as cart titan
+    gunPlayer.SetTeam(cartTitan.GetTeam());
+    
+    // Transparent profile
+    gunPlayer.SetProfile(new IProfile()
+    {
+        Gender = Gender.Female,
+        Skin = new IProfileClothingItem("__CANVAS__", ""),
+    });
+    
+    // Hide name and status bar
+    gunPlayer.SetNameVisibility(false);
+    gunPlayer.SetStatusBarsVisibility(false);
+    
+    // Infinite ammo modifier
+    PlayerModifiers gunMods = gunPlayer.GetModifiers();
+    gunMods.InfiniteAmmo = 1;
+    gunPlayer.SetModifiers(gunMods);
+    
+    // Give M60 and draw it
+    gunPlayer.GiveWeaponItem(WeaponItem.M60);
+    gunPlayer.AddCommand(new PlayerCommand(PlayerCommandType.DrawRifle));
+    
+    // Set AI: BotB if cart titan is a bot, else None
+    if (cartTitan.IsBot)
+    {
+        gunPlayer.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotB));
+        BotBehaviorSet bS = gunPlayer.GetBotBehaviorSet();
+        bS.SearchItems = 0;
+        gunPlayer.SetBotBehaviorSet(bS);
+    }
+    else
+    {
+        gunPlayer.SetBotBehavior(new BotBehavior(false, PredefinedAIType.None));
+        gunPlayer.SetBotBehaviorActive(false);
+    }
+    
+    cartTitanGunPlayer[cartTitanId] = gunPlayer;
+    cartTitanGunIsSniper[cartTitanId] = false;
+    cartTitanGunAimY[cartTitanId] = spawnPos.Y;
+    
+    // Create crosshair '+' text object
+    CartTitanCreateCrosshair(cartTitanId, spawnPos);
+}
+
+private void CartTitanDestroyGunPlayer(int cartTitanId)
+{
+    if (cartTitanGunPlayer.ContainsKey(cartTitanId))
+    {
+        IPlayer gp = cartTitanGunPlayer[cartTitanId];
+        if (gp != null && !gp.IsRemoved && !gp.IsDead)
+        {
+            gp.Kill();
+        }
+        cartTitanGunPlayer.Remove(cartTitanId);
+    }
+}
+
+private void CartTitanSwitchGun(int cartTitanId, bool toSniper)
+{
+    if (!cartTitanGunPlayer.ContainsKey(cartTitanId)) return;
+    IPlayer gp = cartTitanGunPlayer[cartTitanId];
+    if (gp == null || gp.IsDead || gp.IsRemoved) return;
+    
+    gp.RemoveWeaponItemType(WeaponItemType.Rifle);
+    if (toSniper)
+    {
+        gp.GiveWeaponItem(WeaponItem.SNIPER);
+        gp.AddCommand(new PlayerCommand(PlayerCommandType.DrawRifle));
+    }
+    else
+    {
+        gp.GiveWeaponItem(WeaponItem.M60);
+        gp.AddCommand(new PlayerCommand(PlayerCommandType.DrawRifle));
+    }
+    cartTitanGunIsSniper[cartTitanId] = toSniper;
+}
+
+private void CartTitanSetBlockMode(IPlayer cartTitan, int cartTitanId, bool blockHeld)
+{
+    // Only in Offensive form
+    CartTitanForm form = cartTitanForm.ContainsKey(cartTitanId) ? cartTitanForm[cartTitanId] : CartTitanForm.Rescue;
+    if (form != CartTitanForm.Offensive) return;
+    
+    cartTitanBlockHeld[cartTitanId] = blockHeld;
+    
+    if (blockHeld)
+    {
+        // Enter read-only: disable cart titan input so JUMP/CROUCH adjust aim instead
+        cartTitan.SetInputEnabled(false);
+    }
+    else
+    {
+        // Re-enable input
+        cartTitan.SetInputEnabled(true);
+    }
+}
+
+// Catch dive on ally in Rescue form (called from OnPlayerMeleeAction for Cart Titan)
+private void CartTitanCheckDiveCatch(IPlayer cartTitan, int cartTitanId, PlayerMeleeHitArg[] args, float currentTime)
+{
+    CartTitanForm form = cartTitanForm.ContainsKey(cartTitanId) ? cartTitanForm[cartTitanId] : CartTitanForm.Rescue;
+    if (form != CartTitanForm.Rescue) return;
+    
+    // Only catch if not already lifting someone
+    if (cartTitanLiftedAlly.ContainsKey(cartTitanId) && cartTitanLiftedAlly[cartTitanId] != null) return;
+    
+    if (args == null) return;
+    foreach (PlayerMeleeHitArg hitArg in args)
+    {
+        if (!hitArg.IsPlayer) continue;
+        IPlayer hitPlayer = hitArg.HitObject as IPlayer;
+        if (hitPlayer == null || hitPlayer.IsDead) continue;
+        
+        // Must be an ally
+        PlayerTeam crtTeam = cartTitan.GetTeam();
+        if (crtTeam != PlayerTeam.Independent && hitPlayer.GetTeam() != crtTeam) continue;
+        if (hitPlayer.UniqueID == cartTitanId) continue;
+        
+        // Check if the cart titan is diving (jump-attacking)
+        if (!cartTitan.IsJumpAttacking && !cartTitan.IsJumpKicking) continue;
+        
+        // Lift ally
+        CartTitanLiftAlly(cartTitan, cartTitanId, hitPlayer, currentTime);
+        break;
+    }
+}
+
+private void CartTitanLiftAlly(IPlayer cartTitan, int cartTitanId, IPlayer ally, float currentTime)
+{
+    cartTitanLiftedAlly[cartTitanId] = ally;
+    cartTitanLiftNextCostTime[cartTitanId] = currentTime + 1000f; // first cost after 1 second
+    
+    // Apply damage reduction to ally
+    PlayerModifiers allyMods = ally.GetModifiers();
+    allyMods.MeleeDamageTakenModifier      *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    allyMods.ProjectileDamageTakenModifier *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    allyMods.ExplosionDamageTakenModifier  *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    allyMods.ImpactDamageTakenModifier     *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    ally.SetModifiers(allyMods);
+    
+    Game.ShowChatMessage(cartTitan.Name + " lifted " + ally.Name + " onto the backpack!", Color.Cyan);
+}
+
+private void CartTitanReleaseAlly(IPlayer cartTitan, int cartTitanId)
+{
+    if (!cartTitanLiftedAlly.ContainsKey(cartTitanId)) return;
+    IPlayer ally = cartTitanLiftedAlly[cartTitanId];
+    cartTitanLiftedAlly.Remove(cartTitanId);
+    cartTitanLiftNextCostTime.Remove(cartTitanId);
+    
+    if (ally == null || ally.IsDead || ally.IsRemoved) return;
+    
+    // Restore damage modifiers
+    PlayerModifiers allyMods = ally.GetModifiers();
+    if (allyMods.MeleeDamageTakenModifier > 0)
+        allyMods.MeleeDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    if (allyMods.ProjectileDamageTakenModifier > 0)
+        allyMods.ProjectileDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    if (allyMods.ExplosionDamageTakenModifier > 0)
+        allyMods.ExplosionDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    if (allyMods.ImpactDamageTakenModifier > 0)
+        allyMods.ImpactDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    ally.SetModifiers(allyMods);
+    
+    Game.ShowChatMessage(ally.Name + " was released from the backpack.", Color.Cyan);
+}
+
+// Create crosshair '+' text at aim position
+private void CartTitanCreateCrosshair(int cartTitanId, Vector2 pos)
+{
+    CartTitanDestroyCrosshair(cartTitanId);
+    IObjectText ch = (IObjectText)Game.CreateObject("Text", pos);
+    if (ch != null)
+    {
+        ch.SetText("+");
+        ch.SetTextAlignment(TextAlignment.Middle);
+        ch.SetTextScale(0.5f);
+        ch.SetTextColor(new Color(255, 255, 100));
+        cartTitanCrosshair[cartTitanId] = ch;
+    }
+}
+
+private void CartTitanDestroyCrosshair(int cartTitanId)
+{
+    if (cartTitanCrosshair.ContainsKey(cartTitanId))
+    {
+        IObjectText ch = cartTitanCrosshair[cartTitanId];
+        if (ch != null && !ch.IsRemoved) ch.Remove();
+        cartTitanCrosshair.Remove(cartTitanId);
+    }
+}
+
+// Per-tick update for Cart Titan
+private void CartTitanUpdate(IPlayer player, int playerId, float currentTime)
+{
+    CartTitanForm form = cartTitanForm.ContainsKey(playerId) ? cartTitanForm[playerId] : CartTitanForm.Rescue;
+    
+    Vector2 playerPos = player.GetWorldPosition();
+    
+    // ---- Position back-attached object ----
+    if (cartTitanBackObject.ContainsKey(playerId))
+    {
+        IObject backObj = cartTitanBackObject[playerId];
+        if (backObj != null && !backObj.IsRemoved)
+        {
+            // Place behind the titan (opposite of facing)
+            int facing = player.FacingDirection;
+            Vector2 backPos = playerPos + new Vector2(-facing * 8f, 4f);
+            backObj.SetWorldPosition(backPos);
+        }
+        else
+        {
+            cartTitanBackObject.Remove(playerId);
+        }
+    }
+    
+    if (form == CartTitanForm.Rescue)
+    {
+        CartTitanUpdateRescue(player, playerId, currentTime, playerPos);
+    }
+    else
+    {
+        CartTitanUpdateOffensive(player, playerId, currentTime, playerPos);
+    }
+}
+
+private void CartTitanUpdateRescue(IPlayer player, int playerId, float currentTime, Vector2 playerPos)
+{
+    // Check if ally is still valid
+    if (!cartTitanLiftedAlly.ContainsKey(playerId)) return;
+    IPlayer ally = cartTitanLiftedAlly[playerId];
+    if (ally == null || ally.IsDead || ally.IsRemoved)
+    {
+        CartTitanReleaseAlly(player, playerId);
+        return;
+    }
+    
+    // Position ally on back
+    int facing = player.FacingDirection;
+    Vector2 allyPos = playerPos + new Vector2(-facing * 6f, 10f);
+    ally.SetWorldPosition(allyPos);
+    
+    // Energy cost: 0.5% of max energy per second
+    if (currentTime >= cartTitanLiftNextCostTime[playerId])
+    {
+        cartTitanLiftNextCostTime[playerId] = currentTime + 1000f;
+        PlayerModifiers mods = player.GetModifiers();
+        float cost = mods.MaxEnergy * CART_RESCUE_LIFT_COST_PER_SEC;
+        mods.CurrentEnergy = Math.Max(0f, mods.CurrentEnergy - cost);
+        player.SetModifiers(mods);
+    }
+}
+
+private void CartTitanUpdateOffensive(IPlayer player, int playerId, float currentTime, Vector2 playerPos)
+{
+    // Update gun player position and aim
+    if (!cartTitanGunPlayer.ContainsKey(playerId)) return;
+    IPlayer gp = cartTitanGunPlayer[playerId];
+    if (gp == null || gp.IsDead || gp.IsRemoved)
+    {
+        cartTitanGunPlayer.Remove(playerId);
+        CartTitanDestroyCrosshair(playerId);
+        return;
+    }
+    
+    // Gun player rides on titan's head
+    Vector2 gunPos = playerPos + new Vector2(0f, CART_GUN_OFFSET_Y);
+    gp.SetWorldPosition(gunPos);
+    gp.SetFaceDirection(player.FacingDirection);
+    
+    // Block/aim-adjust mode: JUMP = aim up, CROUCH_ROLL_DIVE = aim down
+    bool blockHeld = cartTitanBlockHeld.ContainsKey(playerId) && cartTitanBlockHeld[playerId];
+    if (blockHeld)
+    {
+        float aimY = cartTitanGunAimY.ContainsKey(playerId) ? cartTitanGunAimY[playerId] : gunPos.Y;
+        if (player.KeyPressed(VirtualKey.JUMP))
+            aimY += 1.5f;
+        if (player.KeyPressed(VirtualKey.CROUCH_ROLL_DIVE))
+            aimY -= 1.5f;
+        cartTitanGunAimY[playerId] = aimY;
+    }
+    else
+    {
+        // Not in block mode: aim forward (same Y as gun player)
+        if (!cartTitanGunAimY.ContainsKey(playerId))
+            cartTitanGunAimY[playerId] = gunPos.Y;
+    }
+    
+    // Aim the gun player toward the stored Y
+    float storedAimY = cartTitanGunAimY[playerId];
+    float aimTargetX = gunPos.X + player.FacingDirection * 200f;
+    gp.SetAimVector(new Vector2(aimTargetX, storedAimY));
+    
+    // Update crosshair position
+    if (cartTitanCrosshair.ContainsKey(playerId))
+    {
+        IObjectText ch = cartTitanCrosshair[playerId];
+        if (ch != null && !ch.IsRemoved)
+        {
+            ch.SetWorldPosition(new Vector2(aimTargetX, storedAimY));
+        }
+        else
+        {
+            cartTitanCrosshair.Remove(playerId);
+            CartTitanCreateCrosshair(playerId, new Vector2(aimTargetX, storedAimY));
+        }
+    }
+    
+    // ATTACK fire: drain energy per bullet
+    bool attackHeld = player.KeyPressed(VirtualKey.ATTACK);
+    if (attackHeld && !blockHeld)
+    {
+        // Fire by commanding gun player
+        gp.AddCommand(new PlayerCommand(PlayerCommandType.StartMeleeAttack)); // triggers weapon fire
+        
+        // Throttle energy drain (1 drain per 100ms for M60, 500ms for sniper)
+        bool isSniper = cartTitanGunIsSniper.ContainsKey(playerId) && cartTitanGunIsSniper[playerId];
+        float fireInterval = isSniper ? 500f : 100f;
+        
+        if (!cartTitanLastBulletFireTime.ContainsKey(playerId) ||
+            currentTime - cartTitanLastBulletFireTime[playerId] >= fireInterval)
+        {
+            cartTitanLastBulletFireTime[playerId] = currentTime;
+            
+            PlayerModifiers crtMods = player.GetModifiers();
+            float energyCost = isSniper
+                ? crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_SNIPER
+                : crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_M60;
+            crtMods.CurrentEnergy = Math.Max(0f, crtMods.CurrentEnergy - energyCost);
+            player.SetModifiers(crtMods);
+        }
+    }
+}
+
+private void CleanupCartTitanData(int playerId)
+{
+    // Release lifted ally (restore modifiers)
+    if (cartTitanLiftedAlly.ContainsKey(playerId))
+    {
+        IPlayer ally = cartTitanLiftedAlly[playerId];
+        if (ally != null && !ally.IsDead && !ally.IsRemoved)
+        {
+            PlayerModifiers allyMods = ally.GetModifiers();
+            if (allyMods.MeleeDamageTakenModifier > 0)
+                allyMods.MeleeDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+            if (allyMods.ProjectileDamageTakenModifier > 0)
+                allyMods.ProjectileDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+            if (allyMods.ExplosionDamageTakenModifier > 0)
+                allyMods.ExplosionDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+            if (allyMods.ImpactDamageTakenModifier > 0)
+                allyMods.ImpactDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+            ally.SetModifiers(allyMods);
+        }
+        cartTitanLiftedAlly.Remove(playerId);
+    }
+    cartTitanLiftNextCostTime.Remove(playerId);
+    
+    // Destroy gun player
+    CartTitanDestroyGunPlayer(playerId);
+    
+    // Destroy crosshair
+    CartTitanDestroyCrosshair(playerId);
+    
+    // Destroy back object
+    if (cartTitanBackObject.ContainsKey(playerId))
+    {
+        IObject obj = cartTitanBackObject[playerId];
+        if (obj != null && !obj.IsRemoved) obj.Remove();
+        cartTitanBackObject.Remove(playerId);
+    }
+    
+    cartTitanForm.Remove(playerId);
+    cartTitanGunIsSniper.Remove(playerId);
+    cartTitanBlockHeld.Remove(playerId);
+    cartTitanGunAimY.Remove(playerId);
+    cartTitanLastBulletFireTime.Remove(playerId);
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)

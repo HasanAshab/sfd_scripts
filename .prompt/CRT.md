@@ -1,4 +1,4 @@
-## now lets add "Cart Titan":
+## now lets add "Cart Titan" label: CRT:
 
 - Stats:
 Health -40%
