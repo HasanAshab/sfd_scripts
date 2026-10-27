@@ -251,6 +251,8 @@ private Dictionary<int, bool> cartTitanBlockHeld = new Dictionary<int, bool>(); 
 private Dictionary<int, float> cartTitanGunAimY = new Dictionary<int, float>(); // Stored aim Y for uphead gun
 private Dictionary<int, IObjectText> cartTitanCrosshair = new Dictionary<int, IObjectText>(); // '+' crosshair text
 private Dictionary<int, float> cartTitanLastBulletFireTime = new Dictionary<int, float>(); // Throttle bullet energy cost
+private Dictionary<int, Vector2> cartTitanGunLastAimPos = new Dictionary<int, Vector2>(); // Last commanded aim position
+private Dictionary<int, int> cartTitanGunLastFacing = new Dictionary<int, int>(); // Last commanded facing direction
 
 // Track assigned titan powers (does not mean transformed, just assigned power)
 private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, TitanType>();
@@ -1968,13 +1970,6 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
     if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Armored)
     {
         HandleArmoredTitanMelee(player, playerId, args, currentTime);
-        return;
-    }
-    
-    // Cart Titan: Rescue form - catch dives on allies
-    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Cart)
-    {
-        CartTitanCheckDiveCatch(player, playerId, args, currentTime);
         return;
     }
     
@@ -4758,20 +4753,40 @@ private void CartTitanCreateGunPlayer(IPlayer cartTitan, int cartTitanId)
     // Set team same as cart titan
     gunPlayer.SetTeam(cartTitan.GetTeam());
     
-    // Transparent profile
-    gunPlayer.SetProfile(new IProfile()
+    // Invisible skin profile
+    gunPlayer.SetProfile(new IProfile
     {
-        Gender = Gender.Female,
-        Skin = new IProfileClothingItem("__CANVAS__", ""),
+        Skin = new IProfileClothingItem("Invisible", null)
     });
     
     // Hide name and status bar
     gunPlayer.SetNametagVisible(false);
     gunPlayer.SetStatusBarsVisible(false);
     
-    // Infinite ammo modifier
+    // Disable collision so it doesn't physically collide with the cart titan and cause shaking
+    CollisionFilter cf = gunPlayer.GetCollisionFilter();
+    cf.CategoryBits = 0;
+    cf.MaskBits = 0;
+    cf.ProjectileHit = false;
+    cf.BlockExplosions = false;
+    cf.BlockFire = false;
+    cf.BlockMelee = false;
+    gunPlayer.SetCollisionFilter(cf);
+    
+    // Zero initial velocities
+    gunPlayer.SetLinearVelocity(Vector2.Zero);
+    gunPlayer.SetAngularVelocity(0f);
+    
+    // Infinite ammo and damage immunity so it never dies
     PlayerModifiers gunMods = gunPlayer.GetModifiers();
     gunMods.InfiniteAmmo = 1;
+    gunMods.ImpactDamageTakenModifier = 0f;
+    gunMods.ExplosionDamageTakenModifier = 0f;
+    gunMods.ProjectileDamageTakenModifier = 0f;
+    gunMods.FireDamageTakenModifier = 0f;
+    gunMods.MeleeDamageTakenModifier = 0f;
+    gunMods.CurrentHealth = 500f;
+    gunMods.MaxHealth = 500;
     gunPlayer.SetModifiers(gunMods);
     
     // Give M60 and draw it
@@ -4850,36 +4865,6 @@ private void CartTitanSetBlockMode(IPlayer cartTitan, int cartTitanId, bool bloc
     {
         // Re-enable input
         cartTitan.SetInputEnabled(true);
-    }
-}
-
-// Catch dive on ally in Rescue form (called from OnPlayerMeleeAction for Cart Titan)
-private void CartTitanCheckDiveCatch(IPlayer cartTitan, int cartTitanId, PlayerMeleeHitArg[] args, float currentTime)
-{
-    CartTitanForm form = cartTitanForm.ContainsKey(cartTitanId) ? cartTitanForm[cartTitanId] : CartTitanForm.Rescue;
-    if (form != CartTitanForm.Rescue) return;
-    
-    // Only catch if not already lifting someone
-    if (cartTitanLiftedAlly.ContainsKey(cartTitanId) && cartTitanLiftedAlly[cartTitanId] != null) return;
-    
-    if (args == null) return;
-    foreach (PlayerMeleeHitArg hitArg in args)
-    {
-        if (!hitArg.IsPlayer) continue;
-        IPlayer hitPlayer = hitArg.HitObject as IPlayer;
-        if (hitPlayer == null || hitPlayer.IsDead) continue;
-        
-        // Must be an ally
-        PlayerTeam crtTeam = cartTitan.GetTeam();
-        if (crtTeam != PlayerTeam.Independent && hitPlayer.GetTeam() != crtTeam) continue;
-        if (hitPlayer.UniqueID == cartTitanId) continue;
-        
-        // Check if the cart titan is diving (jump-attacking)
-        if (!cartTitan.IsJumpAttacking && !cartTitan.IsJumpKicking) continue;
-        
-        // Lift ally
-        CartTitanLiftAlly(cartTitan, cartTitanId, hitPlayer, currentTime);
-        break;
     }
 }
 
@@ -4984,8 +4969,24 @@ private void CartTitanUpdate(IPlayer player, int playerId, float currentTime)
 
 private void CartTitanUpdateRescue(IPlayer player, int playerId, float currentTime, Vector2 playerPos)
 {
-    // Check if ally is still valid
-    if (!cartTitanLiftedAlly.ContainsKey(playerId)) return;
+    // If not currently lifting an ally, check if cart titan is holding an ally in a dive
+    if (!cartTitanLiftedAlly.ContainsKey(playerId) || cartTitanLiftedAlly[playerId] == null)
+    {
+        if (player.HoldingPlayerInDiveID > 0)
+        {
+            IPlayer tackled = Game.GetPlayer(player.HoldingPlayerInDiveID);
+            if (tackled != null && !tackled.IsDead && !tackled.IsRemoved && tackled.UniqueID != playerId)
+            {
+                PlayerTeam crtTeam = player.GetTeam();
+                if (crtTeam == PlayerTeam.Independent || tackled.GetTeam() == crtTeam)
+                {
+                    CartTitanLiftAlly(player, playerId, tackled, currentTime);
+                }
+            }
+        }
+        return;
+    }
+    
     IPlayer ally = cartTitanLiftedAlly[playerId];
     if (ally == null || ally.IsDead || ally.IsRemoved)
     {
@@ -4997,6 +4998,7 @@ private void CartTitanUpdateRescue(IPlayer player, int playerId, float currentTi
     int facing = player.FacingDirection;
     Vector2 allyPos = playerPos + new Vector2(-facing * 6f, 10f);
     ally.SetWorldPosition(allyPos);
+    ally.SetLinearVelocity(player.GetLinearVelocity());
     
     // Energy cost: 0.5% of max energy per second
     if (currentTime >= cartTitanLiftNextCostTime[playerId])
@@ -5021,9 +5023,11 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         return;
     }
     
-    // Gun player rides on titan's head
+    // Gun player rides on titan's head with zero velocity to avoid physics jitter
     Vector2 gunPos = playerPos + new Vector2(0f, CART_GUN_OFFSET_Y);
     gp.SetWorldPosition(gunPos);
+    gp.SetLinearVelocity(Vector2.Zero);
+    gp.SetAngularVelocity(0f);
     gp.SetFaceDirection(player.FacingDirection);
     
     // Block/aim-adjust mode: JUMP = aim up, CROUCH_ROLL_DIVE = aim down
@@ -5075,6 +5079,8 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     if (canFire)
     {
         cartTitanLastBulletFireTime[playerId] = currentTime;
+        cartTitanGunLastAimPos[playerId] = aimTarget;
+        cartTitanGunLastFacing[playerId] = player.FacingDirection;
         
         gp.ClearCommandQueue();
         if (gp.CurrentWeaponDrawn != WeaponItemType.Rifle)
@@ -5091,11 +5097,22 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     }
     else if (!attackHeld)
     {
-        // When not firing, keep aim updated smoothly
-        gp.ClearCommandQueue();
-        if (gp.CurrentWeaponDrawn != WeaponItemType.Rifle)
-            gp.AddCommand(new PlayerCommand(PlayerCommandType.DrawRifle));
-        gp.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimTarget, faceDir));
+        bool aimChanged = !cartTitanGunLastAimPos.ContainsKey(playerId) ||
+            !cartTitanGunLastFacing.ContainsKey(playerId) ||
+            cartTitanGunLastFacing[playerId] != player.FacingDirection ||
+            Math.Abs(cartTitanGunLastAimPos[playerId].Y - storedAimY) > 0.5f ||
+            Vector2.Distance(cartTitanGunLastAimPos[playerId], aimTarget) > 25f;
+
+        if (aimChanged)
+        {
+            cartTitanGunLastAimPos[playerId] = aimTarget;
+            cartTitanGunLastFacing[playerId] = player.FacingDirection;
+            
+            gp.ClearCommandQueue();
+            if (gp.CurrentWeaponDrawn != WeaponItemType.Rifle)
+                gp.AddCommand(new PlayerCommand(PlayerCommandType.DrawRifle));
+            gp.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimTarget, faceDir));
+        }
     }
 }
 
@@ -5141,6 +5158,8 @@ private void CleanupCartTitanData(int playerId)
     cartTitanBlockHeld.Remove(playerId);
     cartTitanGunAimY.Remove(playerId);
     cartTitanLastBulletFireTime.Remove(playerId);
+    cartTitanGunLastAimPos.Remove(playerId);
+    cartTitanGunLastFacing.Remove(playerId);
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)
