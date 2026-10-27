@@ -58,4 +58,5 @@ Size = 0.920f
                     - when block is pressed the titan will go readonly input mode and using up (JUMP) and down (CROUCH_ROLL_DIVE) virtual key, the titan can adjust the aim of uphead players aim, when released, set input mode enabled again and uphead bots aim will remain there same
                     - always show a '+' text object at the aim of uphead players aim
     
-                    
+
+        - Bot Usage: When the cart titan is a bot, he needs custom algorithm to use the titan wisely. I will provide you the algorighm in next task
