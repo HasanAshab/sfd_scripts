@@ -158,6 +158,10 @@ private const float CART_GUN_OFFSET_Y = 18f;
 // Cart Titan aim distance from gun (crosshair distance)
 private const float CART_GUN_AIM_DISTANCE = 30f;
 
+// Cart Titan aim angle limits in radians (MIN = max down limit, MAX = max up limit)
+private const float CART_GUN_AIM_MIN_ANGLE = -0.30f; // Maximum down aim limit (adjustable)
+private const float CART_GUN_AIM_MAX_ANGLE = (float)(Math.PI * 0.45); // Maximum up aim limit
+
 // Cart Titan gun pipe (BgRailing02A) default rotation offset in radians (adjustable)
 private const float CART_GUN_PIPE_DEFAULT_ROTATION = 7.9f;
 
@@ -4778,6 +4782,14 @@ private void CartTitanDestroyGunPipe(int cartTitanId)
 private void CartTitanSwitchGun(int cartTitanId, bool toSniper)
 {
     cartTitanGunIsSniper[cartTitanId] = toSniper;
+    if (cartTitanCrosshair.ContainsKey(cartTitanId))
+    {
+        IObjectText ch = cartTitanCrosshair[cartTitanId];
+        if (ch != null && !ch.IsRemoved)
+        {
+            ch.SetTextColor(toSniper ? Color.Red : new Color(255, 255, 100));
+        }
+    }
 }
 
 private void CartTitanSetBlockMode(IPlayer cartTitan, int cartTitanId, bool blockHeld)
@@ -4847,10 +4859,11 @@ private void CartTitanCreateCrosshair(int cartTitanId, Vector2 pos)
     IObjectText ch = (IObjectText)Game.CreateObject("Text", pos);
     if (ch != null)
     {
+        bool isSniper = cartTitanGunIsSniper.ContainsKey(cartTitanId) && cartTitanGunIsSniper[cartTitanId];
         ch.SetText("+");
         ch.SetTextAlignment(TextAlignment.Middle);
         ch.SetTextScale(0.95f);
-        ch.SetTextColor(new Color(255, 255, 100));
+        ch.SetTextColor(isSniper ? Color.Red : new Color(255, 255, 100));
         cartTitanCrosshair[cartTitanId] = ch;
     }
 }
@@ -4970,8 +4983,8 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         if (player.KeyPressed(VirtualKey.CROUCH_ROLL_DIVE))
             currentAngle -= 0.035f;
             
-        // Clamp to avoid aiming completely backwards into the cart titan
-        currentAngle = MathHelper.Clamp(currentAngle, -(float)(Math.PI * 0.45), (float)(Math.PI * 0.45));
+        // Clamp to avoid aiming completely backwards or beyond down limit
+        currentAngle = MathHelper.Clamp(currentAngle, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
         cartTitanGunAimAngle[playerId] = currentAngle;
     }
     
@@ -5013,9 +5026,15 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     {
         cartTitanLastBulletFireTime[playerId] = currentTime;
         
-        ProjectileItem projType = isSniper ? ProjectileItem.SNIPER : ProjectileItem.M60;
         Vector2 muzzlePos = gunPos + aimDirection * 10f;
-        Game.SpawnProjectile(projType, muzzlePos, aimDirection);
+        if (isSniper)
+        {
+            Game.SpawnProjectile(ProjectileItem.SNIPER, muzzlePos, aimDirection, ProjectilePowerup.Fire);
+        }
+        else
+        {
+            Game.SpawnProjectile(ProjectileItem.M60, muzzlePos, aimDirection);
+        }
         
         PlayerModifiers crtMods = player.GetModifiers();
         float energyCost = isSniper
