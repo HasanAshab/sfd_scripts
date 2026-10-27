@@ -1681,7 +1681,7 @@ private void ApplyAttackTitanHeightScaling(IPlayer player, int playerId, PlayerM
     mods.CurrentHealth = mods.MaxHealth;
     
     player.SetModifiers(mods);
-    
+
     // Give infinite strength boost if differ >= 3
     if (giveInfiniteStrength)
     {
