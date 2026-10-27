@@ -25,7 +25,7 @@
 // ============================================================================
 
 // ------------------------------- CONFIG -------------------------------------
-private const int    WINS_TO_TAKE_WAR = 4;                 // the first team to win this many battles wins the war
+private const int    WINS_TO_TAKE_WAR = 3;                 // the first team to win this many battles wins the war
 private const string TEAM1_NAME      = "Marley";           // PlayerTeam.Team1
 private const string TEAM2_NAME      = "Paradis";          // PlayerTeam.Team2
 
@@ -374,6 +374,8 @@ private string TeamName(PlayerTeam team)
 
 private void ShowStats()
 {
+    // TEMP: disabled
+    return;
     int wars1 = GetWarWins(PlayerTeam.Team1);
     int wars2 = GetWarWins(PlayerTeam.Team2);
     string text = "WAR WINS  |  " + TEAM1_NAME + " " + wars1 + " : " + wars2 + " " + TEAM2_NAME;
