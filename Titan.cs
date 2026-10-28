@@ -3833,8 +3833,8 @@ private void TryActivateBotStrengthBoost(IPlayer player, int playerId)
             if (myTeam != PlayerTeam.Independent && ally.GetTeam() != myTeam) continue;
             
             PlayerModifiers aMods = ally.GetModifiers();
-            float maxHp = aMods.MaxHealth > 0 ? (float)aMods.MaxHealth : 100f;
-            float hpPct = (float)ally.GetHealth() / maxHp;
+            float allyMaxHp = aMods.MaxHealth > 0 ? (float)aMods.MaxHealth : 100f;
+            float hpPct = (float)ally.GetHealth() / allyMaxHp;
             if (hpPct < 0.25f)
             {
                 QuickCommand(player, new PlayerCommand(PlayerCommandType.DrawPowerup));
