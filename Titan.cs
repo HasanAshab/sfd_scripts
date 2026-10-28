@@ -5376,6 +5376,48 @@ private void CrtBotTickRescue(IPlayer bot, int botId, float currentTime, Vector2
         Vector2 targetPos = target.GetWorldPosition();
         float distToAlly = Vector2.Distance(botPos, targetPos);
         
+        // Check if any enemy is currently aiming at the rescue ally -
+        // if so, abort approach and flee to safety (mirrors Attack Titan defensive hardening).
+        bool allyUnderAim = false;
+        {
+            PlayerTeam botTeam = bot.GetTeam();
+            int allyId = target.UniqueID;
+            foreach (IPlayer otherPlayer in Game.GetPlayers())
+            {
+                if (otherPlayer == null || otherPlayer.IsDead || otherPlayer.IsRemoved) continue;
+                if (otherPlayer.UniqueID == botId || otherPlayer.UniqueID == allyId) continue;
+                PlayerTeam otherTeam = otherPlayer.GetTeam();
+                if (botTeam != PlayerTeam.Independent && (otherTeam == botTeam || otherTeam == PlayerTeam.Independent)) continue;
+                IPlayer aimedTarget = GetAimedPlayer(otherPlayer);
+                if (aimedTarget != null && aimedTarget.UniqueID == allyId)
+                {
+                    allyUnderAim = true;
+                    break;
+                }
+            }
+        }
+        
+        if (allyUnderAim)
+        {
+            // Ally is in an enemy's aim ray - flee to safety rather than walking into fire
+            Vector2 threatPos = closestEnemy != null ? closestEnemy.GetWorldPosition() : targetPos;
+            IObjectPathNode fleeNode = CrtBotFindFleeNode(bot, threatPos);
+            if (fleeNode != null)
+            {
+                BotBehaviorSet bS = bot.GetBotBehaviorSet();
+                bS.EliminateEnemies = false;
+                bS.RangedWeaponUsage = false;
+                bS.MeleeWeaponUsage = false;
+                bS.MeleeUsage = false;
+                bS.ChaseRange = 20;
+                bS.GuardRange = 9;
+                bS.ChokePointPlayerCountThreshold = 0;
+                bot.SetBotBehaviorSet(bS);
+                bot.SetGuardTarget(fleeNode);
+            }
+            return;
+        }
+        
         // Reached the ally? (within 28 units)
         if (distToAlly <= 28f)
         {
