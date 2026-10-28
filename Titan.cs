@@ -2401,6 +2401,23 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
         TryActivateBotStrengthBoost(player, playerId);
     }
     
+    // If an ally was damaged, check if any allied Cart Titan bot owner should transform to rescue (< 25% HP)
+    PlayerTeam damagedTeam = player.GetTeam();
+    foreach (var kvp in assignedTitanPowers)
+    {
+        if (kvp.Value == TitanType.Cart)
+        {
+            IPlayer cartOwner = Game.GetPlayer(kvp.Key);
+            if (cartOwner != null && cartOwner.IsBot && !cartOwner.IsDead && cartOwner.UniqueID != playerId && !titanPlayers.ContainsKey(cartOwner.UniqueID))
+            {
+                if (damagedTeam == PlayerTeam.Independent || cartOwner.GetTeam() == damagedTeam)
+                {
+                    TryActivateBotStrengthBoost(cartOwner, cartOwner.UniqueID);
+                }
+            }
+        }
+    }
+    
     // Check if Armored Titan with armor ON
     if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] != TitanType.Armored) return;
     if (!armoredTitanArmorOn.ContainsKey(playerId) || !armoredTitanArmorOn[playerId]) return;
@@ -3806,6 +3823,26 @@ private void TryActivateBotStrengthBoost(IPlayer player, int playerId)
     if (player.GetStrengthBoostTime() > 0) return;
     if (titanPlayers.ContainsKey(playerId)) return;
     
+    // Extra trigger for Cart Titan bot owner: if any ally has < 25% HP, transform immediately!
+    if (assignedTitanPowers.ContainsKey(playerId) && assignedTitanPowers[playerId] == TitanType.Cart)
+    {
+        PlayerTeam myTeam = player.GetTeam();
+        foreach (IPlayer ally in Game.GetPlayers())
+        {
+            if (ally == null || ally.IsDead || ally.IsRemoved || ally.UniqueID == playerId) continue;
+            if (myTeam != PlayerTeam.Independent && ally.GetTeam() != myTeam) continue;
+            
+            PlayerModifiers aMods = ally.GetModifiers();
+            float maxHp = aMods.MaxHealth > 0 ? (float)aMods.MaxHealth : 100f;
+            float hpPct = (float)ally.GetHealth() / maxHp;
+            if (hpPct < 0.25f)
+            {
+                QuickCommand(player, new PlayerCommand(PlayerCommandType.DrawPowerup));
+                return;
+            }
+        }
+    }
+    
     PlayerModifiers mods = player.GetModifiers();
     float currentHp = player.GetHealth();
     float maxHp = mods.MaxHealth;
@@ -5070,10 +5107,12 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         if (isSniper)
         {
             Game.SpawnProjectile(ProjectileItem.SNIPER, muzzlePos, aimDirection, ProjectilePowerup.Fire);
+            Game.PlaySound("Sniper", muzzlePos);
         }
         else
         {
             Game.SpawnProjectile(ProjectileItem.M60, muzzlePos, aimDirection);
+            Game.PlaySound("M60", muzzlePos);
         }
         
         PlayerModifiers fireMods = player.GetModifiers();
@@ -5224,6 +5263,8 @@ private void CrtBotApplyMode(IPlayer bot, int botId, float currentTime, CartTita
         bS.EliminateEnemies = false;
         bS.RangedWeaponUsage = false;
         bS.MeleeWeaponUsage = false;
+        bS.ChaseRange = 250;
+        bS.GuardRange = 5;
     }
     else
     {
@@ -5268,10 +5309,13 @@ private IObjectPathNode CrtBotFindFleeNode(IPlayer bot, Vector2 threatPos)
 }
 
 /// <summary>
-/// Run-away from enemies (bot Rescue behaviour tick).
+/// Rescue mode tick: reach for low-HP ally and lift them programmatically, then flee from enemies.
 /// </summary>
 private void CrtBotTickRescue(IPlayer bot, int botId, float currentTime, Vector2 botPos)
 {
+    bool hasAlly = cartTitanLiftedAlly.ContainsKey(botId) && cartTitanLiftedAlly[botId] != null &&
+                   !cartTitanLiftedAlly[botId].IsDead && !cartTitanLiftedAlly[botId].IsRemoved;
+    
     // Find closest enemy
     IPlayer closestEnemy = (from p in Game.GetPlayers()
         let pt = p.GetTeam()
@@ -5281,19 +5325,40 @@ private void CrtBotTickRescue(IPlayer bot, int botId, float currentTime, Vector2
         orderby Vector2.Distance(p.GetWorldPosition(), botPos) ascending
         select p).FirstOrDefault();
     
-    if (closestEnemy == null || Vector2.Distance(closestEnemy.GetWorldPosition(), botPos) > CRT_BOT_AVOID_ENEMY_RANGE)
+    if (!hasAlly)
     {
-        // No nearby enemy — let AI roam/guard naturally toward rescue target
-        if (cartTitanBotRescueTarget.ContainsKey(botId))
+        // Check rescue target: must reach the ally before lifting them
+        if (!cartTitanBotRescueTarget.ContainsKey(botId)) return;
+        IPlayer target = cartTitanBotRescueTarget[botId];
+        if (target == null || target.IsDead || target.IsRemoved)
         {
-            IPlayer target = cartTitanBotRescueTarget[botId];
-            if (target != null && !target.IsDead && !target.IsRemoved)
+            cartTitanBotRescueTarget.Remove(botId);
+            return;
+        }
+        
+        Vector2 targetPos = target.GetWorldPosition();
+        float distToAlly = Vector2.Distance(botPos, targetPos);
+        
+        // Reached the ally? (within 28 units)
+        if (distToAlly <= 28f)
+        {
+            CartTitanLiftAlly(bot, botId, target, currentTime);
+        }
+        else
+        {
+            // Move toward ally
+            if (!(bot.GetGuardTarget() is IPlayer) || (IPlayer)bot.GetGuardTarget() != target)
             {
-                // Guard toward ally
-                if (!(bot.GetGuardTarget() is IPlayer) || bot.GetGuardTarget() != (IObject)target)
-                    bot.SetGuardTarget(target);
+                bot.SetGuardTarget(target);
             }
         }
+        return;
+    }
+    
+    // Ally is lifted onto backpack: flee from enemies until ally HP > 80%
+    if (closestEnemy == null || Vector2.Distance(closestEnemy.GetWorldPosition(), botPos) > CRT_BOT_AVOID_ENEMY_RANGE)
+    {
+        // No nearby enemy — stay safe
         return;
     }
     
@@ -5411,30 +5476,18 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
     if (useSniper != currentSniper)
         CartTitanSwitchGun(botId, useSniper);
     
-    // Check fire interval — M60=500ms, Sniper=2000ms (matching player)
     bool isSniper = cartTitanGunIsSniper.ContainsKey(botId) && cartTitanGunIsSniper[botId];
-    float fireInterval = isSniper ? 2000f : 500f;
-    if (cartTitanLastBulletFireTime.ContainsKey(botId) &&
-        currentTime - cartTitanLastBulletFireTime[botId] < fireInterval)
-        return;
-    
-    // Energy check (#1): don't fire if not enough
-    PlayerModifiers crtMods = bot.GetModifiers();
-    float energyCost = isSniper
-        ? crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_SNIPER
-        : crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_M60;
-    if (crtMods.CurrentEnergy < energyCost) return;
     
     // Calculate exact aim direction toward enemy torso
     Vector2 gunPos = botPos + new Vector2(0f, CART_GUN_OFFSET_Y);
     Vector2 enemyPos = closestEnemy.GetWorldPosition() + new Vector2(0f, 10f); // Aim at torso
-    Vector2 aimDir = enemyPos - gunPos;
-    if (aimDir == Vector2.Zero) return;
-    float aimLen = (float)Math.Sqrt(aimDir.X * aimDir.X + aimDir.Y * aimDir.Y);
-    aimDir = aimDir / aimLen;
+    Vector2 toEnemy = enemyPos - gunPos;
+    if (toEnemy == Vector2.Zero) return;
+    float toEnemyLen = (float)Math.Sqrt(toEnemy.X * toEnemy.X + toEnemy.Y * toEnemy.Y);
+    Vector2 targetDir = toEnemy / toEnemyLen;
     
-    // Compute local aim angle for clamping (#6: respect min/max)
-    float rawAimAngle = (float)Math.Atan2(aimDir.Y, aimDir.X);
+    // Compute local aim angle for target (#6: respect min/max)
+    float rawAimAngle = (float)Math.Atan2(targetDir.Y, targetDir.X);
     // In SFD facing right = 0 rad, facing left = pi rad.
     float forwardAngle = (bot.FacingDirection > 0) ? 0f : (float)Math.PI;
     float localAimAngle = rawAimAngle - forwardAngle;
@@ -5442,12 +5495,50 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
     while (localAimAngle > Math.PI)  localAimAngle -= (float)(2 * Math.PI);
     while (localAimAngle < -Math.PI) localAimAngle += (float)(2 * Math.PI);
     
+    float desiredAngle = MathHelper.Clamp(localAimAngle, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
+    
+    // Smoothly adjust aim angle each tick like human players (#3: move by motion, not in a blink)
+    float currentAngle = cartTitanGunAimAngle.ContainsKey(botId) ? cartTitanGunAimAngle[botId] : 0f;
+    float aimSpeed = isSniper ? 0.07f : 0.12f;
+    float angleDiff = desiredAngle - currentAngle;
+    if (Math.Abs(angleDiff) <= aimSpeed)
+    {
+        currentAngle = desiredAngle;
+    }
+    else
+    {
+        currentAngle += Math.Sign(angleDiff) * aimSpeed;
+    }
+    cartTitanGunAimAngle[botId] = currentAngle;
+    
     // If target is outside the gun's arc, skip firing this tick
     if (localAimAngle < CART_GUN_AIM_MIN_ANGLE || localAimAngle > CART_GUN_AIM_MAX_ANGLE)
         return;
     
-    // Friendly-fire check (#4): raycast from muzzle toward enemy; abort if an ally is in between
+    // Wait until gun aim has smoothly aligned close to the target before firing
+    if (Math.Abs(desiredAngle - currentAngle) > 0.15f)
+        return;
+    
+    // Check fire interval — M60=500ms, Sniper=2000ms (matching player)
+    float fireInterval = isSniper ? 2000f : 500f;
+    if (cartTitanLastBulletFireTime.ContainsKey(botId) &&
+        currentTime - cartTitanLastBulletFireTime[botId] < fireInterval)
+        return;
+    
+    // Energy check: don't fire if not enough
+    PlayerModifiers crtMods = bot.GetModifiers();
+    float energyCost = isSniper
+        ? crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_SNIPER
+        : crtMods.MaxEnergy * CART_GUN_ENERGY_PER_BULLET_M60;
+    if (crtMods.CurrentEnergy < energyCost) return;
+    
+    // Compute current muzzle position and aim direction along the gun's physical direction
+    float cosAngle = (float)Math.Cos(currentAngle);
+    float sinAngle = (float)Math.Sin(currentAngle);
+    Vector2 aimDir = new Vector2(bot.FacingDirection * cosAngle, sinAngle);
     Vector2 muzzlePos = gunPos + aimDir * 10f;
+    
+    // Friendly-fire check (#4): raycast from muzzle toward enemy; abort if an ally is in between
     bool friendlyInWay = false;
     PlayerTeam botTeam = bot.GetTeam();
     foreach (IPlayer ally in Game.GetPlayers())
@@ -5484,40 +5575,18 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
         aimDir = new Vector2(aimDir.X * cosS - aimDir.Y * sinS, aimDir.X * sinS + aimDir.Y * cosS);
     }
     
-    // Update stored aim angle so the gun pipe visual + crosshair track the target (#5)
-    cartTitanGunAimAngle[botId] = MathHelper.Clamp(localAimAngle, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
-    
-    // Update gun pipe rotation visually
-    if (cartTitanGunPipe.ContainsKey(botId))
-    {
-        IObject pipeObj = cartTitanGunPipe[botId];
-        if (pipeObj != null && !pipeObj.IsRemoved)
-        {
-            float pipeAngle = (float)Math.Atan2(aimDir.Y, aimDir.X) + CART_GUN_PIPE_DEFAULT_ROTATION;
-            pipeObj.SetAngle(pipeAngle);
-        }
-    }
-    
-    // Update crosshair position (#5)
-    Vector2 aimTarget = gunPos + aimDir * CART_GUN_AIM_DISTANCE;
-    if (cartTitanCrosshair.ContainsKey(botId))
-    {
-        IObjectText ch = cartTitanCrosshair[botId];
-        if (ch != null && !ch.IsRemoved)
-            ch.SetWorldPosition(aimTarget);
-        else
-        {
-            cartTitanCrosshair.Remove(botId);
-            CartTitanCreateCrosshair(botId, aimTarget);
-        }
-    }
-    
-    // Fire!
+    // Fire & play sound!
     cartTitanLastBulletFireTime[botId] = currentTime;
     if (isSniper)
+    {
         Game.SpawnProjectile(ProjectileItem.SNIPER, muzzlePos, aimDir, ProjectilePowerup.Fire);
+        Game.PlaySound("Sniper", muzzlePos);
+    }
     else
+    {
         Game.SpawnProjectile(ProjectileItem.M60, muzzlePos, aimDir);
+        Game.PlaySound("M60", muzzlePos);
+    }
     
     crtMods.CurrentEnergy = Math.Max(0f, crtMods.CurrentEnergy - energyCost);
     bot.SetModifiers(crtMods);
