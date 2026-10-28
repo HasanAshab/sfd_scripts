@@ -5380,93 +5380,100 @@ private void CrtBotTickRescue(IPlayer bot, int botId, float currentTime, Vector2
 }
 
 /// <summary>
-/// Offensive mode bot tick: 70% fire, 30% avoid. Handles bullet selection and aim.
+/// Offensive mode bot tick: runs away from close enemies to keep distance while continuously aiming & firing at the best target.
 /// </summary>
 private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vector2 botPos)
 {
-    // Decide avoid vs fight (re-roll periodically)
-    bool behCheckDue = !cartTitanBotLastBehCheck.ContainsKey(botId) ||
-                       currentTime - cartTitanBotLastBehCheck[botId] >= CRT_BOT_BEH_CHECK_INTERVAL;
-    if (behCheckDue)
-    {
-        cartTitanBotLastBehCheck[botId] = currentTime;
-        cartTitanBotIsAvoiding[botId] = rnd.NextDouble() > CRT_BOT_OFFENSIVE_FIRE_CHANCE; // 30% avoid
-    }
-    
-    bool isAvoiding = cartTitanBotIsAvoiding.ContainsKey(botId) && cartTitanBotIsAvoiding[botId];
-    
-    // Find closest enemy
-    IPlayer closestEnemy = (from p in Game.GetPlayers()
+    // Find all alive enemies ordered by distance
+    List<IPlayer> enemies = (from p in Game.GetPlayers()
         let bt = bot.GetTeam()
         let pt = p.GetTeam()
         where p != null && !p.IsDead && !p.IsRemoved && p.UniqueID != botId &&
               (bt == PlayerTeam.Independent ? true : pt != bt)
         orderby Vector2.Distance(p.GetWorldPosition(), botPos) ascending
-        select p).FirstOrDefault();
+        select p).ToList();
     
-    if (isAvoiding)
+    if (enemies.Count == 0) return;
+    
+    IPlayer closestEnemy = enemies[0];
+    
+    // --- 1. Movement: Run away / kite if any enemy is within avoidance range ---
+    bool enemyTooClose = Vector2.Distance(closestEnemy.GetWorldPosition(), botPos) <= CRT_BOT_AVOID_ENEMY_RANGE;
+    if (enemyTooClose)
     {
-        // Flee from closest enemy
-        if (closestEnemy != null && Vector2.Distance(closestEnemy.GetWorldPosition(), botPos) <= CRT_BOT_AVOID_ENEMY_RANGE)
+        IObjectPathNode fleeNode = CrtBotFindFleeNode(bot, closestEnemy.GetWorldPosition());
+        if (fleeNode != null)
         {
-            IObjectPathNode fleeNode = CrtBotFindFleeNode(bot, closestEnemy.GetWorldPosition());
-            if (fleeNode != null)
-            {
-                BotBehaviorSet bS = bot.GetBotBehaviorSet();
-                bS.EliminateEnemies = false;
-                bS.RangedWeaponUsage = false;
-                bS.MeleeWeaponUsage = false;
-                bS.MeleeUsage = false;
-                bS.ChaseRange = 20;
-                bS.GuardRange = 9;
-                bS.ChokePointPlayerCountThreshold = 0;
-                bot.SetBotBehaviorSet(bS);
-                bot.SetGuardTarget(fleeNode);
-            }
+            BotBehaviorSet bS = bot.GetBotBehaviorSet();
+            bS.EliminateEnemies = false;
+            bS.RangedWeaponUsage = false;
+            bS.MeleeWeaponUsage = false;
+            bS.MeleeUsage = false;
+            bS.ChaseRange = 20;
+            bS.GuardRange = 9;
+            bS.ChokePointPlayerCountThreshold = 0;
+            bot.SetBotBehaviorSet(bS);
+            bot.SetGuardTarget(fleeNode);
         }
-        return;
     }
-    
-    // --- Fire mode ---
-    if (closestEnemy == null) return;
-    
-    // Ensure bot behavior allows normal movement toward target
-    BotBehaviorSet firebS = bot.GetBotBehaviorSet();
-    if (!firebS.EliminateEnemies)
+    else
     {
-        firebS.EliminateEnemies = true;
-        firebS.ChaseRange = 0;
-        firebS.GuardRange = 0;
-        firebS.ChokePointPlayerCountThreshold = 1;
-        bot.SetBotBehaviorSet(firebS);
-        bot.SetGuardTarget(null);
+        // Enemy is at a safe distance: move normally to patrol / engage
+        BotBehaviorSet firebS = bot.GetBotBehaviorSet();
+        if (!firebS.EliminateEnemies)
+        {
+            firebS.EliminateEnemies = true;
+            firebS.ChaseRange = 0;
+            firebS.GuardRange = 0;
+            firebS.ChokePointPlayerCountThreshold = 1;
+            bot.SetBotBehaviorSet(firebS);
+            bot.SetGuardTarget(null);
+        }
     }
+    
+    // --- 2. Target Selection: Prioritize closest enemy with clear line-of-sight (fallback to closest) ---
+    Vector2 gunPos = botPos + new Vector2(0f, CART_GUN_OFFSET_Y);
+    RayCastInput losInput = new RayCastInput(true)
+    {
+        ProjectileHit = RayCastFilterMode.True
+    };
+    
+    IPlayer targetEnemy = null;
+    foreach (IPlayer e in enemies)
+    {
+        Vector2 ePos = e.GetWorldPosition() + new Vector2(0f, 10f);
+        RayCastResult[] hits = Game.RayCast(gunPos, ePos, losInput);
+        if (hits.Length == 0 || !hits[0].Hit || hits[0].IsPlayer || hits[0].ObjectID == e.UniqueID)
+        {
+            targetEnemy = e;
+            break;
+        }
+    }
+    if (targetEnemy == null)
+        targetEnemy = closestEnemy;
     
     // Determine bullet type based on enemy size modifier — locked per target, re-evaluated only on enemy change
-    int currentEnemyId = closestEnemy.UniqueID;
+    int currentEnemyId = targetEnemy.UniqueID;
     bool lockedEnemy = cartTitanBotLockedEnemy.ContainsKey(botId) && cartTitanBotLockedEnemy[botId] == currentEnemyId;
     bool useSniper;
     if (lockedEnemy && cartTitanBotLockedIsSniper.ContainsKey(botId))
     {
-        // Same enemy: keep locked bullet type
         useSniper = cartTitanBotLockedIsSniper[botId];
     }
     else
     {
-        // New/different enemy: roll bullet type based on size
         float enemySize = 1.0f;
-        if (titanSizes.ContainsKey(closestEnemy.UniqueID))
-            enemySize = titanSizes[closestEnemy.UniqueID];
+        if (titanSizes.ContainsKey(targetEnemy.UniqueID))
+            enemySize = titanSizes[targetEnemy.UniqueID];
         else
         {
-            PlayerModifiers em = closestEnemy.GetModifiers();
+            PlayerModifiers em = targetEnemy.GetModifiers();
             enemySize = em.SizeModifier;
         }
         float sizeMin = 0.5f; float sizeMax = 1.7f;
         float t = MathHelper.Clamp((enemySize - sizeMin) / (sizeMax - sizeMin), 0f, 1f);
         float m60Chance = 0.05f + t * 0.90f; // 0.05 at size=0.5, 0.95 at size=1.7
         useSniper = rnd.NextDouble() > (double)m60Chance;
-        // Lock it
         cartTitanBotLockedEnemy[botId] = currentEnemyId;
         cartTitanBotLockedIsSniper[botId] = useSniper;
     }
@@ -5478,26 +5485,27 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
     
     bool isSniper = cartTitanGunIsSniper.ContainsKey(botId) && cartTitanGunIsSniper[botId];
     
-    // Calculate exact aim direction toward enemy torso
-    Vector2 gunPos = botPos + new Vector2(0f, CART_GUN_OFFSET_Y);
-    Vector2 enemyPos = closestEnemy.GetWorldPosition() + new Vector2(0f, 10f); // Aim at torso
+    // Turn bot to face target so gun can physically aim forward at them
+    Vector2 enemyPos = targetEnemy.GetWorldPosition() + new Vector2(0f, 10f);
     Vector2 toEnemy = enemyPos - gunPos;
     if (toEnemy == Vector2.Zero) return;
-    float toEnemyLen = (float)Math.Sqrt(toEnemy.X * toEnemy.X + toEnemy.Y * toEnemy.Y);
-    Vector2 targetDir = toEnemy / toEnemyLen;
     
-    // Compute local aim angle for target (#6: respect min/max)
-    float rawAimAngle = (float)Math.Atan2(targetDir.Y, targetDir.X);
-    // In SFD facing right = 0 rad, facing left = pi rad.
-    float forwardAngle = (bot.FacingDirection > 0) ? 0f : (float)Math.PI;
-    float localAimAngle = rawAimAngle - forwardAngle;
-    // Normalise to [-pi, pi]
-    while (localAimAngle > Math.PI)  localAimAngle -= (float)(2 * Math.PI);
-    while (localAimAngle < -Math.PI) localAimAngle += (float)(2 * Math.PI);
+    int targetFacing = (toEnemy.X >= 0) ? 1 : -1;
+    if (bot.FacingDirection != targetFacing)
+    {
+        bot.SetFaceDirection(targetFacing);
+    }
     
-    float desiredAngle = MathHelper.Clamp(localAimAngle, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
+    // Calculate elevation angle relative to forward facing
+    // Atan2(Y, Math.Abs(X)) gives:
+    //   Y > 0 -> positive angle (aim UP)
+    //   Y < 0 -> negative angle (aim DOWN)
+    // This perfectly matches aimDirection = (FacingDirection * cos(angle), sin(angle))
+    float forwardDist = Math.Max(1f, Math.Abs(toEnemy.X));
+    float desiredElevation = (float)Math.Atan2(toEnemy.Y, forwardDist);
+    float desiredAngle = MathHelper.Clamp(desiredElevation, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
     
-    // Smoothly adjust aim angle each tick like human players (#3: move by motion, not in a blink)
+    // Smoothly adjust aim angle each tick like human players
     float currentAngle = cartTitanGunAimAngle.ContainsKey(botId) ? cartTitanGunAimAngle[botId] : 0f;
     float aimSpeed = isSniper ? 0.07f : 0.12f;
     float angleDiff = desiredAngle - currentAngle;
@@ -5511,15 +5519,15 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
     }
     cartTitanGunAimAngle[botId] = currentAngle;
     
-    // If target is outside the gun's arc, skip firing this tick
-    if (localAimAngle < CART_GUN_AIM_MIN_ANGLE || localAimAngle > CART_GUN_AIM_MAX_ANGLE)
+    // If target's actual elevation is outside physical gun arc, skip firing (can't aim that high/low)
+    if (desiredElevation < CART_GUN_AIM_MIN_ANGLE || desiredElevation > CART_GUN_AIM_MAX_ANGLE)
         return;
     
-    // Wait until gun aim has smoothly aligned close to the target before firing
-    if (Math.Abs(desiredAngle - currentAngle) > 0.15f)
+    // Wait until gun aim has smoothly aligned close to target before firing (within ~7 degrees)
+    if (Math.Abs(desiredAngle - currentAngle) > 0.12f)
         return;
     
-    // Check fire interval — M60=500ms, Sniper=2000ms (matching player)
+    // Check fire interval
     float fireInterval = isSniper ? 1500f : 200f;
     if (cartTitanLastBulletFireTime.ContainsKey(botId) &&
         currentTime - cartTitanLastBulletFireTime[botId] < fireInterval)
@@ -5538,27 +5546,33 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
     Vector2 aimDir = new Vector2(bot.FacingDirection * cosAngle, sinAngle);
     Vector2 muzzlePos = gunPos + aimDir * 10f;
     
-    // Friendly-fire check (#4): raycast from muzzle toward enemy; abort if an ally is in between
+    // Check line of sight from muzzle to enemy (don't shoot into walls)
+    RayCastResult[] muzzleWallHits = Game.RayCast(muzzlePos, enemyPos, losInput);
+    if (muzzleWallHits.Length > 0 && muzzleWallHits[0].Hit && !muzzleWallHits[0].IsPlayer && muzzleWallHits[0].ObjectID != targetEnemy.UniqueID)
+    {
+        return; // Wall/ground in the way!
+    }
+    
+    // Friendly-fire check: abort if an ally is between muzzle and enemy
     bool friendlyInWay = false;
     PlayerTeam botTeam = bot.GetTeam();
     foreach (IPlayer ally in Game.GetPlayers())
     {
         if (ally == null || ally.IsDead || ally.IsRemoved) continue;
-        if (ally.UniqueID == botId || ally.UniqueID == closestEnemy.UniqueID) continue;
-        // Must be an ally
+        if (ally.UniqueID == botId || ally.UniqueID == targetEnemy.UniqueID) continue;
         PlayerTeam at = ally.GetTeam();
         if (botTeam != PlayerTeam.Independent && at != botTeam) continue;
-        // Check if ally is roughly between the muzzle and the enemy
+        
         Vector2 allyPos = ally.GetWorldPosition();
         Vector2 toAlly = allyPos - muzzlePos;
         float dotAlly = toAlly.X * aimDir.X + toAlly.Y * aimDir.Y;
-        if (dotAlly <= 0f) continue; // ally is behind the gun
+        if (dotAlly <= 0f) continue; // ally behind gun
         float dotEnemy = (enemyPos - muzzlePos).X * aimDir.X + (enemyPos - muzzlePos).Y * aimDir.Y;
-        if (dotAlly >= dotEnemy) continue; // ally is beyond the enemy
-        // Perpendicular distance from aim line
+        if (dotAlly >= dotEnemy) continue; // ally beyond enemy
+        
         Vector2 rejection = new Vector2(toAlly.X - aimDir.X * dotAlly, toAlly.Y - aimDir.Y * dotAlly);
         float perpDist = (float)Math.Sqrt(rejection.X * rejection.X + rejection.Y * rejection.Y);
-        if (perpDist <= 12f) // ~half player width threshold
+        if (perpDist <= 12f)
         {
             friendlyInWay = true;
             break;
@@ -5566,8 +5580,8 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
     }
     if (friendlyInWay) return;
     
-    // Apply accuracy spread (80% accurate → 20% get random angle offset)
-    if (rnd.NextDouble() > CRT_BOT_FIRE_ACCURACY)
+    // Apply accuracy spread if accuracy < 100%
+    if (CRT_BOT_FIRE_ACCURACY < 1f && rnd.NextDouble() > CRT_BOT_FIRE_ACCURACY)
     {
         float spread = (float)((rnd.NextDouble() * 2.0 - 1.0) * CRT_BOT_AIM_SPREAD_MAX);
         float cosS = (float)Math.Cos(spread);
