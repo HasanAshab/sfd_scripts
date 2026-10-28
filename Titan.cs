@@ -81,7 +81,7 @@ private const float JAW_HUNT_VICTIM_STUN_DURATION = 0f; // 0 seconds input disab
 // Jaw Titan bot backstab targeting
 private const float JAW_BOT_BACKSTAB_COMBAT_RANGE = 50f;   // Range for in-combat backstab check
 private const float JAW_BOT_COMBAT_TIMEOUT_MS = 3000f;     // Time with no melee before considered out-of-combat
-private const float JAW_BOT_TARGETING_INTERVAL_MS = 300f;  // How often to re-evaluate target
+private const float JAW_BOT_TARGETING_INTERVAL_MS = 3000f;  // How often to re-evaluate target
 
 // Jaw Titan sharp claw ability
 private const int JAW_SHARP_CLAW_PUNCH_COUNT = 3; // 3rd punch breaks objects
