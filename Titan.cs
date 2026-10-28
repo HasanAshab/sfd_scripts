@@ -4911,8 +4911,14 @@ private void CartTitanLiftAlly(IPlayer cartTitan, int cartTitanId, IPlayer ally,
     cartTitanLiftedAlly[cartTitanId] = ally;
     cartTitanLiftNextCostTime[cartTitanId] = currentTime + 1000f; // first cost after 1 second
     
-    // Apply damage reduction to ally
+    // Apply damage reduction and instantly set energy to full at the moment of lifting
     PlayerModifiers allyMods = ally.GetModifiers();
+    if (allyMods.MaxEnergy <= 0)
+    {
+        float maxE = ally.GetMaxEnergy();
+        allyMods.MaxEnergy = maxE > 0 ? (int)maxE : 100;
+    }
+    allyMods.CurrentEnergy = allyMods.MaxEnergy;
     allyMods.MeleeDamageTakenModifier      *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
     allyMods.ProjectileDamageTakenModifier *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
     allyMods.ExplosionDamageTakenModifier  *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
