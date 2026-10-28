@@ -5319,36 +5319,92 @@ private void CrtBotApplyMode(IPlayer bot, int botId, float currentTime, CartTita
     bot.SetBotBehaviorSet(bS);
 }
 
-/// <summary>
-/// Helper: find a path node far from a threat position, favouring the opposite side.
-/// Mirrors the pattern from Bot_Avoid_Explosives.cs.
-/// </summary>
+private bool CrtBotIsSafeFleeNode(IObjectPathNode n)
+{
+    if (n == null || n.IsRemoved) return false;
+    if (!n.GetNodeEnabled() || n.GetNodeBlockedByPathZone()) return false;
+    if (n.GetIsElevatorNode() || n.GetFollowObject() != null) return false;
+    PathNodeType t = n.GetPathNodeType();
+    return t == PathNodeType.Ground || t == PathNodeType.Platform; // no ledge-grab / ladder nodes
+}
+
+private bool CrtBotConnUsable(IObjectPathNodeConnection c)
+{
+    return c != null && !c.IsRemoved && c.GetConnectionEnabled() && !c.GetConnectionBlockedByPathZone();
+}
+
 private IObjectPathNode CrtBotFindFleeNode(IPlayer bot, Vector2 threatPos)
 {
+    if (bot == null || bot.IsRemoved || bot.IsFalling) return null; // don't plan while airborne
+
     Vector2 botPos = bot.GetWorldPosition();
     Area searchArea = new Area(botPos - new Vector2(80f, 70f), botPos + new Vector2(80f, 70f));
-    
-    // Find nearest blocked node (obstacle side)
-    IObjectPathNode blockedNearNode = (from P in Game.GetObjectsByArea<IObjectPathNode>(searchArea, PhysicsLayer.Background)
-        orderby Vector2.Distance(P.GetWorldPosition(), botPos) ascending
-        where P != null && (P.GetNodeEnabled() == false ||
-            (from O in P.GetPathNodeConnections() where O.GetConnectionEnabled() == false || O.GetConnectionBlockedByPathZone() select O).FirstOrDefault() != null) &&
-            Vector2.Distance(P.GetWorldPosition(), botPos) <= 22
-        select P).FirstOrDefault();
-    
-    // Pick a valid node as far as possible from the threat, same side as blocked-node-relative to bot
-    IObjectPathNode node = (from Q in Game.GetObjectsByArea<IObjectPathNode>(searchArea, PhysicsLayer.Background)
-        orderby Vector2.Distance(Q.GetWorldPosition(), threatPos) descending
-        where Q != null && Q.GetNodeEnabled() &&
-            (from N in Q.GetPathNodeConnections() where N.GetConnectionEnabled() == false || N.GetConnectionBlockedByPathZone() select N).FirstOrDefault() == null &&
-            !Q.IsRemoved &&
-            (blockedNearNode == null ||
-                ((botPos.X - blockedNearNode.GetWorldPosition().X) >= 0
-                    ? (Q.GetWorldPosition().X - blockedNearNode.GetWorldPosition().X) >= 0
-                    : (Q.GetWorldPosition().X - blockedNearNode.GetWorldPosition().X) < 0))
-        select Q).FirstOrDefault();
-    
-    return node;
+
+    // 1. Collect only safe nodes
+    var usable = new Dictionary<int, IObjectPathNode>();
+    foreach (IObjectPathNode n in Game.GetObjectsByArea<IObjectPathNode>(searchArea, PhysicsLayer.Background))
+        if (CrtBotIsSafeFleeNode(n)) usable[n.UniqueID] = n;
+    if (usable.Count == 0) return null;
+
+    // 2. Start node = nearest safe node to the bot
+    IObjectPathNode start = null; float best = float.MaxValue;
+    foreach (var n in usable.Values)
+    {
+        float d = Vector2.Distance(n.GetWorldPosition(), botPos);
+        if (d < best) { best = d; start = n; }
+    }
+    if (start == null || best > 22f) return null; // bot isn't actually on the path network
+
+    // 3. Flood-fill over enabled, unblocked connections (max 10 hops) => reachable set
+    var reachable = new Dictionary<int, IObjectPathNode>();
+    var queue = new Queue<KeyValuePair<IObjectPathNode, int>>();
+    reachable[start.UniqueID] = start;
+    queue.Enqueue(new KeyValuePair<IObjectPathNode, int>(start, 0));
+    while (queue.Count > 0)
+    {
+        var cur = queue.Dequeue();
+        if (cur.Value >= 10) continue;
+        foreach (IObjectPathNodeConnection c in cur.Key.GetPathNodeConnections())
+        {
+            if (!CrtBotConnUsable(c)) continue;
+            IObjectPathNode other = c.GetPathNodeAUniqueID() == cur.Key.UniqueID ? c.GetPathNodeB() : c.GetPathNodeA();
+            if (other == null || reachable.ContainsKey(other.UniqueID) || !usable.ContainsKey(other.UniqueID)) continue;
+            reachable[other.UniqueID] = other;
+            queue.Enqueue(new KeyValuePair<IObjectPathNode, int>(other, cur.Value + 1));
+        }
+    }
+
+    // 4. Nearest obstacle node (same as before, but also honouring node-level blocking)
+    IObjectPathNode blocked = null; float bd = 22f;
+    foreach (IObjectPathNode P in Game.GetObjectsByArea<IObjectPathNode>(searchArea, PhysicsLayer.Background))
+    {
+        if (P == null || P.IsRemoved) continue;
+        float d = Vector2.Distance(P.GetWorldPosition(), botPos);
+        if (d > bd) continue;
+        bool bad = !P.GetNodeEnabled() || P.GetNodeBlockedByPathZone();
+        if (!bad) foreach (var o in P.GetPathNodeConnections())
+            if (o != null && (!o.GetConnectionEnabled() || o.GetConnectionBlockedByPathZone())) { bad = true; break; }
+        if (bad) { blocked = P; bd = d; }
+    }
+
+    // 5. Pick the reachable node farthest from the threat, on the correct side of the obstacle,
+    //    and on roughly the same floor as the bot (no drops to a lower level)
+    IObjectPathNode result = null; float bestDist = -1f;
+    foreach (var n in reachable.Values)
+    {
+        if (n.UniqueID == start.UniqueID) continue;
+        Vector2 p = n.GetWorldPosition();
+        if (Math.Abs(p.Y - botPos.Y) > 25f) continue;
+        if (blocked != null)
+        {
+            float bx = blocked.GetWorldPosition().X;
+            bool botRight = botPos.X - bx >= 0;
+            if (botRight != (p.X - bx >= 0)) continue;
+        }
+        float d = Vector2.Distance(p, threatPos);
+        if (d > bestDist) { bestDist = d; result = n; }
+    }
+    return result; // null => caller should NOT issue a move; just stay / use another behaviour
 }
 
 /// <summary>
