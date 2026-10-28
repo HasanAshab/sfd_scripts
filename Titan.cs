@@ -136,12 +136,12 @@ private const float ARMORED_SHIELD_ENERGY_DRAIN_RATIO = 0.50f; // 50% of blocked
 private const float CART_TITAN_HP_BONUS = -0.40f;           // -40% HP
 private const float CART_TITAN_MELEE_DAMAGE_BONUS = 0.0f;   // +0% melee damage
 private const float CART_TITAN_MELEE_FORCE_BONUS = 0.0f;    // +0% melee force
-private const float CART_TITAN_SPEED_BONUS = 0.50f;         // +50% speed
+private const float CART_TITAN_SPEED_BONUS = 0.90f;         // +90% speed
 private const float CART_TITAN_ENERGY_BONUS = 3.0f;         // +300% energy
 private const float CART_TITAN_SIZE = 0.920f;               // Fixed size
 
 // Cart Titan Offensive form stat modifiers (applied on top of base CRT)
-private const float CART_OFFENSIVE_SPEED_PENALTY = 0.40f;   // -40% speed
+private const float CART_OFFENSIVE_SPEED_PENALTY = 0.80f;   // -80% speed
 private const float CART_OFFENSIVE_HP_BONUS = 0.40f;        // +40% HP
 
 // Cart Titan rescue ally mechanics
