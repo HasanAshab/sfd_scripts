@@ -5407,8 +5407,8 @@ private void CrtBotTickRescue(IPlayer bot, int botId, float currentTime, Vector2
         {
             // Ally is in an enemy's aim ray - flee to safety rather than walking into fire
             Vector2 threatPos = closestEnemy != null ? closestEnemy.GetWorldPosition() : targetPos;
-            IObjectPathNode fleeNode = CrtBotFindFleeNode(bot, threatPos);
-            if (fleeNode != null)
+            IObjectPathNode preFleeNode = CrtBotFindFleeNode(bot, threatPos);
+            if (preFleeNode != null)
             {
                 BotBehaviorSet bS = bot.GetBotBehaviorSet();
                 bS.EliminateEnemies = false;
@@ -5419,7 +5419,7 @@ private void CrtBotTickRescue(IPlayer bot, int botId, float currentTime, Vector2
                 bS.GuardRange = 9;
                 bS.ChokePointPlayerCountThreshold = 0;
                 bot.SetBotBehaviorSet(bS);
-                bot.SetGuardTarget(fleeNode);
+                bot.SetGuardTarget(preFleeNode);
             }
             return;
         }
