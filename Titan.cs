@@ -137,7 +137,7 @@ private const float CART_TITAN_HP_BONUS = -0.40f;           // -40% HP
 private const float CART_TITAN_MELEE_DAMAGE_BONUS = 0.0f;   // +0% melee damage
 private const float CART_TITAN_MELEE_FORCE_BONUS = 0.0f;    // +0% melee force
 private const float CART_TITAN_SPEED_BONUS = 0.50f;         // +50% speed
-private const float CART_TITAN_ENERGY_BONUS = 2.0f;         // +200% energy
+private const float CART_TITAN_ENERGY_BONUS = 3.0f;         // +300% energy
 private const float CART_TITAN_SIZE = 0.920f;               // Fixed size
 
 // Cart Titan Offensive form stat modifiers (applied on top of base CRT)
@@ -171,11 +171,11 @@ private const float CART_AIM_UPDATE_INTERVAL = 50f; // 50ms
 // Cart Titan bot constants
 private const float CRT_BOT_MODE_CHECK_INTERVAL  = 1500f; // How often (ms) to re-evaluate Rescue vs Offensive mode
 private const float CRT_BOT_BEH_CHECK_INTERVAL   = 2500f; // How often (ms) to flip avoid/fight roll in Offensive mode
-private const float CRT_BOT_RESCUE_HP_TRIGGER     = 0.20f; // Ally HP% to trigger Rescue mode
+private const float CRT_BOT_RESCUE_HP_TRIGGER     = 0.30f; // Ally HP% to trigger Rescue mode
 private const float CRT_BOT_RESCUE_HP_RELEASE     = 0.80f; // Ally HP% to leave Rescue mode
 private const float CRT_BOT_AVOID_ENEMY_RANGE     = 80f;   // Enemy detection radius for path-node avoidance
 private const float CRT_BOT_OFFENSIVE_FIRE_CHANCE = 0.70f; // 70% → fire, 30% → avoid
-private const float CRT_BOT_FIRE_ACCURACY         = 0.80f; // 80% accuracy (random aim spread when missing)
+private const float CRT_BOT_FIRE_ACCURACY         = 1f; // 100% accuracy (random aim spread when missing)
 private const float CRT_BOT_AIM_SPREAD_MAX        = 0.45f; // Max aim angle error (radians) at 0% accuracy
 
 // Titan size range
@@ -5084,7 +5084,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     // ATTACK fire: drain energy per bullet and spawn projectile (can fire while adjusting aim / block held)
     bool attackHeld = player.KeyPressed(VirtualKey.ATTACK);
     // M60 = 500ms between shots, Sniper = 2000ms
-    float fireInterval = isSniper ? 2000f : 500f;
+    float fireInterval = isSniper ? 1500f : 200f;
     bool canFire = attackHeld &&
         (!cartTitanLastBulletFireTime.ContainsKey(playerId) || currentTime - cartTitanLastBulletFireTime[playerId] >= fireInterval);
     
@@ -5520,7 +5520,7 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
         return;
     
     // Check fire interval — M60=500ms, Sniper=2000ms (matching player)
-    float fireInterval = isSniper ? 2000f : 500f;
+    float fireInterval = isSniper ? 1500f : 200f;
     if (cartTitanLastBulletFireTime.ContainsKey(botId) &&
         currentTime - cartTitanLastBulletFireTime[botId] < fireInterval)
         return;
