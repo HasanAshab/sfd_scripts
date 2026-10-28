@@ -2638,12 +2638,23 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
             
             if (isBot)
             {
-                humanPlayer.SetBotBehavior(humanBotBehavior);
-                if (humanBotBehaviorSet != null)
+                humanPlayer.SetInputEnabled(true);
+                humanPlayer.AddCommand(new PlayerCommand(PlayerCommandType.StopCrouch));
+                
+                BotBehavior botBeh = humanBotBehavior;
+                if (botBeh == null || !botBeh.Active || botBeh.PredefinedAI == PredefinedAIType.None)
                 {
-                    humanBotBehaviorSet.PowerupUsage = false;
-                    humanPlayer.SetBotBehaviorSet(humanBotBehaviorSet);
+                    botBeh = new BotBehavior(true, PredefinedAIType.BotA);
                 }
+                humanPlayer.SetBotBehavior(botBeh);
+                humanPlayer.SetBotBehaviorActive(true);
+                
+                BotBehaviorSet bS = humanBotBehaviorSet ?? humanPlayer.GetBotBehaviorSet() ?? BotBehaviorSet.GetBotBehaviorPredefinedSet(botBeh.PredefinedAI);
+                if (bS == null) bS = new BotBehaviorSet();
+                bS.PowerupUsage = true;
+                humanPlayer.SetBotBehaviorSet(bS);
+                
+                configuredBotPowerupUsage.Remove(humanPlayerId);
             }
             else
             {
@@ -2653,6 +2664,7 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
                 {
                     humanPlayer.SetUser(user);
                     humanPlayer.SetInputEnabled(true);
+                    humanPlayer.AddCommand(new PlayerCommand(PlayerCommandType.StopCrouch));
                 }
             }
         }, 1000, 1);
@@ -2675,13 +2687,16 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
         playerNameToId[playerName] = humanPlayerId;
         playerIdToName[humanPlayerId] = playerName;
         
-        // Ensure the new bot gets PowerupUsage disabled
-        if (isBot && !configuredBotPowerupUsage.Contains(humanPlayerId))
+        // Allow the bot to seek and pick up powerups (strength boost) after detransforming
+        if (isBot)
         {
+            configuredBotPowerupUsage.Remove(humanPlayerId);
             BotBehaviorSet bS = humanPlayer.GetBotBehaviorSet();
-            bS.PowerupUsage = false;
-            humanPlayer.SetBotBehaviorSet(bS);
-            configuredBotPowerupUsage.Add(humanPlayerId);
+            if (bS != null)
+            {
+                bS.PowerupUsage = true;
+                humanPlayer.SetBotBehaviorSet(bS);
+            }
         }
         
         // 2. Handle power distribution based on whether extractor is temporary
@@ -2908,8 +2923,11 @@ public void OnUpdate(float elapsed)
         if (player.IsBot && (hasStrengthBoostItem || player.GetStrengthBoostTime() > 0) && !configuredBotPowerupUsage.Contains(playerId))
         {
             BotBehaviorSet bS = player.GetBotBehaviorSet();
-            bS.PowerupUsage = false;
-            player.SetBotBehaviorSet(bS);
+            if (bS != null)
+            {
+                bS.PowerupUsage = false;
+                player.SetBotBehaviorSet(bS);
+            }
             configuredBotPowerupUsage.Add(playerId);
         }
         
@@ -4499,12 +4517,23 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
             
             if (isBot)
             {
-                humanPlayer.SetBotBehavior(humanBotBehavior);
-                if (humanBotBehaviorSet != null)
+                humanPlayer.SetInputEnabled(true);
+                humanPlayer.AddCommand(new PlayerCommand(PlayerCommandType.StopCrouch));
+                
+                BotBehavior botBeh = humanBotBehavior;
+                if (botBeh == null || !botBeh.Active || botBeh.PredefinedAI == PredefinedAIType.None)
                 {
-                    humanBotBehaviorSet.PowerupUsage = false;
-                    humanPlayer.SetBotBehaviorSet(humanBotBehaviorSet);
+                    botBeh = new BotBehavior(true, PredefinedAIType.BotA);
                 }
+                humanPlayer.SetBotBehavior(botBeh);
+                humanPlayer.SetBotBehaviorActive(true);
+                
+                BotBehaviorSet bS = humanBotBehaviorSet ?? humanPlayer.GetBotBehaviorSet() ?? BotBehaviorSet.GetBotBehaviorPredefinedSet(botBeh.PredefinedAI);
+                if (bS == null) bS = new BotBehaviorSet();
+                bS.PowerupUsage = true;
+                humanPlayer.SetBotBehaviorSet(bS);
+                
+                configuredBotPowerupUsage.Remove(humanPlayerId);
             }
             else
             {
@@ -4514,6 +4543,7 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
                 {
                     humanPlayer.SetUser(user);
                     humanPlayer.SetInputEnabled(true);
+                    humanPlayer.AddCommand(new PlayerCommand(PlayerCommandType.StopCrouch));
                 }
             }
         }, 1000, 1);
@@ -4545,13 +4575,16 @@ private void DetachTitan(IPlayer titanPlayer, int titanPlayerId)
         playerNameToId[playerName] = humanPlayerId;
         playerIdToName[humanPlayerId] = playerName;
         
-        // Ensure the new bot gets PowerupUsage disabled
-        if (isBot && !configuredBotPowerupUsage.Contains(humanPlayerId))
+        // Allow the bot to seek and pick up powerups (strength boost) after detransforming
+        if (isBot)
         {
+            configuredBotPowerupUsage.Remove(humanPlayerId);
             BotBehaviorSet bS = humanPlayer.GetBotBehaviorSet();
-            bS.PowerupUsage = false;
-            humanPlayer.SetBotBehaviorSet(bS);
-            configuredBotPowerupUsage.Add(humanPlayerId);
+            if (bS != null)
+            {
+                bS.PowerupUsage = true;
+                humanPlayer.SetBotBehaviorSet(bS);
+            }
         }
         
         // Save updated powers
@@ -4758,6 +4791,7 @@ private void ApplyCartTitanForm(IPlayer player, int playerId, CartTitanForm newF
         int hpRemove = (int)(mods.MaxHealth * CART_OFFENSIVE_HP_BONUS / (1f + CART_OFFENSIVE_HP_BONUS));
         mods.MaxHealth -= hpRemove;
         mods.CurrentHealth = Math.Min(mods.CurrentHealth, mods.MaxHealth);
+        mods.CanBurn = 1;
         
         // Kill and clean up the gun pipe
         CartTitanDestroyGunPipe(playerId);
@@ -4784,6 +4818,8 @@ private void ApplyCartTitanForm(IPlayer player, int playerId, CartTitanForm newF
         int hpAdd = (int)(mods.MaxHealth * CART_OFFENSIVE_HP_BONUS);
         mods.MaxHealth += hpAdd;
         mods.CurrentHealth = Math.Min(mods.CurrentHealth + hpAdd, mods.MaxHealth);
+        mods.CanBurn = 0;
+        player.ClearFire();
         
         player.SetProfile(GetCartTitanOffensiveProfile());
         player.SetModifiers(mods);
@@ -4793,6 +4829,7 @@ private void ApplyCartTitanForm(IPlayer player, int playerId, CartTitanForm newF
     }
     else // newForm == Rescue
     {
+        mods.CanBurn = 1;
         player.SetProfile(GetCartTitanRescueProfile());
         player.SetModifiers(mods);
     }
@@ -5608,6 +5645,18 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
 
 private void CleanupCartTitanData(int playerId)
 {
+    // Reset burn modifier if titan was in Offensive form
+    if (cartTitanForm.ContainsKey(playerId) && cartTitanForm[playerId] == CartTitanForm.Offensive)
+    {
+        IPlayer cartPlayer = Game.GetPlayer(playerId);
+        if (cartPlayer != null && !cartPlayer.IsDead && !cartPlayer.IsRemoved)
+        {
+            PlayerModifiers cMods = cartPlayer.GetModifiers();
+            cMods.CanBurn = 1;
+            cartPlayer.SetModifiers(cMods);
+        }
+    }
+    
     // Release lifted ally (restore modifiers)
     if (cartTitanLiftedAlly.ContainsKey(playerId))
     {
