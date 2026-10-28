@@ -262,7 +262,7 @@ private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>()
 // Track Cart Titan specific data
 private enum CartTitanForm { Rescue, Offensive }
 private Dictionary<int, CartTitanForm> cartTitanForm = new Dictionary<int, CartTitanForm>();
-private Dictionary<int, IObject> cartTitanBackObject = new Dictionary<int, IObject>(); // BgFence01G (Rescue) or drone (Offensive)
+private Dictionary<int, IObject> cartTitanBackObject = new Dictionary<int, IObject>(); // BgWallPanel01A (Rescue) or BgElectric02C (Offensive)
 private Dictionary<int, IPlayer> cartTitanLiftedAlly = new Dictionary<int, IPlayer>(); // Ally on backpack (Rescue)
 private Dictionary<int, float> cartTitanLiftNextCostTime = new Dictionary<int, float>(); // Next energy drain tick for lift
 private Dictionary<int, IObject> cartTitanGunPipe = new Dictionary<int, IObject>(); // BgRailing02A gun pipe (Offensive)
@@ -4700,7 +4700,7 @@ private IProfile GetCartTitanOffensiveProfile()
     };
 }
 
-// Attach/replace the back-attached object (BgFence01G for Rescue, drone for Offensive)
+// Attach/replace the back-attached object (BgWallPanel01A for Rescue, BgElectric02C for Offensive)
 private void CartTitanAttachBackObject(IPlayer player, int playerId, CartTitanForm form)
 {
     // Remove old back object if it exists
@@ -4711,7 +4711,7 @@ private void CartTitanAttachBackObject(IPlayer player, int playerId, CartTitanFo
         cartTitanBackObject.Remove(playerId);
     }
     
-    string objName = (form == CartTitanForm.Rescue) ? "BgFence01G" : "BgElectric02C";
+    string objName = (form == CartTitanForm.Rescue) ? "BgWallPanel01A" : "BgElectric02C";
     IObject backObj = Game.CreateObject(objName, player.GetWorldPosition());
     if (backObj != null)
     {
