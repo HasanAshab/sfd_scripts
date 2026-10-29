@@ -1,4 +1,4 @@
-// Titan Transformation Script
+﻿// Titan Transformation Script
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
 // Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
 
@@ -291,11 +291,14 @@ private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, Tit
 private Dictionary<string, int> playerNameToId = new Dictionary<string, int>();
 private Dictionary<int, string> playerIdToName = new Dictionary<int, string>();
 
-// Distribution mode: "A" = VIP scenario (permanent, 2-day expiry), "B" = normal (30-min expiry)
+// Distribution mode: "A" = VIP scenario (permanent, 2-day expiry), "B" = normal (30-min expiry), "C" = Undir/Udoy scenario (permanent, 2-day expiry, TitanPowerStorageC)
 private string distributionMode = "";
 
 // VIP player names that trigger Scenario A
 private static readonly string[] VIP_PLAYER_NAMES = new string[] { "Pakhi", "Xray", "Kokola", "Bichi" };
+
+// Player names that trigger Scenario C (using TitanPowerStorageC)
+private static readonly string[] STORAGE_C_PLAYER_NAMES = new string[] { "Undir", "Udoy" };
 
 // Per-player expiry unix-day (Scenario A) or unix-minute (Scenario B)
 // Key = player name, Value = expiry timestamp
@@ -435,10 +438,19 @@ public void InitializeTitanDistribution(TriggerArgs args)
     }
 
     // Detect which scenario to use
+    bool hasStorageCPlayer = false;
     bool hasVip = false;
     foreach (IPlayer p in allPlayers)
     {
         if (p == null) continue;
+        foreach (string cName in STORAGE_C_PLAYER_NAMES)
+        {
+            if (p.Name.Equals(cName, System.StringComparison.OrdinalIgnoreCase))
+            {
+                hasStorageCPlayer = true;
+                break;
+            }
+        }
         foreach (string vip in VIP_PLAYER_NAMES)
         {
             if (p.Name.Equals(vip, System.StringComparison.OrdinalIgnoreCase))
@@ -447,27 +459,31 @@ public void InitializeTitanDistribution(TriggerArgs args)
                 break;
             }
         }
-        if (hasVip) break;
     }
     
-    distributionMode = hasVip ? "A" : "B";
+    if (hasStorageCPlayer)
+        distributionMode = "C";
+    else if (hasVip)
+        distributionMode = "A";
+    else
+        distributionMode = "B";
     Game.ShowChatMessage("[Titan] Mode " + distributionMode, Color.Yellow);
     
-    if (distributionMode == "A")
+    if (distributionMode == "A" || distributionMode == "C")
     {
-        // Scenario A: permanent per-player powers.
+        // Scenario A / C: permanent per-player powers.
         bool hasStoredPowers = RestoreAssignedPowersFromStorage();
         LoadPlayerExpiryFromStorage();
         
         if (hasStoredPowers && !HasDuplicateHumanoids(allPlayers))
         {
-            Game.ShowChatMessage("[Titan] Restoring permanent distribution (Scenario A)...", Color.Green);
+            Game.ShowChatMessage("[Titan] Restoring permanent distribution (Scenario " + distributionMode + ")...", Color.Green);
             // Check if any restored power expired while the game was away
             CheckScenarioAExpiry();
         }
         else
         {
-            Game.ShowChatMessage("[Titan] Distributing powers (Scenario A)...", Color.Green);
+            Game.ShowChatMessage("[Titan] Distributing powers (Scenario " + distributionMode + ")...", Color.Green);
             DistributeTitanPowers(args);
         }
     }
@@ -552,7 +568,11 @@ private int DaysUntilExpiry(long expiryUnixDay)
 // --- Per-Player Storage Helpers (No Group Key) ---
 private IScriptStorage GetCurrentStorage()
 {
-    string storageName = (distributionMode == "A") ? "TitanPowerStorageA" : "TitanPowerStorageB";
+    string storageName = "TitanPowerStorageB";
+    if (distributionMode == "C")
+        storageName = "TitanPowerStorageC";
+    else if (distributionMode == "A")
+        storageName = "TitanPowerStorageA";
     return Game.GetSharedStorage(storageName);
 }
 
@@ -638,7 +658,7 @@ public void DistributeTitanPowers(TriggerArgs args)
     assignedTitanPowers.Clear();
     playerPowerExpiry.Clear();
     
-    if (distributionMode == "A")
+    if (distributionMode == "A" || distributionMode == "C")
         DistributeScenarioA(allPlayers);
     else
         DistributeScenarioB(allPlayers);
@@ -1007,7 +1027,7 @@ private void CheckPowerExpiry(float currentTime)
     if (currentTime - lastExpiryCheckTime < EXPIRY_CHECK_INTERVAL) return;
     lastExpiryCheckTime = currentTime;
     
-    if (distributionMode == "A")
+    if (distributionMode == "A" || distributionMode == "C")
     {
         CheckScenarioAExpiry();
     }
@@ -1159,8 +1179,8 @@ private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanT
     }
     else return;
     
-    // Append expiry info for Scenario A
-    if (distributionMode == "A" && playerPowerExpiry.ContainsKey(player.Name))
+    // Append expiry info for Scenario A and C
+    if ((distributionMode == "A" || distributionMode == "C") && playerPowerExpiry.ContainsKey(player.Name))
     {
         int daysLeft = DaysUntilExpiry(playerPowerExpiry[player.Name]);
         labelText += ":" + daysLeft.ToString();
@@ -2757,7 +2777,7 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
                     UpdateLabelsAfterPowerSwap(teammateId, victimId);
                     CreateLabelForPlayer(humanPlayer, humanPlayerId, TitanType.Pure);
                     
-                    if (distributionMode == "A")
+                    if (distributionMode == "A" || distributionMode == "C")
                         playerPowerExpiry[randomTeammatePureTitan.Name] = GetUnixDay() + 2;
                     else
                         playerPowerExpiry[randomTeammatePureTitan.Name] = GetUnixMinute() + 30L;
@@ -2794,7 +2814,7 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
                 CreateLabelForPlayer(victim, victimId, tempPureTitanPower);
             }
             
-            if (distributionMode == "A")
+            if (distributionMode == "A" || distributionMode == "C")
                 playerPowerExpiry[playerName] = GetUnixDay() + 2;
             else
                 playerPowerExpiry[playerName] = GetUnixMinute() + 30L;
