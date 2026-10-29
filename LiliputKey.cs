@@ -23,7 +23,7 @@ public void SetupBots()
         spawnPositions[0],
         PlayerTeam.Team1,
         PredefinedAIType.BotD,
-        0.8f,
+        0.79f,
         new IProfile()
         {
             Name = "Undir",
@@ -42,7 +42,7 @@ public void SetupBots()
         spawnPositions[1],
         PlayerTeam.Team1,
         PredefinedAIType.BotC,
-        0.8f,
+        0.79f,
         new IProfile()
         {
             Name = "Mew",
@@ -61,7 +61,7 @@ public void SetupBots()
         spawnPositions[2],
         PlayerTeam.Team2,
         PredefinedAIType.BotA,
-        0.9f,
+        0.94f,
         new IProfile()
         {
             Name = "Udoy",
@@ -81,7 +81,7 @@ public void SetupBots()
         spawnPositions[3],
         PlayerTeam.Team2,
         PredefinedAIType.BotA,
-        0.9f,
+        0.94f,
         new IProfile()
         {
             Name = "Poshu",
@@ -99,7 +99,7 @@ public void SetupBots()
         spawnPositions[4],
         PlayerTeam.Team2,
         PredefinedAIType.BotA,
-        0.9f,
+        0.94f,
         new IProfile()
         {
             Name = "3Tala",
@@ -117,7 +117,7 @@ public void SetupBots()
         spawnPositions[5],
         PlayerTeam.Team2,
         PredefinedAIType.BotA,
-        0.9f,
+        0.94f,
         new IProfile()
         {
             Name = "ChipaBhoot",
@@ -135,7 +135,7 @@ public void SetupBots()
         spawnPositions[6],
         PlayerTeam.Team2,
         PredefinedAIType.BotA,
-        0.9f,
+        0.94f,
         new IProfile()
         {
             Name = "Jhumur",

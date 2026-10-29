@@ -23,7 +23,7 @@ public void SetupPlayers()
         // p1Mods.CurrentEnergy = (int)(p1Mods.CurrentEnergy * 1.2f);
         // p1Mods.EnergyRechargeModifier *= 1.2f;
 
-        p1Mods.SizeModifier = 0.89f;
+        p1Mods.SizeModifier = 0.82f;
         p1Mods.MeleeForceModifier *= 0.8f;
         p1Mods.MeleeDamageDealtModifier *= 1.2f;
         p1Mods.RunSpeedModifier = 1.1f;
@@ -49,7 +49,7 @@ public void SetupPlayers()
         // p2Mods.MeleeForceModifier *= 1.2f;
         // p2Mods.MeleeDamageDealtModifier *= 1.4f;
 
-        p2Mods.SizeModifier = 0.86f;
+        p2Mods.SizeModifier = 0.8f;
         p2Mods.MeleeForceModifier *= 0.8f;
         p2Mods.MeleeDamageDealtModifier *= 1.2f;
         p2Mods.RunSpeedModifier = 1.13f;
