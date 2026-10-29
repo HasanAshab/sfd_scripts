@@ -264,7 +264,7 @@ private enum CartTitanForm { Rescue, Offensive }
 private Dictionary<int, CartTitanForm> cartTitanForm = new Dictionary<int, CartTitanForm>();
 private Dictionary<int, IObject> cartTitanBackObject = new Dictionary<int, IObject>(); // BgWallPanel01A (Rescue) or BgElectric02C (Offensive)
 private Dictionary<int, IPlayer> cartTitanLiftedAlly = new Dictionary<int, IPlayer>(); // Ally on backpack (Rescue)
-private Dictionary<int, int> cartTitanLiftedAllyOriginalCanBurn = new Dictionary<int, int>(); // Store original CanBurn of lifted ally
+private Dictionary<int, CartRescuedAllyData> cartTitanLiftedAllyData = new Dictionary<int, CartRescuedAllyData>(); // Store original modifiers of lifted ally
 private Dictionary<int, float> cartTitanLiftNextCostTime = new Dictionary<int, float>(); // Next energy drain tick for lift
 private Dictionary<int, IObject> cartTitanGunPipe = new Dictionary<int, IObject>(); // BgRailing02A gun pipe (Offensive)
 private Dictionary<int, bool> cartTitanGunIsSniper = new Dictionary<int, bool>(); // true=Sniper, false=M60
@@ -338,6 +338,17 @@ private class GrabDamageData
     public float NextDamageTime;
     public float TitanMeleeDamage;
     public float NextBloodEffectTime; // Track blood effect timing separately
+}
+
+// Helper class for Cart Titan rescued ally modifier tracking
+private class CartRescuedAllyData
+{
+    public IPlayer Ally;
+    public float OriginalMeleeDamageTaken;
+    public float OriginalProjDamageTaken;
+    public float OriginalExplDamageTaken;
+    public float OriginalImpactDamageTaken;
+    public int OriginalCanBurn;
 }
 
 // Random generator
@@ -4912,20 +4923,40 @@ private void CartTitanLiftAlly(IPlayer cartTitan, int cartTitanId, IPlayer ally,
     cartTitanLiftedAlly[cartTitanId] = ally;
     cartTitanLiftNextCostTime[cartTitanId] = currentTime + 1000f; // first cost after 1 second
     
-    // Apply damage reduction, CanBurn = 0, and instantly set energy to full at the moment of lifting
     PlayerModifiers allyMods = ally.GetModifiers();
-    cartTitanLiftedAllyOriginalCanBurn[cartTitanId] = allyMods.CanBurn;
+    
+    // Capture original modifiers so they can be reliably restored on release
+    CartRescuedAllyData data = new CartRescuedAllyData();
+    data.Ally = ally;
+    data.OriginalMeleeDamageTaken  = allyMods.MeleeDamageTakenModifier;
+    data.OriginalProjDamageTaken   = allyMods.ProjectileDamageTakenModifier;
+    data.OriginalExplDamageTaken   = allyMods.ExplosionDamageTakenModifier;
+    data.OriginalImpactDamageTaken = allyMods.ImpactDamageTakenModifier;
+    data.OriginalCanBurn           = allyMods.CanBurn;
+    cartTitanLiftedAllyData[cartTitanId] = data;
+    
+    // Set energy to full at the moment of lifting
     if (allyMods.MaxEnergy <= 0)
     {
         float maxE = ally.GetMaxEnergy();
         allyMods.MaxEnergy = maxE > 0 ? (int)maxE : 100;
     }
     allyMods.CurrentEnergy = allyMods.MaxEnergy;
+    
+    // Immune to fire while being rescued
     allyMods.CanBurn = 0;
-    allyMods.MeleeDamageTakenModifier      *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
-    allyMods.ProjectileDamageTakenModifier *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
-    allyMods.ExplosionDamageTakenModifier  *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
-    allyMods.ImpactDamageTakenModifier     *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    
+    // 50% damage reduction: in SFD negative modifiers (-1) mean default 1.0x damage
+    float baseMelee  = (data.OriginalMeleeDamageTaken < 0) ? 1.0f : data.OriginalMeleeDamageTaken;
+    float baseProj   = (data.OriginalProjDamageTaken < 0) ? 1.0f : data.OriginalProjDamageTaken;
+    float baseExpl   = (data.OriginalExplDamageTaken < 0) ? 1.0f : data.OriginalExplDamageTaken;
+    float baseImpact = (data.OriginalImpactDamageTaken < 0) ? 1.0f : data.OriginalImpactDamageTaken;
+    
+    allyMods.MeleeDamageTakenModifier      = baseMelee * (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    allyMods.ProjectileDamageTakenModifier = baseProj * (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    allyMods.ExplosionDamageTakenModifier  = baseExpl * (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    allyMods.ImpactDamageTakenModifier     = baseImpact * (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    
     ally.SetModifiers(allyMods);
     ally.ClearFire();
     
@@ -4939,26 +4970,33 @@ private void CartTitanReleaseAlly(IPlayer cartTitan, int cartTitanId)
     cartTitanLiftedAlly.Remove(cartTitanId);
     cartTitanLiftNextCostTime.Remove(cartTitanId);
     
-    int origCanBurn = 1;
-    if (cartTitanLiftedAllyOriginalCanBurn.ContainsKey(cartTitanId))
+    CartRescuedAllyData data = null;
+    if (cartTitanLiftedAllyData.ContainsKey(cartTitanId))
     {
-        origCanBurn = cartTitanLiftedAllyOriginalCanBurn[cartTitanId];
-        cartTitanLiftedAllyOriginalCanBurn.Remove(cartTitanId);
+        data = cartTitanLiftedAllyData[cartTitanId];
+        cartTitanLiftedAllyData.Remove(cartTitanId);
     }
     
     if (ally == null || ally.IsDead || ally.IsRemoved) return;
     
-    // Restore damage modifiers and CanBurn
+    // Restore damage modifiers and CanBurn back to original state
     PlayerModifiers allyMods = ally.GetModifiers();
-    if (allyMods.MeleeDamageTakenModifier > 0)
-        allyMods.MeleeDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
-    if (allyMods.ProjectileDamageTakenModifier > 0)
-        allyMods.ProjectileDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
-    if (allyMods.ExplosionDamageTakenModifier > 0)
-        allyMods.ExplosionDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
-    if (allyMods.ImpactDamageTakenModifier > 0)
-        allyMods.ImpactDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
-    allyMods.CanBurn = origCanBurn;
+    if (data != null)
+    {
+        allyMods.MeleeDamageTakenModifier      = (data.OriginalMeleeDamageTaken < 0) ? -2f : data.OriginalMeleeDamageTaken;
+        allyMods.ProjectileDamageTakenModifier = (data.OriginalProjDamageTaken < 0) ? -2f : data.OriginalProjDamageTaken;
+        allyMods.ExplosionDamageTakenModifier  = (data.OriginalExplDamageTaken < 0) ? -2f : data.OriginalExplDamageTaken;
+        allyMods.ImpactDamageTakenModifier     = (data.OriginalImpactDamageTaken < 0) ? -2f : data.OriginalImpactDamageTaken;
+        allyMods.CanBurn = (data.OriginalCanBurn == 0) ? 0 : 1;
+    }
+    else
+    {
+        allyMods.MeleeDamageTakenModifier      = -2f;
+        allyMods.ProjectileDamageTakenModifier = -2f;
+        allyMods.ExplosionDamageTakenModifier  = -2f;
+        allyMods.ImpactDamageTakenModifier     = -2f;
+        allyMods.CanBurn = 1;
+    }
     ally.SetModifiers(allyMods);
     
     Game.ShowChatMessage(ally.Name + " was released from the backpack.", Color.Cyan);
@@ -5095,6 +5133,12 @@ private void CartTitanUpdateRescue(IPlayer player, int playerId, float currentTi
         float cost = mods.MaxEnergy * CART_RESCUE_LIFT_COST_PER_SEC;
         mods.CurrentEnergy = Math.Max(0f, mods.CurrentEnergy - cost);
         player.SetModifiers(mods);
+        
+        if (mods.CurrentEnergy <= 0)
+        {
+            CartTitanReleaseAlly(player, playerId);
+            return;
+        }
     }
 }
 
@@ -5258,7 +5302,11 @@ private CrtBotMode CrtBotEvaluateMode(IPlayer bot, int botId, float currentTime,
                 return CrtBotMode.Rescue;
             }
         }
-        // Target healed or gone — fall through to fresh evaluation
+        // Target healed or gone — release ally and fall through to fresh evaluation
+        if (cartTitanLiftedAlly.ContainsKey(botId))
+        {
+            CartTitanReleaseAlly(bot, botId);
+        }
         cartTitanBotRescueTarget.Remove(botId);
     }
     
@@ -5801,29 +5849,38 @@ private void CleanupCartTitanData(int playerId)
     if (cartTitanLiftedAlly.ContainsKey(playerId))
     {
         IPlayer ally = cartTitanLiftedAlly[playerId];
+        CartRescuedAllyData data = null;
+        if (cartTitanLiftedAllyData.ContainsKey(playerId))
+        {
+            data = cartTitanLiftedAllyData[playerId];
+            cartTitanLiftedAllyData.Remove(playerId);
+        }
+        
         if (ally != null && !ally.IsDead && !ally.IsRemoved)
         {
             PlayerModifiers allyMods = ally.GetModifiers();
-            if (allyMods.MeleeDamageTakenModifier > 0)
-                allyMods.MeleeDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
-            if (allyMods.ProjectileDamageTakenModifier > 0)
-                allyMods.ProjectileDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
-            if (allyMods.ExplosionDamageTakenModifier > 0)
-                allyMods.ExplosionDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
-            if (allyMods.ImpactDamageTakenModifier > 0)
-                allyMods.ImpactDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
-            int origCanBurn = 1;
-            if (cartTitanLiftedAllyOriginalCanBurn.ContainsKey(playerId))
+            if (data != null)
             {
-                origCanBurn = cartTitanLiftedAllyOriginalCanBurn[playerId];
+                allyMods.MeleeDamageTakenModifier      = (data.OriginalMeleeDamageTaken < 0) ? -2f : data.OriginalMeleeDamageTaken;
+                allyMods.ProjectileDamageTakenModifier = (data.OriginalProjDamageTaken < 0) ? -2f : data.OriginalProjDamageTaken;
+                allyMods.ExplosionDamageTakenModifier  = (data.OriginalExplDamageTaken < 0) ? -2f : data.OriginalExplDamageTaken;
+                allyMods.ImpactDamageTakenModifier     = (data.OriginalImpactDamageTaken < 0) ? -2f : data.OriginalImpactDamageTaken;
+                allyMods.CanBurn = (data.OriginalCanBurn == 0) ? 0 : 1;
             }
-            allyMods.CanBurn = origCanBurn;
+            else
+            {
+                allyMods.MeleeDamageTakenModifier      = -2f;
+                allyMods.ProjectileDamageTakenModifier = -2f;
+                allyMods.ExplosionDamageTakenModifier  = -2f;
+                allyMods.ImpactDamageTakenModifier     = -2f;
+                allyMods.CanBurn = 1;
+            }
             ally.SetModifiers(allyMods);
         }
         cartTitanLiftedAlly.Remove(playerId);
     }
     cartTitanLiftNextCostTime.Remove(playerId);
-    cartTitanLiftedAllyOriginalCanBurn.Remove(playerId);
+    cartTitanLiftedAllyData.Remove(playerId);
     
     // Destroy gun pipe
     CartTitanDestroyGunPipe(playerId);
