@@ -264,6 +264,7 @@ private enum CartTitanForm { Rescue, Offensive }
 private Dictionary<int, CartTitanForm> cartTitanForm = new Dictionary<int, CartTitanForm>();
 private Dictionary<int, IObject> cartTitanBackObject = new Dictionary<int, IObject>(); // BgWallPanel01A (Rescue) or BgElectric02C (Offensive)
 private Dictionary<int, IPlayer> cartTitanLiftedAlly = new Dictionary<int, IPlayer>(); // Ally on backpack (Rescue)
+private Dictionary<int, int> cartTitanLiftedAllyOriginalCanBurn = new Dictionary<int, int>(); // Store original CanBurn of lifted ally
 private Dictionary<int, float> cartTitanLiftNextCostTime = new Dictionary<int, float>(); // Next energy drain tick for lift
 private Dictionary<int, IObject> cartTitanGunPipe = new Dictionary<int, IObject>(); // BgRailing02A gun pipe (Offensive)
 private Dictionary<int, bool> cartTitanGunIsSniper = new Dictionary<int, bool>(); // true=Sniper, false=M60
@@ -4911,19 +4912,22 @@ private void CartTitanLiftAlly(IPlayer cartTitan, int cartTitanId, IPlayer ally,
     cartTitanLiftedAlly[cartTitanId] = ally;
     cartTitanLiftNextCostTime[cartTitanId] = currentTime + 1000f; // first cost after 1 second
     
-    // Apply damage reduction and instantly set energy to full at the moment of lifting
+    // Apply damage reduction, CanBurn = 0, and instantly set energy to full at the moment of lifting
     PlayerModifiers allyMods = ally.GetModifiers();
+    cartTitanLiftedAllyOriginalCanBurn[cartTitanId] = allyMods.CanBurn;
     if (allyMods.MaxEnergy <= 0)
     {
         float maxE = ally.GetMaxEnergy();
         allyMods.MaxEnergy = maxE > 0 ? (int)maxE : 100;
     }
     allyMods.CurrentEnergy = allyMods.MaxEnergy;
+    allyMods.CanBurn = 0;
     allyMods.MeleeDamageTakenModifier      *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
     allyMods.ProjectileDamageTakenModifier *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
     allyMods.ExplosionDamageTakenModifier  *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
     allyMods.ImpactDamageTakenModifier     *= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
     ally.SetModifiers(allyMods);
+    ally.ClearFire();
     
     Game.ShowChatMessage(cartTitan.Name + " lifted " + ally.Name + " onto the backpack!", Color.Cyan);
 }
@@ -4935,9 +4939,16 @@ private void CartTitanReleaseAlly(IPlayer cartTitan, int cartTitanId)
     cartTitanLiftedAlly.Remove(cartTitanId);
     cartTitanLiftNextCostTime.Remove(cartTitanId);
     
+    int origCanBurn = 1;
+    if (cartTitanLiftedAllyOriginalCanBurn.ContainsKey(cartTitanId))
+    {
+        origCanBurn = cartTitanLiftedAllyOriginalCanBurn[cartTitanId];
+        cartTitanLiftedAllyOriginalCanBurn.Remove(cartTitanId);
+    }
+    
     if (ally == null || ally.IsDead || ally.IsRemoved) return;
     
-    // Restore damage modifiers
+    // Restore damage modifiers and CanBurn
     PlayerModifiers allyMods = ally.GetModifiers();
     if (allyMods.MeleeDamageTakenModifier > 0)
         allyMods.MeleeDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
@@ -4947,6 +4958,7 @@ private void CartTitanReleaseAlly(IPlayer cartTitan, int cartTitanId)
         allyMods.ExplosionDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
     if (allyMods.ImpactDamageTakenModifier > 0)
         allyMods.ImpactDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+    allyMods.CanBurn = origCanBurn;
     ally.SetModifiers(allyMods);
     
     Game.ShowChatMessage(ally.Name + " was released from the backpack.", Color.Cyan);
@@ -5050,6 +5062,30 @@ private void CartTitanUpdateRescue(IPlayer player, int playerId, float currentTi
     Vector2 allyPos = playerPos + new Vector2(-facing * 6f, 10f);
     ally.SetWorldPosition(allyPos);
     ally.SetLinearVelocity(player.GetLinearVelocity());
+    
+    // Rescuing ally gets full energy and CanBurn = 0 on every update until released
+    PlayerModifiers allyMods = ally.GetModifiers();
+    bool allyModsChanged = false;
+    float maxEnergy = allyMods.MaxEnergy > 0 ? (float)allyMods.MaxEnergy : ally.GetMaxEnergy();
+    if (maxEnergy <= 0f) maxEnergy = 100f;
+    if (allyMods.CurrentEnergy < maxEnergy)
+    {
+        allyMods.CurrentEnergy = maxEnergy;
+        allyModsChanged = true;
+    }
+    if (allyMods.CanBurn != 0)
+    {
+        allyMods.CanBurn = 0;
+        allyModsChanged = true;
+    }
+    if (allyModsChanged)
+    {
+        ally.SetModifiers(allyMods);
+    }
+    if (ally.IsBurning)
+    {
+        ally.ClearFire();
+    }
     
     // Energy cost: 0.5% of max energy per second
     if (currentTime >= cartTitanLiftNextCostTime[playerId])
@@ -5776,11 +5812,18 @@ private void CleanupCartTitanData(int playerId)
                 allyMods.ExplosionDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
             if (allyMods.ImpactDamageTakenModifier > 0)
                 allyMods.ImpactDamageTakenModifier /= (1f - CART_RESCUE_ALLY_DMG_REDUCTION);
+            int origCanBurn = 1;
+            if (cartTitanLiftedAllyOriginalCanBurn.ContainsKey(playerId))
+            {
+                origCanBurn = cartTitanLiftedAllyOriginalCanBurn[playerId];
+            }
+            allyMods.CanBurn = origCanBurn;
             ally.SetModifiers(allyMods);
         }
         cartTitanLiftedAlly.Remove(playerId);
     }
     cartTitanLiftNextCostTime.Remove(playerId);
+    cartTitanLiftedAllyOriginalCanBurn.Remove(playerId);
     
     // Destroy gun pipe
     CartTitanDestroyGunPipe(playerId);
