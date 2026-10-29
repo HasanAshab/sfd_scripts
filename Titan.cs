@@ -255,6 +255,7 @@ private Dictionary<int, Dictionary<int, float>> armoredTitanRushHitTimes = new D
 private Dictionary<int, bool> armoredTitanIsRushing = new Dictionary<int, bool>(); // Track if bot is currently rushing
 private Dictionary<int, int> armoredTitanPunchCount = new Dictionary<int, int>(); // Track punch count for super punch
 private Dictionary<int, float> armoredTitanLastPunchTime = new Dictionary<int, float>(); // Track last punch time
+private Dictionary<int, float> armoredReflectedProjTimes = new Dictionary<int, float>(); // Track projectiles reflected by Armored Titan
 
 // Track player facing directions for Jaw Titan backstab detection
 private Dictionary<int, int> playerFacingDirections = new Dictionary<int, int>();
@@ -2375,8 +2376,28 @@ public void OnProjectileHit(IProjectile projectile, ProjectileHitArgs args)
     if (!titanPlayers.ContainsKey(hitPlayerId) || titanPlayers[hitPlayerId] != TitanType.Armored) return;
     if (!armoredTitanArmorOn.ContainsKey(hitPlayerId) || !armoredTitanArmorOn[hitPlayerId]) return;
     
-    // Check if hit from front
-    if (!IsArmoredInFront(hitPlayer, args.HitPosition)) return;
+    // Check if hit from front (projectiles from behind deal normal damage)
+    if (!IsArmoredFrontProjectileHit(hitPlayer, projectile, args.HitPosition)) return;
+    
+    // Track reflected projectile ID for OnPlayerDamage safety net
+    armoredReflectedProjTimes[projectile.InstanceID] = (float)Game.TotalElapsedGameTime;
+    if (armoredReflectedProjTimes.Count > 30)
+    {
+        float curTime = (float)Game.TotalElapsedGameTime;
+        List<int> oldKeys = null;
+        foreach (var kvp in armoredReflectedProjTimes)
+        {
+            if (curTime - kvp.Value > 1000f)
+            {
+                if (oldKeys == null) oldKeys = new List<int>();
+                oldKeys.Add(kvp.Key);
+            }
+        }
+        if (oldKeys != null)
+        {
+            for (int i = 0; i < oldKeys.Count; i++) armoredReflectedProjTimes.Remove(oldKeys[i]);
+        }
+    }
     
     // Reflect the projectile
     Vector2 projDir = projectile.Direction;
@@ -2435,16 +2456,22 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
     if (!armoredTitanArmorOn.ContainsKey(playerId) || !armoredTitanArmorOn[playerId]) return;
     
     // Only handle melee, projectile, and thrown damage
-    Vector2 sourcePos = Vector2.Zero;
-    bool hasSource = false;
+    bool isFrontHit = false;
     
     if (args.DamageType == PlayerDamageEventType.Projectile)
     {
-        IProjectile proj = Game.GetProjectile(args.SourceID);
-        if (proj != null)
+        if (armoredReflectedProjTimes.ContainsKey(args.SourceID))
         {
-            sourcePos = proj.Position;
-            hasSource = true;
+            armoredReflectedProjTimes.Remove(args.SourceID);
+            isFrontHit = true;
+        }
+        else
+        {
+            IProjectile proj = Game.GetProjectile(args.SourceID);
+            if (proj != null && IsArmoredFrontProjectileHit(player, proj, proj.Position))
+            {
+                isFrontHit = true;
+            }
         }
     }
     else if (args.DamageType == PlayerDamageEventType.Melee)
@@ -2452,8 +2479,8 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
         IPlayer attacker = Game.GetPlayer(args.SourceID);
         if (attacker != null)
         {
-            sourcePos = attacker.GetWorldPosition();
-            hasSource = true;
+            Vector2 sourcePos = attacker.GetWorldPosition();
+            isFrontHit = IsArmoredInFront(player, sourcePos);
         }
     }
     else if (args.DamageType == PlayerDamageEventType.Explosion)
@@ -2466,12 +2493,12 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
         
         // Simple heuristic: if explosion is in front, block it
         // This is a simplified check - you might want to enhance this
-        hasSource = true;
-        sourcePos = playerPos + new Vector2(player.FacingDirection * 10f, 0); // Assume front
+        Vector2 sourcePos = playerPos + new Vector2(player.FacingDirection * 10f, 0); // Assume front
+        isFrontHit = IsArmoredInFront(player, sourcePos);
     }
     
     // If source is from front, refund damage
-    if (hasSource && IsArmoredInFront(player, sourcePos))
+    if (isFrontHit)
     {
         player.SetHealth(player.GetHealth() + args.Damage);
         
@@ -4236,6 +4263,27 @@ private float GetPlayerHeight(IPlayer player)
 {
     float size = player.GetModifiers().SizeModifier;
     return (size < 0) ? 1f : size; // -1/-2 = unset, treat as default 1
+}
+
+// Helper method to check if a projectile hit is hitting the front of Armored Titan
+private bool IsArmoredFrontProjectileHit(IPlayer armoredTitan, IProjectile projectile, Vector2 hitPosition)
+{
+    if (armoredTitan == null || projectile == null) return false;
+    
+    int facing = armoredTitan.FacingDirection; // -1 (left) or +1 (right)
+    float dirX = projectile.Direction.X;
+    
+    // If the projectile is moving horizontally
+    if (Math.Abs(dirX) > 0.01f)
+    {
+        // Moving toward the front face of the titan means dirX and facing have opposite signs
+        return (dirX * facing) < 0f;
+    }
+    
+    // For purely vertical projectiles, check hit position relative to titan center
+    Vector2 titanPos = armoredTitan.GetWorldPosition();
+    float forwardDistance = (hitPosition.X - titanPos.X) * facing;
+    return forwardDistance > 0f;
 }
 
 // Helper method to check if point is in front of Armored Titan
