@@ -2153,8 +2153,8 @@ private void HandleJawTitanMelee(IPlayer jawTitan, int jawTitanId, PlayerMeleeHi
             IPlayer victim = hitArg.HitObject as IPlayer;
             if (victim == null || victim.IsDead) continue;
             
-            // Claw ability: extra damage on jump attacks
-            if (isJumpAttack)
+            // Claw ability: extra damage on jump attacks (only against enemies)
+            if (isJumpAttack && !IsTeammate(jawTitan, victim))
             {
                 HandleJawTitanClawAttack(jawTitan, jawTitanId, victim);
             }
@@ -2185,6 +2185,8 @@ private void HandleJawTitanMelee(IPlayer jawTitan, int jawTitanId, PlayerMeleeHi
 
 private void HandleJawTitanClawAttack(IPlayer jawTitan, int jawTitanId, IPlayer victim)
 {
+    if (victim == null || victim.IsDead || IsTeammate(jawTitan, victim)) return;
+    
     int victimId = victim.UniqueID;
     
     // Get victim's facing direction (stored before hit to prevent instant turn-around exploitation)
@@ -3121,10 +3123,11 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
     // Check for new dive catches
     IPlayer[] allPlayers = Game.GetPlayers();
     
-    // Look for victims caught in dive by this Jaw Titan
+    // Look for victims caught in dive by this Jaw Titan (ignore teammates)
     foreach (IPlayer potentialVictim in allPlayers)
     {
         if (potentialVictim == null || potentialVictim.IsDead || potentialVictim.UniqueID == jawTitanId) continue;
+        if (IsTeammate(jawTitan, potentialVictim)) continue;
         
         // Check if victim is caught in dive by this Jaw Titan
         if (potentialVictim.CaughtByPlayerInDiveID == jawTitanId)
@@ -3148,8 +3151,8 @@ private void CheckJawTitanHuntDamage(IPlayer jawTitan, int jawTitanId, float cur
     
     IPlayer victim = jawTitanHuntVictim[jawTitanId];
     
-    // Check if victim is still valid
-    if (victim == null || victim.IsDead || victim.IsRemoved)
+    // Check if victim is still valid (must not be dead, removed, or teammate)
+    if (victim == null || victim.IsDead || victim.IsRemoved || IsTeammate(jawTitan, victim))
     {
         jawTitanHuntVictim.Remove(jawTitanId);
         jawTitanHuntDamageTime.Remove(jawTitanId);
@@ -3734,6 +3737,10 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         float targetForce = GetPlayerForce(target);
         float targetHeight = GetPlayerHeight(target);
         float targetPower = targetForce * targetHeight;
+        if (target.GetStrengthBoostTime() > 0)
+        {
+            targetPower *= 1.3f;
+        }
         
         float power = (titanPower - (targetPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_RUSH_BALANCER_MOD;
         power = Math.Max(power, 0f);
@@ -4270,6 +4277,16 @@ private IPlayer GetPlayerAimingAtBot(IPlayer bot, int botId)
     }
     
     return null;
+}
+
+// Helper method to check if two players are allies / on the same team
+private bool IsTeammate(IPlayer p1, IPlayer p2)
+{
+    if (p1 == null || p2 == null) return false;
+    if (p1.UniqueID == p2.UniqueID) return true;
+    PlayerTeam t1 = p1.GetTeam();
+    PlayerTeam t2 = p2.GetTeam();
+    return t1 != PlayerTeam.Independent && t1 == t2;
 }
 
 // Helper methods for Armored Titan force/height calculation

@@ -60,7 +60,7 @@ public void SetupBots()
         "Udoy",
         spawnPositions[2],
         PlayerTeam.Team2,
-        PredefinedAIType.BotA,
+        PredefinedAIType.BotC,
         0.94f,
         new IProfile()
         {
@@ -80,7 +80,7 @@ public void SetupBots()
         "Poshu",
         spawnPositions[3],
         PlayerTeam.Team2,
-        PredefinedAIType.BotA,
+        PredefinedAIType.BotC,
         0.94f,
         new IProfile()
         {
@@ -98,7 +98,7 @@ public void SetupBots()
         "3Tala",
         spawnPositions[4],
         PlayerTeam.Team2,
-        PredefinedAIType.BotA,
+        PredefinedAIType.BotC,
         0.94f,
         new IProfile()
         {
@@ -116,7 +116,7 @@ public void SetupBots()
         "ChipaBhoot",
         spawnPositions[5],
         PlayerTeam.Team2,
-        PredefinedAIType.BotA,
+        PredefinedAIType.BotB,
         0.94f,
         new IProfile()
         {
