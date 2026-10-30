@@ -5302,7 +5302,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     // ATTACK fire: drain energy per bullet and spawn projectile (can fire while adjusting aim / block held)
     bool attackHeld = player.KeyPressed(VirtualKey.ATTACK);
     // M60 = 500ms between shots, Sniper = 2000ms
-    float fireInterval = isSniper ? 1500f : 60f;
+    float fireInterval = isSniper ? 1500f : 20f;
     bool canFire = attackHeld &&
         (!cartTitanLastBulletFireTime.ContainsKey(playerId) || currentTime - cartTitanLastBulletFireTime[playerId] >= fireInterval);
     
@@ -5329,7 +5329,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         }
         else
         {
-            Game.SpawnProjectile(ProjectileItem.MACHINE_PISTOL, muzzlePos, aimDirection);
+            Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, aimDirection);
             Game.PlaySound("M60", muzzlePos);
         }
         
@@ -5848,7 +5848,7 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
         return;
     
     // Check fire interval
-    float fireInterval = isSniper ? 1500f : 60f;
+    float fireInterval = isSniper ? 1500f : 20f;
     if (cartTitanLastBulletFireTime.ContainsKey(botId) &&
         currentTime - cartTitanLastBulletFireTime[botId] < fireInterval)
         return;
