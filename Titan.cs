@@ -1,4 +1,4 @@
-﻿// Titan Transformation Script
+// Titan Transformation Script
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
 // Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
 
@@ -4899,6 +4899,10 @@ private void ApplyCartTitanForm(IPlayer player, int playerId, CartTitanForm newF
         mods.MaxHealth -= hpRemove;
         mods.CurrentHealth = Math.Min(mods.CurrentHealth, mods.MaxHealth);
         mods.CanBurn = 1;
+        float revertMod = (originalModifiers.ContainsKey(playerId) && originalModifiers[playerId].ProjectileDamageDealtModifier >= 0f)
+            ? originalModifiers[playerId].ProjectileDamageDealtModifier
+            : -2f;
+        mods.ProjectileDamageDealtModifier = revertMod;
         
         // Kill and clean up the gun pipe
         CartTitanDestroyGunPipe(playerId);
@@ -4926,6 +4930,7 @@ private void ApplyCartTitanForm(IPlayer player, int playerId, CartTitanForm newF
         mods.MaxHealth += hpAdd;
         mods.CurrentHealth = Math.Min(mods.CurrentHealth + hpAdd, mods.MaxHealth);
         mods.CanBurn = 0;
+        mods.ProjectileDamageDealtModifier = 0.4f;
         player.ClearFire();
         
         player.SetProfile(GetCartTitanOffensiveProfile());
@@ -4990,6 +4995,17 @@ private void CartTitanSwitchGun(int cartTitanId, bool toSniper)
         {
             ch.SetTextColor(toSniper ? Color.Red : new Color(255, 255, 100));
         }
+    }
+
+    IPlayer cartTitan = Game.GetPlayer(cartTitanId);
+    if (cartTitan != null && !cartTitan.IsDead && !cartTitan.IsRemoved)
+    {
+        PlayerModifiers cMods = cartTitan.GetModifiers();
+        float revertMod = (originalModifiers.ContainsKey(cartTitanId) && originalModifiers[cartTitanId].ProjectileDamageDealtModifier >= 0f)
+            ? originalModifiers[cartTitanId].ProjectileDamageDealtModifier
+            : -2f;
+        cMods.ProjectileDamageDealtModifier = toSniper ? revertMod : 0.4f;
+        cartTitan.SetModifiers(cMods);
     }
 }
 
@@ -5329,7 +5345,11 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         }
         else
         {
-            Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, aimDirection);
+            IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, aimDirection);
+            if (proj != null)
+            {
+                proj.DamageDealtModifier = 0.4f;
+            }
             Game.PlaySound("M60", muzzlePos);
         }
         
@@ -5918,7 +5938,11 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
     }
     else
     {
-        Game.SpawnProjectile(ProjectileItem.M60, muzzlePos, aimDir);
+        IProjectile proj = Game.SpawnProjectile(ProjectileItem.M60, muzzlePos, aimDir);
+        if (proj != null)
+        {
+            proj.DamageDealtModifier = 0.4f;
+        }
         Game.PlaySound("M60", muzzlePos);
     }
     
@@ -5936,6 +5960,9 @@ private void CleanupCartTitanData(int playerId)
         {
             PlayerModifiers cMods = cartPlayer.GetModifiers();
             cMods.CanBurn = 1;
+            cMods.ProjectileDamageDealtModifier = (originalModifiers.ContainsKey(playerId) && originalModifiers[playerId].ProjectileDamageDealtModifier >= 0f)
+                ? originalModifiers[playerId].ProjectileDamageDealtModifier
+                : -2f;
             cartPlayer.SetModifiers(cMods);
         }
     }
