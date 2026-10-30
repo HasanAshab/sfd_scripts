@@ -4933,7 +4933,7 @@ private void ApplyCartTitanForm(IPlayer player, int playerId, CartTitanForm newF
         mods.MaxHealth += hpAdd;
         mods.CurrentHealth = Math.Min(mods.CurrentHealth + hpAdd, mods.MaxHealth);
         mods.CanBurn = 0;
-        mods.ProjectileDamageDealtModifier = 0.15f;
+        mods.ProjectileDamageDealtModifier = 0.05f;
         player.ClearFire();
         
         player.SetProfile(GetCartTitanOffensiveProfile());
@@ -5007,7 +5007,7 @@ private void CartTitanSwitchGun(int cartTitanId, bool toSniper)
         float revertMod = (originalModifiers.ContainsKey(cartTitanId) && originalModifiers[cartTitanId].ProjectileDamageDealtModifier >= 0f)
             ? originalModifiers[cartTitanId].ProjectileDamageDealtModifier
             : -2f;
-        cMods.ProjectileDamageDealtModifier = toSniper ? revertMod : 0.15f;
+        cMods.ProjectileDamageDealtModifier = toSniper ? revertMod : 0.05f;
         cartTitan.SetModifiers(cMods);
     }
 }
@@ -5409,7 +5409,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
                 IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, spreadDir);
                 if (proj != null)
                 {
-                    proj.DamageDealtModifier = 0.15f;
+                    proj.DamageDealtModifier = 0.05f;
                 }
             }
             Game.PlaySound("M60", muzzlePos);
@@ -6011,7 +6011,7 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
             IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, spreadDir);
             if (proj != null)
             {
-                proj.DamageDealtModifier = 0.15f;
+                proj.DamageDealtModifier = 0.05f;
             }
         }
         Game.PlaySound("M60", muzzlePos);
