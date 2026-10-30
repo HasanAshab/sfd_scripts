@@ -137,7 +137,8 @@ private const float CART_TITAN_HP_BONUS = -0.40f;           // -40% HP
 private const float CART_TITAN_MELEE_DAMAGE_BONUS = 0.0f;   // +0% melee damage
 private const float CART_TITAN_MELEE_FORCE_BONUS = 0.0f;    // +0% melee force
 private const float CART_TITAN_SPEED_BONUS = 0.90f;         // +90% speed
-private const float CART_TITAN_ENERGY_BONUS = 5.0f;         // +500% energy
+private const float CART_TITAN_ENERGY_BONUS = 3.0f;         // +300% energy
+private const float CART_TITAN_ENERGY_RECHARGE_BONUS = 3.0f; // +300% energy recharge
 private const float CART_TITAN_SIZE = 0.920f;               // Fixed size
 
 // Cart Titan Offensive form stat modifiers (applied on top of base CRT)
@@ -4794,8 +4795,8 @@ private void TransformToCartTitan(IPlayer player, int playerId)
     mods.RunSpeedModifier          *= (1f + CART_TITAN_SPEED_BONUS);
     mods.SprintSpeedModifier       *= (1f + CART_TITAN_SPEED_BONUS);
     
-    // +200% energy
     mods.MaxEnergy = (int)(mods.MaxEnergy * (1f + CART_TITAN_ENERGY_BONUS));
+    mods.EnergyRechargeModifier = (int)(mods.EnergyRechargeModifier * (1f + CART_TITAN_ENERGY_RECHARGE_BONUS));
     mods.CurrentEnergy = mods.MaxEnergy;
     
     mods.SizeModifier = CART_TITAN_SIZE;
