@@ -6178,6 +6178,8 @@ private IPlayer HumanBotFindThreateningTitan(IPlayer bot, int botId, float range
 
 private IObjectPathNode HumanBotFindFleeNode(IPlayer bot, Vector2 threatPos)
 {
+    if (bot == null || bot.IsRemoved || bot.IsFalling) return null;
+
     Vector2 botPos = bot.GetWorldPosition();
     float botDistToThreat = Vector2.Distance(botPos, threatPos);
 
@@ -6188,7 +6190,7 @@ private IObjectPathNode HumanBotFindFleeNode(IPlayer bot, Vector2 threatPos)
         botPos.X + FEAR_SEARCH_HALF_W
     );
 
-    IObjectPathNode[] nearbyNodes = Game.GetObjectsByArea<IObjectPathNode>(searchArea);
+    IObjectPathNode[] nearbyNodes = Game.GetObjectsByArea<IObjectPathNode>(searchArea, PhysicsLayer.Background);
     if (nearbyNodes == null || nearbyNodes.Length == 0) return null;
 
     IObjectPathNode startNode = null;
@@ -6199,7 +6201,7 @@ private IObjectPathNode HumanBotFindFleeNode(IPlayer bot, Vector2 threatPos)
         float d = Vector2.Distance(n.GetWorldPosition(), botPos);
         if (d < bestStartDist) { bestStartDist = d; startNode = n; }
     }
-    if (startNode == null) return null;
+    if (startNode == null || bestStartDist > 22f) return null; // bot not on the path network
 
     // Flood-fill up to FEAR_MAX_HOPS hops, find the node farthest from threat
     // Flood-fill using the same connection API as CrtBotFindFleeNode
