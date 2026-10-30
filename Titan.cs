@@ -1,4 +1,4 @@
-﻿// Titan Transformation Script
+// Titan Transformation Script
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
 // Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
 
@@ -380,6 +380,9 @@ public void OnStartup()
     
     // Set up update callback to detect strength boost pickups and falls
     Events.UpdateCallback.Start(OnUpdate, 50); // Check every 50ms
+    
+    // High-FPS update callback for Cart Titan aim adjusting and moving (matching odm.cs rope throw aim)
+    Events.UpdateCallback.Start(CartTitanFastAimUpdate, 10, 0);
     
     // Set up key input callback for Attack Titan abilities
     Events.PlayerKeyInputCallback.Start(OnPlayerKeyInput);
@@ -5253,9 +5256,42 @@ private void CartTitanUpdateRescue(IPlayer player, int playerId, float currentTi
     }
 }
 
-private void CartTitanUpdateOffensive(IPlayer player, int playerId, float currentTime, Vector2 playerPos)
+// High-FPS update loop (10ms callback like odm.cs rope throw aim) for smooth aim adjusting and movement
+private void CartTitanFastAimUpdate(float elapsed)
 {
-    // Update gun pipe position, angle, and aim
+    if (titanPlayers.Count == 0) return;
+    
+    foreach (KeyValuePair<int, TitanType> kv in titanPlayers)
+    {
+        if (kv.Value != TitanType.Cart) continue;
+        int playerId = kv.Key;
+        IPlayer player = Game.GetPlayer(playerId);
+        if (player == null || player.IsDead || player.IsRemoved) continue;
+        
+        CartTitanForm form = cartTitanForm.ContainsKey(playerId) ? cartTitanForm[playerId] : CartTitanForm.Rescue;
+        Vector2 playerPos = player.GetWorldPosition();
+        
+        // Update back object position smoothly at 10ms FPS
+        if (cartTitanBackObject.ContainsKey(playerId))
+        {
+            IObject backObj = cartTitanBackObject[playerId];
+            if (backObj != null && !backObj.IsRemoved)
+            {
+                int facing = player.FacingDirection;
+                Vector2 backPos = playerPos + new Vector2(-facing * 8f, 4f);
+                backObj.SetWorldPosition(backPos);
+            }
+        }
+        
+        if (form == CartTitanForm.Offensive)
+        {
+            CartTitanUpdateAimFast(player, playerId, playerPos, elapsed);
+        }
+    }
+}
+
+private void CartTitanUpdateAimFast(IPlayer player, int playerId, Vector2 playerPos, float elapsed)
+{
     if (!cartTitanGunPipe.ContainsKey(playerId)) return;
     IObject pipeObj = cartTitanGunPipe[playerId];
     if (pipeObj == null || pipeObj.IsRemoved)
@@ -5265,18 +5301,21 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         return;
     }
     
-    // Gun pipe rides on titan's head
+    // Gun pipe rides on titan's head - update at 10ms for smooth movement
     Vector2 gunPos = playerPos + new Vector2(0f, CART_GUN_OFFSET_Y);
     pipeObj.SetWorldPosition(gunPos);
     
     // Block/aim-adjust mode: JUMP = aim up, CROUCH_ROLL_DIVE = aim down
     bool blockHeld = cartTitanBlockHeld.ContainsKey(playerId) && cartTitanBlockHeld[playerId];
     bool isSniper = cartTitanGunIsSniper.ContainsKey(playerId) && cartTitanGunIsSniper[playerId];
-    if (blockHeld)
+    if (blockHeld && !player.IsBot)
     {
         float currentAngle = cartTitanGunAimAngle.ContainsKey(playerId) ? cartTitanGunAimAngle[playerId] : 0f;
-        // Sniper aims slower (0.07), M60 faster (0.12)
-        float aimSpeed = isSniper ? 0.07f : 0.12f;
+        
+        // Aim adjust speed scaled for high-FPS 10ms updates (matching odm.cs smoothness)
+        float dtFactor = (elapsed > 0f) ? (elapsed / 50f) : 0.2f;
+        float aimSpeed = (isSniper ? 0.07f : 0.12f) * dtFactor;
+        
         // JUMP aims up (+Y in SFD), CROUCH aims down (-Y in SFD)
         if (player.KeyPressed(VirtualKey.JUMP))
             currentAngle += aimSpeed;
@@ -5292,7 +5331,6 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     float aimAngleOffset = cartTitanGunAimAngle.ContainsKey(playerId) ? cartTitanGunAimAngle[playerId] : 0f;
     float cosAngle = (float)Math.Cos(aimAngleOffset);
     float sinAngle = (float)Math.Sin(aimAngleOffset);
-    // When facing right (+1): direction is (cos, sin). When facing left (-1): direction is (-cos, sin)
     Vector2 aimDirection = new Vector2(player.FacingDirection * cosAngle, sinAngle);
     Vector2 aimTarget = gunPos + aimDirection * CART_GUN_AIM_DISTANCE;
     
@@ -5300,7 +5338,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     float angle = (float)Math.Atan2(aimDirection.Y, aimDirection.X) + CART_GUN_PIPE_DEFAULT_ROTATION;
     pipeObj.SetAngle(angle);
     
-    // Update crosshair position (moves with the titan)
+    // Update crosshair position (moves with the titan and aim at 10ms FPS)
     if (cartTitanCrosshair.ContainsKey(playerId))
     {
         IObjectText ch = cartTitanCrosshair[playerId];
@@ -5314,15 +5352,30 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
             CartTitanCreateCrosshair(playerId, aimTarget);
         }
     }
+}
+
+private void CartTitanUpdateOffensive(IPlayer player, int playerId, float currentTime, Vector2 playerPos)
+{
+    if (!cartTitanGunPipe.ContainsKey(playerId)) return;
+    
+    // Keep aim and positions synchronized
+    CartTitanUpdateAimFast(player, playerId, playerPos, 50f);
+    
+    bool isSniper = cartTitanGunIsSniper.ContainsKey(playerId) && cartTitanGunIsSniper[playerId];
+    Vector2 gunPos = playerPos + new Vector2(0f, CART_GUN_OFFSET_Y);
+    
+    float aimAngleOffset = cartTitanGunAimAngle.ContainsKey(playerId) ? cartTitanGunAimAngle[playerId] : 0f;
+    float cosAngle = (float)Math.Cos(aimAngleOffset);
+    float sinAngle = (float)Math.Sin(aimAngleOffset);
+    Vector2 aimDirection = new Vector2(player.FacingDirection * cosAngle, sinAngle);
     
     // ATTACK fire: drain energy per bullet and spawn projectile (can fire while adjusting aim / block held)
     bool attackHeld = player.KeyPressed(VirtualKey.ATTACK);
-    // M60 = 500ms between shots, Sniper = 2000ms
     float fireInterval = isSniper ? 1500f : 20f;
     bool canFire = attackHeld &&
         (!cartTitanLastBulletFireTime.ContainsKey(playerId) || currentTime - cartTitanLastBulletFireTime[playerId] >= fireInterval);
     
-    // Energy check (fix #1): do not fire if not enough energy
+    // Energy check: do not fire if not enough energy
     if (canFire)
     {
         PlayerModifiers crtMods = player.GetModifiers();
@@ -5345,10 +5398,19 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         }
         else
         {
-            IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, aimDirection);
-            if (proj != null)
+            // Spawn 3 pistol projectiles on one fire with tight spread
+            float[] spreads = new float[] { -0.035f, 0f, 0.035f };
+            for (int i = 0; i < 3; i++)
             {
-                proj.DamageDealtModifier = 0.2f;
+                float sAngle = spreads[i];
+                float c = (float)Math.Cos(sAngle);
+                float s = (float)Math.Sin(sAngle);
+                Vector2 spreadDir = new Vector2(aimDirection.X * c - aimDirection.Y * s, aimDirection.X * s + aimDirection.Y * c);
+                IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, spreadDir);
+                if (proj != null)
+                {
+                    proj.DamageDealtModifier = 0.2f;
+                }
             }
             Game.PlaySound("M60", muzzlePos);
         }
@@ -5938,10 +6000,19 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
     }
     else
     {
-        IProjectile proj = Game.SpawnProjectile(ProjectileItem.M60, muzzlePos, aimDir);
-        if (proj != null)
+        // Spawn 3 pistol projectiles on one fire with tight spread
+        float[] spreads = new float[] { -0.035f, 0f, 0.035f };
+        for (int i = 0; i < 3; i++)
         {
-            proj.DamageDealtModifier = 0.2f;
+            float sAngle = spreads[i];
+            float c = (float)Math.Cos(sAngle);
+            float s = (float)Math.Sin(sAngle);
+            Vector2 spreadDir = new Vector2(aimDir.X * c - aimDir.Y * s, aimDir.X * s + aimDir.Y * c);
+            IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, spreadDir);
+            if (proj != null)
+            {
+                proj.DamageDealtModifier = 0.2f;
+            }
         }
         Game.PlaySound("M60", muzzlePos);
     }
