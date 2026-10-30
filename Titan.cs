@@ -1,4 +1,4 @@
-// Titan Transformation Script
+﻿// Titan Transformation Script
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
 // Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
 
@@ -5302,7 +5302,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     // ATTACK fire: drain energy per bullet and spawn projectile (can fire while adjusting aim / block held)
     bool attackHeld = player.KeyPressed(VirtualKey.ATTACK);
     // M60 = 500ms between shots, Sniper = 2000ms
-    float fireInterval = isSniper ? 1500f : 200f;
+    float fireInterval = isSniper ? 1500f : 60f;
     bool canFire = attackHeld &&
         (!cartTitanLastBulletFireTime.ContainsKey(playerId) || currentTime - cartTitanLastBulletFireTime[playerId] >= fireInterval);
     
@@ -5329,7 +5329,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
         }
         else
         {
-            Game.SpawnProjectile(ProjectileItem.M60, muzzlePos, aimDirection);
+            Game.SpawnProjectile(ProjectileItem.MACHINE_PISTOL, muzzlePos, aimDirection);
             Game.PlaySound("M60", muzzlePos);
         }
         
@@ -5848,7 +5848,7 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
         return;
     
     // Check fire interval
-    float fireInterval = isSniper ? 1500f : 200f;
+    float fireInterval = isSniper ? 1500f : 60f;
     if (cartTitanLastBulletFireTime.ContainsKey(botId) &&
         currentTime - cartTitanLastBulletFireTime[botId] < fireInterval)
         return;
@@ -6016,11 +6016,11 @@ private const float FEAR_TRIGGER_RANGE = 45f;
 private const float FEAR_Y_TOLERANCE = 40f;
 private const float FEAR_RELEASE_RANGE_MULT = 1.6f;
 private const float FEAR_CHECK_INTERVAL = 600f;
-private const float FEAR_START_CHANCE = 0.65f;
+private const float FEAR_START_CHANCE = 0.95f;
 private const float FEAR_MIN_DURATION = 1200f;
 private const float FEAR_MAX_DURATION = 2200f;
-private const float FEAR_COOLDOWN = 3000f;
-private const float FEAR_BRAVE_COOLDOWN = 3000f;
+private const float FEAR_COOLDOWN = 2000f;
+private const float FEAR_BRAVE_COOLDOWN = 2000f;
 private const float FEAR_NO_PATH_COOLDOWN = 1000f;
 private const float FEAR_REPATH_INTERVAL = 600f;
 private const float FEAR_SEARCH_HALF_W = 55f;
