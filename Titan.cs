@@ -137,7 +137,7 @@ private const float CART_TITAN_HP_BONUS = -0.40f;           // -40% HP
 private const float CART_TITAN_MELEE_DAMAGE_BONUS = 0.0f;   // +0% melee damage
 private const float CART_TITAN_MELEE_FORCE_BONUS = 0.0f;    // +0% melee force
 private const float CART_TITAN_SPEED_BONUS = 0.90f;         // +90% speed
-private const float CART_TITAN_ENERGY_BONUS = 3.0f;         // +300% energy
+private const float CART_TITAN_ENERGY_BONUS = 5.0f;         // +500% energy
 private const float CART_TITAN_SIZE = 0.920f;               // Fixed size
 
 // Cart Titan Offensive form stat modifiers (applied on top of base CRT)
@@ -5007,7 +5007,7 @@ private void CartTitanSwitchGun(int cartTitanId, bool toSniper)
         float revertMod = (originalModifiers.ContainsKey(cartTitanId) && originalModifiers[cartTitanId].ProjectileDamageDealtModifier >= 0f)
             ? originalModifiers[cartTitanId].ProjectileDamageDealtModifier
             : -2f;
-        cMods.ProjectileDamageDealtModifier = toSniper ? revertMod : 0.05f;
+        cMods.ProjectileDamageDealtModifier = toSniper ? revertMod : 0.11f;
         cartTitan.SetModifiers(cMods);
     }
 }
@@ -5409,7 +5409,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
                 IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, spreadDir);
                 if (proj != null)
                 {
-                    proj.DamageDealtModifier = 0.05f;
+                    proj.DamageDealtModifier = 0.11f;
                 }
             }
             Game.PlaySound("M60", muzzlePos);
@@ -6011,7 +6011,7 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
             IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, spreadDir);
             if (proj != null)
             {
-                proj.DamageDealtModifier = 0.05f;
+                proj.DamageDealtModifier = 0.11f;
             }
         }
         Game.PlaySound("M60", muzzlePos);
