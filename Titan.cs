@@ -1,4 +1,4 @@
-﻿// Titan Transformation Script
+// Titan Transformation Script
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
 // Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
 
@@ -1256,6 +1256,9 @@ private void TransformToTitan(IPlayer player)
     
     // 2. Remove strength boost powerup
     player.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
+    // Restore any fearful AI state before snapshotting original bot behavior
+    HumanBotFearEnd(player, playerId, Game.TotalElapsedRealTime, false);
     
     // Store original profile, modifiers, and bot behaviors (if bot)
     originalProfiles[playerId] = player.GetProfile();
@@ -2961,6 +2964,7 @@ public void OnUpdate(float elapsed)
     
     // Check power expiry (Scenario A: 2-day; Scenario B: handled at match start)
     CheckPowerExpiry(currentTime);
+    HumanBotFearCleanup(currentTime);
     
     foreach (IPlayer player in allPlayers)
     {
@@ -3097,6 +3101,12 @@ public void OnUpdate(float elapsed)
                 threatMods.MeleeStunImmunity = desiredImmunity;
                 player.SetModifiers(threatMods);
             }
+        }
+        
+        // Human-form bots briefly flee from enemy titans
+        if (player.IsBot && !titanPlayers.ContainsKey(playerId))
+        {
+            HumanBotFearTick(player, playerId, currentTime);
         }
         
         // Update facing direction for all players (every update tick for accurate backstab detection)
@@ -5995,6 +6005,268 @@ private void CleanupCartTitanData(int playerId)
     cartTitanBotIsAvoiding.Remove(playerId);
     cartTitanBotLockedEnemy.Remove(playerId);
     cartTitanBotLockedIsSniper.Remove(playerId);
+}
+
+// ============================================================
+// HUMAN-FORM BOT FEAR OF TITANS
+// ============================================================
+
+// ---- Tuning ----
+private const float FEAR_TRIGGER_RANGE = 45f;
+private const float FEAR_Y_TOLERANCE = 40f;
+private const float FEAR_RELEASE_RANGE_MULT = 1.6f;
+private const float FEAR_CHECK_INTERVAL = 600f;
+private const float FEAR_START_CHANCE = 0.65f;
+private const float FEAR_MIN_DURATION = 1200f;
+private const float FEAR_MAX_DURATION = 2200f;
+private const float FEAR_COOLDOWN = 3000f;
+private const float FEAR_BRAVE_COOLDOWN = 3000f;
+private const float FEAR_NO_PATH_COOLDOWN = 1000f;
+private const float FEAR_REPATH_INTERVAL = 600f;
+private const float FEAR_SEARCH_HALF_W = 55f;
+private const float FEAR_SEARCH_HALF_H = 45f;
+private const int FEAR_MAX_HOPS = 5;
+private const float FEAR_MAX_NODE_DISTANCE = 45f;
+private const float FEAR_FLOOR_TOLERANCE = 20f;
+private const float FEAR_MIN_DISTANCE_GAIN = 8f;
+private const float FEAR_CLEANUP_INTERVAL = 2000f;
+
+// ---- State ----
+private class HumanBotFearData
+{
+    public BotBehaviorSet Snapshot;
+    public IObject PrevGuardTarget;
+    public float EndTime;
+    public float NextRepathTime;
+    public int NodeId;
+}
+
+private Dictionary<int, HumanBotFearData> humanBotFear = new Dictionary<int, HumanBotFearData>();
+private Dictionary<int, float> humanBotFearNextCheck = new Dictionary<int, float>();
+private Dictionary<int, float> humanBotFearCooldownUntil = new Dictionary<int, float>();
+private float humanBotFearLastCleanup = 0f;
+
+private void HumanBotFearTick(IPlayer bot, int botId, float currentTime)
+{
+    bool fleeing = humanBotFear.ContainsKey(botId);
+    if (!fleeing && titanPlayers.Count == 0) return;
+
+    if (fleeing)
+    {
+        HumanBotFearData data = humanBotFear[botId];
+
+        if (currentTime >= data.EndTime || bot.IsCaughtByPlayerInGrab || !bot.IsInputEnabled)
+        {
+            HumanBotFearEnd(bot, botId, currentTime, true);
+            return;
+        }
+
+        IPlayer stillThreat = HumanBotFindThreateningTitan(bot, botId, FEAR_TRIGGER_RANGE * FEAR_RELEASE_RANGE_MULT);
+        if (stillThreat == null)
+        {
+            HumanBotFearEnd(bot, botId, currentTime, true);
+            return;
+        }
+
+        if (currentTime >= data.NextRepathTime)
+        {
+            data.NextRepathTime = currentTime + FEAR_REPATH_INTERVAL;
+            IObjectPathNode fearFleeNode = HumanBotFindFleeNode(bot, stillThreat.GetWorldPosition());
+            if (fearFleeNode != null && fearFleeNode.UniqueID != data.NodeId)
+            {
+                data.NodeId = fearFleeNode.UniqueID;
+                bot.SetGuardTarget(fearFleeNode);
+            }
+        }
+        return;
+    }
+
+    float nextCheck;
+    if (humanBotFearNextCheck.TryGetValue(botId, out nextCheck) && currentTime < nextCheck) return;
+    humanBotFearNextCheck[botId] = currentTime + FEAR_CHECK_INTERVAL;
+
+    float cooldownUntil;
+    if (humanBotFearCooldownUntil.TryGetValue(botId, out cooldownUntil) && currentTime < cooldownUntil) return;
+
+    if (bot.IsDead || bot.IsRemoved || bot.IsFalling || bot.IsCaughtByPlayerInGrab || !bot.IsInputEnabled) return;
+
+    BotBehavior beh = bot.GetBotBehavior();
+    if (beh == null || !beh.Active || beh.PredefinedAI == PredefinedAIType.ZombieA) return;
+
+    IPlayer threat = HumanBotFindThreateningTitan(bot, botId, FEAR_TRIGGER_RANGE);
+    if (threat == null) return;
+
+    if (rnd.NextDouble() > FEAR_START_CHANCE)
+    {
+        humanBotFearCooldownUntil[botId] = currentTime + FEAR_BRAVE_COOLDOWN;
+        return;
+    }
+
+    IObjectPathNode fearStartNode = HumanBotFindFleeNode(bot, threat.GetWorldPosition());
+    if (fearStartNode == null)
+    {
+        humanBotFearCooldownUntil[botId] = currentTime + FEAR_NO_PATH_COOLDOWN;
+        return;
+    }
+
+    HumanBotFearData newData = new HumanBotFearData();
+    newData.Snapshot = bot.GetBotBehaviorSet();
+    newData.PrevGuardTarget = bot.GetGuardTarget();
+    newData.EndTime = currentTime + FEAR_MIN_DURATION + (float)(rnd.NextDouble() * (FEAR_MAX_DURATION - FEAR_MIN_DURATION));
+    newData.NextRepathTime = currentTime + FEAR_REPATH_INTERVAL;
+    newData.NodeId = fearStartNode.UniqueID;
+    humanBotFear[botId] = newData;
+
+    BotBehaviorSet bS = bot.GetBotBehaviorSet();
+    bS.EliminateEnemies = false;
+    bS.MeleeUsage = false;
+    bS.MeleeWeaponUsage = false;
+    bS.ChaseRange = 20;
+    bS.GuardRange = 9;
+    bS.ChokePointPlayerCountThreshold = 0;
+    bot.SetBotBehaviorSet(bS);
+    bot.SetGuardTarget(fearStartNode);
+}
+
+private void HumanBotFearEnd(IPlayer bot, int botId, float currentTime, bool applyCooldown)
+{
+    HumanBotFearData data;
+    if (!humanBotFear.TryGetValue(botId, out data)) return;
+    humanBotFear.Remove(botId);
+
+    if (applyCooldown)
+        humanBotFearCooldownUntil[botId] = currentTime + FEAR_COOLDOWN;
+
+    if (bot == null || bot.IsRemoved || bot.IsDead) return;
+
+    BotBehaviorSet cur = bot.GetBotBehaviorSet();
+    BotBehaviorSet snap = data.Snapshot;
+    if (cur != null && snap != null)
+    {
+        cur.EliminateEnemies = snap.EliminateEnemies;
+        cur.MeleeUsage = snap.MeleeUsage;
+        cur.MeleeWeaponUsage = snap.MeleeWeaponUsage;
+        cur.ChaseRange = snap.ChaseRange;
+        cur.GuardRange = snap.GuardRange;
+        cur.ChokePointPlayerCountThreshold = snap.ChokePointPlayerCountThreshold;
+        bot.SetBotBehaviorSet(cur);
+    }
+
+    if (data.PrevGuardTarget != null && !data.PrevGuardTarget.IsRemoved)
+        bot.SetGuardTarget(data.PrevGuardTarget);
+    else
+        bot.SetGuardTarget(null);
+}
+
+private IPlayer HumanBotFindThreateningTitan(IPlayer bot, int botId, float range)
+{
+    Vector2 botPos = bot.GetWorldPosition();
+    foreach (var kv in titanPlayers)
+    {
+        IPlayer titan = Game.GetPlayer(kv.Key);
+        if (titan == null || titan.IsDead || titan.IsRemoved) continue;
+        if (IsTeammate(bot, titan)) continue;
+        Vector2 titanPos = titan.GetWorldPosition();
+        float dx = titanPos.X - botPos.X;
+        float dy = titanPos.Y - botPos.Y;
+        if (Math.Abs(dy) > FEAR_Y_TOLERANCE) continue;
+        if (Math.Sqrt(dx * dx + dy * dy) <= range)
+            return titan;
+    }
+    return null;
+}
+
+private IObjectPathNode HumanBotFindFleeNode(IPlayer bot, Vector2 threatPos)
+{
+    Vector2 botPos = bot.GetWorldPosition();
+    float botDistToThreat = Vector2.Distance(botPos, threatPos);
+
+    Area searchArea = new Area(
+        botPos.Y + FEAR_SEARCH_HALF_H,
+        botPos.X - FEAR_SEARCH_HALF_W,
+        botPos.Y - FEAR_SEARCH_HALF_H,
+        botPos.X + FEAR_SEARCH_HALF_W
+    );
+
+    IObjectPathNode[] nearbyNodes = Game.GetObjectsByArea<IObjectPathNode>(searchArea);
+    if (nearbyNodes == null || nearbyNodes.Length == 0) return null;
+
+    IObjectPathNode startNode = null;
+    float bestStartDist = float.MaxValue;
+    foreach (IObjectPathNode n in nearbyNodes)
+    {
+        if (!CrtBotIsSafeFleeNode(n)) continue;
+        float d = Vector2.Distance(n.GetWorldPosition(), botPos);
+        if (d < bestStartDist) { bestStartDist = d; startNode = n; }
+    }
+    if (startNode == null) return null;
+
+    // Flood-fill up to FEAR_MAX_HOPS hops, find the node farthest from threat
+    HashSet<int> visited = new HashSet<int>();
+    Queue<IObjectPathNode> queue = new Queue<IObjectPathNode>();
+    queue.Enqueue(startNode);
+    visited.Add(startNode.UniqueID);
+
+    IObjectPathNode bestNode = null;
+    float bestScore = float.MinValue;
+
+    int hop = 0;
+    while (queue.Count > 0 && hop < FEAR_MAX_HOPS)
+    {
+        int count = queue.Count;
+        for (int i = 0; i < count; i++)
+        {
+            IObjectPathNode current = queue.Dequeue();
+            Vector2 nPos = current.GetWorldPosition();
+
+            float distToBot = Vector2.Distance(nPos, botPos);
+            float distToThreat = Vector2.Distance(nPos, threatPos);
+            float floorDiff = Math.Abs(nPos.Y - botPos.Y);
+
+            if (distToBot <= FEAR_MAX_NODE_DISTANCE &&
+                floorDiff <= FEAR_FLOOR_TOLERANCE &&
+                distToThreat > botDistToThreat + FEAR_MIN_DISTANCE_GAIN &&
+                CrtBotIsSafeFleeNode(current))
+            {
+                if (distToThreat > bestScore)
+                {
+                    bestScore = distToThreat;
+                    bestNode = current;
+                }
+            }
+
+            foreach (IObjectPathNode conn in current.GetConnectedNodes())
+            {
+                if (conn == null || visited.Contains(conn.UniqueID)) continue;
+                if (!CrtBotConnUsable(current, conn)) continue;
+                visited.Add(conn.UniqueID);
+                queue.Enqueue(conn);
+            }
+        }
+        hop++;
+    }
+
+    return bestNode;
+}
+
+private void HumanBotFearCleanup(float currentTime)
+{
+    if (currentTime - humanBotFearLastCleanup < FEAR_CLEANUP_INTERVAL) return;
+    humanBotFearLastCleanup = currentTime;
+
+    List<int> toRemove = new List<int>();
+    foreach (var kv in humanBotFear)
+    {
+        IPlayer bot = Game.GetPlayer(kv.Key);
+        if (bot == null || bot.IsRemoved || bot.IsDead)
+            toRemove.Add(kv.Key);
+    }
+    foreach (int id in toRemove)
+    {
+        humanBotFear.Remove(id);
+        humanBotFearNextCheck.Remove(id);
+        humanBotFearCooldownUntil.Remove(id);
+    }
 }
 
 private void QuickCommand(IPlayer player, PlayerCommand command)
