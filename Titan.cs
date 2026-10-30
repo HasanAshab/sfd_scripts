@@ -6202,48 +6202,51 @@ private IObjectPathNode HumanBotFindFleeNode(IPlayer bot, Vector2 threatPos)
     if (startNode == null) return null;
 
     // Flood-fill up to FEAR_MAX_HOPS hops, find the node farthest from threat
-    HashSet<int> visited = new HashSet<int>();
-    Queue<IObjectPathNode> queue = new Queue<IObjectPathNode>();
-    queue.Enqueue(startNode);
-    visited.Add(startNode.UniqueID);
+    // Flood-fill using the same connection API as CrtBotFindFleeNode
+    var reachable = new Dictionary<int, IObjectPathNode>();
+    var bfsQueue = new Queue<KeyValuePair<IObjectPathNode, int>>();
+    reachable[startNode.UniqueID] = startNode;
+    bfsQueue.Enqueue(new KeyValuePair<IObjectPathNode, int>(startNode, 0));
+
+    while (bfsQueue.Count > 0)
+    {
+        var cur = bfsQueue.Dequeue();
+        if (cur.Value >= FEAR_MAX_HOPS) continue;
+        foreach (IObjectPathNodeConnection c in cur.Key.GetPathNodeConnections())
+        {
+            if (!CrtBotConnUsable(c)) continue;
+            IObjectPathNode other = c.GetPathNodeAUniqueID() == cur.Key.UniqueID
+                ? c.GetPathNodeB() : c.GetPathNodeA();
+            if (other == null || reachable.ContainsKey(other.UniqueID)) continue;
+            if (!CrtBotIsSafeFleeNode(other)) continue;
+            reachable[other.UniqueID] = other;
+            bfsQueue.Enqueue(new KeyValuePair<IObjectPathNode, int>(other, cur.Value + 1));
+        }
+    }
 
     IObjectPathNode bestNode = null;
     float bestScore = float.MinValue;
 
-    int hop = 0;
-    while (queue.Count > 0 && hop < FEAR_MAX_HOPS)
+    foreach (var kv in reachable)
     {
-        int count = queue.Count;
-        for (int i = 0; i < count; i++)
+        if (kv.Key == startNode.UniqueID) continue;
+        IObjectPathNode n = kv.Value;
+        Vector2 nPos = n.GetWorldPosition();
+
+        float distToBot = Vector2.Distance(nPos, botPos);
+        float distToThreat = Vector2.Distance(nPos, threatPos);
+        float floorDiff = Math.Abs(nPos.Y - botPos.Y);
+
+        if (distToBot <= FEAR_MAX_NODE_DISTANCE &&
+            floorDiff <= FEAR_FLOOR_TOLERANCE &&
+            distToThreat > botDistToThreat + FEAR_MIN_DISTANCE_GAIN)
         {
-            IObjectPathNode current = queue.Dequeue();
-            Vector2 nPos = current.GetWorldPosition();
-
-            float distToBot = Vector2.Distance(nPos, botPos);
-            float distToThreat = Vector2.Distance(nPos, threatPos);
-            float floorDiff = Math.Abs(nPos.Y - botPos.Y);
-
-            if (distToBot <= FEAR_MAX_NODE_DISTANCE &&
-                floorDiff <= FEAR_FLOOR_TOLERANCE &&
-                distToThreat > botDistToThreat + FEAR_MIN_DISTANCE_GAIN &&
-                CrtBotIsSafeFleeNode(current))
+            if (distToThreat > bestScore)
             {
-                if (distToThreat > bestScore)
-                {
-                    bestScore = distToThreat;
-                    bestNode = current;
-                }
-            }
-
-            foreach (IObjectPathNode conn in current.GetConnectedNodes())
-            {
-                if (conn == null || visited.Contains(conn.UniqueID)) continue;
-                if (!CrtBotConnUsable(current, conn)) continue;
-                visited.Add(conn.UniqueID);
-                queue.Enqueue(conn);
+                bestScore = distToThreat;
+                bestNode = n;
             }
         }
-        hop++;
     }
 
     return bestNode;
