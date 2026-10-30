@@ -3739,7 +3739,7 @@ private void CheckArmoredTitanRush(IPlayer player, int playerId, float currentTi
         float targetPower = targetForce * targetHeight;
         if (target.GetStrengthBoostTime() > 0)
         {
-            targetPower *= 1.3f;
+            targetPower *= 1.4f;
         }
         
         float power = (titanPower - (targetPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_RUSH_BALANCER_MOD;
