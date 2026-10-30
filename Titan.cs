@@ -1,4 +1,4 @@
-// Titan Transformation Script
+﻿// Titan Transformation Script
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
 // Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
 
@@ -149,7 +149,7 @@ private const float CART_RESCUE_LIFT_COST_PER_SEC = 0.005f; // 0.5% of max energ
 private const float CART_RESCUE_ALLY_DMG_REDUCTION = 0.50f; // 50% all damage reduction while lifted
 
 // Cart Titan uphead gun energy costs
-private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.015f;    // 1.5% per bullet
+private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.03f;    // 3% per bullet
 private const float CART_GUN_ENERGY_PER_BULLET_SNIPER = 0.25f;  // 25% per bullet
 
 // Cart Titan uphead gun attach offset (above titan head)
@@ -4933,7 +4933,7 @@ private void ApplyCartTitanForm(IPlayer player, int playerId, CartTitanForm newF
         mods.MaxHealth += hpAdd;
         mods.CurrentHealth = Math.Min(mods.CurrentHealth + hpAdd, mods.MaxHealth);
         mods.CanBurn = 0;
-        mods.ProjectileDamageDealtModifier = 0.2f;
+        mods.ProjectileDamageDealtModifier = 0.15f;
         player.ClearFire();
         
         player.SetProfile(GetCartTitanOffensiveProfile());
@@ -5007,7 +5007,7 @@ private void CartTitanSwitchGun(int cartTitanId, bool toSniper)
         float revertMod = (originalModifiers.ContainsKey(cartTitanId) && originalModifiers[cartTitanId].ProjectileDamageDealtModifier >= 0f)
             ? originalModifiers[cartTitanId].ProjectileDamageDealtModifier
             : -2f;
-        cMods.ProjectileDamageDealtModifier = toSniper ? revertMod : 0.2f;
+        cMods.ProjectileDamageDealtModifier = toSniper ? revertMod : 0.15f;
         cartTitan.SetModifiers(cMods);
     }
 }
@@ -5371,7 +5371,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
     
     // ATTACK fire: drain energy per bullet and spawn projectile (can fire while adjusting aim / block held)
     bool attackHeld = player.KeyPressed(VirtualKey.ATTACK);
-    float fireInterval = isSniper ? 1500f : 20f;
+    float fireInterval = isSniper ? 1500f : 40f;
     bool canFire = attackHeld &&
         (!cartTitanLastBulletFireTime.ContainsKey(playerId) || currentTime - cartTitanLastBulletFireTime[playerId] >= fireInterval);
     
@@ -5409,7 +5409,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
                 IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, spreadDir);
                 if (proj != null)
                 {
-                    proj.DamageDealtModifier = 0.2f;
+                    proj.DamageDealtModifier = 0.15f;
                 }
             }
             Game.PlaySound("M60", muzzlePos);
@@ -5930,7 +5930,7 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
         return;
     
     // Check fire interval
-    float fireInterval = isSniper ? 1500f : 20f;
+    float fireInterval = isSniper ? 1500f : 40f;
     if (cartTitanLastBulletFireTime.ContainsKey(botId) &&
         currentTime - cartTitanLastBulletFireTime[botId] < fireInterval)
         return;
@@ -6011,7 +6011,7 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
             IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, spreadDir);
             if (proj != null)
             {
-                proj.DamageDealtModifier = 0.2f;
+                proj.DamageDealtModifier = 0.15f;
             }
         }
         Game.PlaySound("M60", muzzlePos);
