@@ -1,4 +1,4 @@
-// Titan Transformation Script
+﻿// Titan Transformation Script
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
 // Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
 
@@ -54,7 +54,7 @@ private const float HARDENING_SWITCH_TO_NEUTRAL_CHANCE = 0.60f; // 60% chance to
 private const float AIM_DETECTION_RANGE = 800f; // Range for raycast aim detection
 
 // Attack Titan super punch ability
-private const int ATTACK_SUPER_PUNCH_COUNT = 3; // 3rd punch is super punch (always death kneels)
+private const int ATTACK_SUPER_PUNCH_COUNT = 2; // 3rd punch is super punch (always death kneels)
 private const int ATTACK_SUPER_PUNCH_WINDOW = 600; // 600ms window between punches
 
 // Attack Titan slowmo ability
@@ -176,7 +176,7 @@ private const float CRT_BOT_RESCUE_HP_TRIGGER     = 0.30f; // Ally HP% to trigge
 private const float CRT_BOT_RESCUE_HP_RELEASE     = 0.80f; // Ally HP% to leave Rescue mode
 private const float CRT_BOT_AVOID_ENEMY_RANGE     = 80f;   // Enemy detection radius for path-node avoidance
 private const float CRT_BOT_OFFENSIVE_FIRE_CHANCE = 0.70f; // 70% → fire, 30% → avoid
-private const float CRT_BOT_FIRE_ACCURACY         = 1f; // 100% accuracy (random aim spread when missing)
+private const float CRT_BOT_FIRE_ACCURACY         = 0.8f; // 80% accuracy (random aim spread when missing)
 private const float CRT_BOT_AIM_SPREAD_MAX        = 0.45f; // Max aim angle error (radians) at 0% accuracy
 
 // Titan size range
