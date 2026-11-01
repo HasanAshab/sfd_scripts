@@ -1,4 +1,4 @@
-﻿// Titan Transformation Script
+// Titan Transformation Script
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
 // Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
 
@@ -54,7 +54,7 @@ private const float HARDENING_SWITCH_TO_NEUTRAL_CHANCE = 0.60f; // 60% chance to
 private const float AIM_DETECTION_RANGE = 800f; // Range for raycast aim detection
 
 // Attack Titan super punch ability
-private const int ATTACK_SUPER_PUNCH_COUNT = 3; // 3rd punch is super punch (always staggers)
+private const int ATTACK_SUPER_PUNCH_COUNT = 3; // 3rd punch is super punch (always death kneels)
 private const int ATTACK_SUPER_PUNCH_WINDOW = 600; // 600ms window between punches
 
 // Attack Titan slowmo ability
@@ -2102,10 +2102,10 @@ private void HandleAttackTitanMelee(IPlayer attackTitan, int attackTitanId, Play
             }
             if (hitPlayer == null || hitPlayer.IsDead) continue;
             
-            // Super Punch: on third punch, victim will always stagger
+            // Super Punch: on third punch, victim will always death kneel
             if (isSuperPunch)
             {
-                QuickCommand(hitPlayer, new PlayerCommand(PlayerCommandType.Stagger));
+                QuickCommand(hitPlayer, new PlayerCommand(PlayerCommandType.DeathKneel));
             }
         }
     }
@@ -3981,6 +3981,8 @@ private void OnTitanFalling(IPlayer titan)
 
 private void CheckTitanExhaustion(IPlayer titan, int titanId)
 {
+    if (titan == null || titan.IsDead || titan.IsRemoved) return;
+    
     PlayerModifiers mods = titan.GetModifiers();
     
     // Initialize exhaustion state if not tracked
@@ -3996,9 +3998,16 @@ private void CheckTitanExhaustion(IPlayer titan, int titanId)
     // Titan just ran out of energy
     if (hasNoEnergy && !isExhausted)
     {
-        // Disable input and make titan kneel
+        // Disable input temporarily for all titans
         titan.SetInputEnabled(false);
-        QuickCommand(titan, new PlayerCommand(PlayerCommandType.DeathKneelInfinite));
+        
+        // Humanoid titans (all except Pure) also crouch while exhausted
+        bool isHumanoid = titanPlayers.ContainsKey(titanId) && titanPlayers[titanId] != TitanType.Pure;
+        if (isHumanoid)
+        {
+            titan.AddCommand(new PlayerCommand(PlayerCommandType.StartCrouch));
+        }
+        
         titanExhausted[titanId] = true;
         
         // Turn off armor if Armored Titan
@@ -4007,14 +4016,20 @@ private void CheckTitanExhaustion(IPlayer titan, int titanId)
             ApplyArmoredTitanArmor(titan, titanId, false);
         }
         
-        // Set recovery time to 6 seconds from now
+        // Set recovery time
         titanExhaustionRecoverTime[titanId] = currentTime + TITAN_EXHAUSTION_DURATION;
     }
     // Check if titan has finished exhaustion period
     else if (isExhausted && currentTime >= titanExhaustionRecoverTime[titanId])
     {
-        // Stop kneeling and re-enable input
-        QuickCommand(titan, new PlayerCommand(PlayerCommandType.StopDeathKneel));
+        // If humanoid titan, stop crouching
+        bool isHumanoid = titanPlayers.ContainsKey(titanId) && titanPlayers[titanId] != TitanType.Pure;
+        if (isHumanoid)
+        {
+            titan.AddCommand(new PlayerCommand(PlayerCommandType.StopCrouch));
+        }
+        
+        // Re-enable input
         titan.SetInputEnabled(true);
         
         // Restore energy to full
