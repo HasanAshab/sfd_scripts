@@ -2798,7 +2798,21 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
                     }
                     SaveExpiryToStorage();
                     
+                    // Force-write both affected players' powers by name directly so the next
+                    // match restores them correctly (SaveAssignedPowersToStorage uses UniqueID
+                    // lookup which can fail for dead/removed players).
+                    SetStoredPlayerPower(randomTeammatePureTitan.Name, extractedPower);
+                    if (!string.IsNullOrEmpty(victimName))
+                        SetStoredPlayerPower(victimName, TitanType.Pure);
+                    
+                    // Remove the temporary player's entry so it doesn't pollute storage
+                    assignedTitanPowers.Remove(humanPlayerId);
+                    
                     Game.ShowChatMessage(playerName + " extracted the " + powerName + " power and transferred it to " + randomTeammatePureTitan.Name + "!", Color.Yellow);
+                    
+                    // Remove the temporary player from the map now that the power has been transferred
+                    if (humanPlayer != null && !humanPlayer.IsRemoved)
+                        humanPlayer.Remove();
                 }
             }
             else
@@ -2806,6 +2820,9 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
                 assignedTitanPowers[humanPlayerId] = TitanType.Pure;
                 CreateLabelForPlayer(humanPlayer, humanPlayerId, TitanType.Pure);
                 Game.ShowChatMessage(playerName + " extracted a power but had no teammate to transfer it to!", Color.Red);
+                // Remove the temporary player from the map even if no teammate was found
+                if (humanPlayer != null && !humanPlayer.IsRemoved)
+                    humanPlayer.Remove();
             }
         }
         else
