@@ -3453,7 +3453,7 @@ public void OnUpdate(float elapsed)
                 // Bot AI: action decision and behavior
                 if (player.IsBot)
                 {
-                    BeastTitanBotUpdate(player, playerId, currentTime, playerPos);
+                    BeastTitanBotUpdate(player, playerId, currentTime);
                 }
                 
                 // Beast Titan also has exhaustion
@@ -7231,8 +7231,10 @@ private void ShatterBeastRock(BeastRockState r, Vector2 at, Vector2 impactVel)
 /// <summary>
 /// Main Beast Titan bot update: decides between throw, flee, or break crates actions
 /// </summary>
-private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime, Vector2 botPos)
+private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
 {
+    Vector2 botPos = bot.GetWorldPosition();
+    
     // Periodic action evaluation
     float lastCheck = beastTitanBotLastActionCheck.ContainsKey(botId) ? beastTitanBotLastActionCheck[botId] : 0f;
     if (currentTime - lastCheck >= BEAST_BOT_ACTION_CHECK_INTERVAL)
@@ -7337,8 +7339,12 @@ private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vec
         beastTitanRockMode[botId] = desiredMode;
     }
     
-    // Face enemy and throw
-    bot.SetFaceDirectionLeft(closestEnemy.GetWorldPosition().X < botPos.X);
+    // Face enemy
+    int targetFacing = (closestEnemy.GetWorldPosition().X >= botPos.X) ? 1 : -1;
+    if (bot.FacingDirection != targetFacing)
+    {
+        bot.SetFaceDirection(targetFacing);
+    }
     
     // Calculate predicted collision position for accurate aim
     Vector2 enemyPos = closestEnemy.GetWorldPosition();
@@ -7349,16 +7355,12 @@ private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vec
     float estimatedTime = distance / 20f; // Approximate rock speed
     Vector2 predictedPos = enemyPos + enemyVel * estimatedTime;
     
-    // Aim at predicted position
-    bot.SetAimTarget(predictedPos);
+    // Bot doesn't have SetAimTarget - bots aim automatically at their target through bot behavior
+    // Just ensure the bot is active and has normal behavior
+    bot.SetBotBehaviorActive(true);
     
     // Throw shurikens (which will be converted to rocks)
-    ThrownWeaponItem thrown = bot.CurrentThrownItem;
-    if (thrown.WeaponItem == WeaponItem.SHURIKEN && thrown.CurrentAmmo > 0)
-    {
-        // Simulate throw key press
-        bot.SetInputEnabled(true);
-    }
+    // Bots throw automatically when they have ranged weapons and are in combat
 }
 
 /// <summary>
@@ -7393,14 +7395,13 @@ private void BeastBotExecuteFlee(IPlayer bot, int botId, Vector2 botPos)
         beastTitanBotFleeTarget[botId] = fleeNode;
         bot.SetBotBehaviorActive(true);
         bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
-        BotBehaviorSet set = new BotBehaviorSet();
+        BotBehaviorSet set = bot.GetBotBehaviorSet();
         set.OffensiveSprintLevel = 100;
         set.DefensiveSprintLevel = 100;
         set.OffensiveRollFireLevel = 100;
-        set.DefensiveRollFireLevel = 100;
         set.RangedWeaponAccuracy = 0; // Don't shoot while fleeing
         bot.SetBotBehaviorSet(set);
-        bot.SetBotBehaviorSearchTarget(fleeNode.GetWorldPosition());
+        bot.SetGuardTarget(fleeNode);
     }
 }
 
@@ -7413,8 +7414,15 @@ private void BeastBotExecuteBreakCrates(IPlayer bot, int botId, Vector2 botPos)
     IObject closestCrate = null;
     float closestDist = float.MaxValue;
     
-    Area searchArea = Area.FromCenter(botPos, 80f);
-    foreach (IObject obj in Game.GetObjectsByArea(searchArea))
+    Area searchArea = new Area(
+        botPos.Y + 80f,
+        botPos.X - 80f,
+        botPos.Y - 80f,
+        botPos.X + 80f
+    );
+    
+    IObject[] objects = Game.GetObjectsByArea(searchArea);
+    foreach (IObject obj in objects)
     {
         if (obj == null || obj.IsRemoved) continue;
         if (obj.Name == null) continue;
@@ -7440,12 +7448,16 @@ private void BeastBotExecuteBreakCrates(IPlayer bot, int botId, Vector2 botPos)
         Vector2 cratePos = closestCrate.GetWorldPosition();
         bot.SetBotBehaviorActive(true);
         bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
-        bot.SetBotBehaviorSearchTarget(cratePos);
+        bot.SetGuardTarget(closestCrate);
         
         // Face crate and attack
         if (Vector2.Distance(botPos, cratePos) < 20f)
         {
-            bot.SetFaceDirectionLeft(cratePos.X < botPos.X);
+            int targetFacing = (cratePos.X >= botPos.X) ? 1 : -1;
+            if (bot.FacingDirection != targetFacing)
+            {
+                bot.SetFaceDirection(targetFacing);
+            }
         }
     }
     else
