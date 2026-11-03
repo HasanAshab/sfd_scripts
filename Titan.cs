@@ -6778,29 +6778,18 @@ public void OnBeastWeaponAdded(IPlayer player, PlayerWeaponAddedArg arg)
     }
     
     // Convert Handgun/Rifle/Melee → 2 shurikens
-    if (arg.WeaponItem == WeaponItem.HANDGUN || arg.WeaponItem == WeaponItem.RIFLE || arg.WeaponItem == WeaponItem.MELEE ||
-        arg.WeaponItem.ToString().Contains("Handgun") || arg.WeaponItem.ToString().Contains("Rifle") || 
-        arg.WeaponItem.ToString().Contains("Melee"))
+    if (arg.WeaponItemType == WeaponItemType.Handgun || 
+        arg.WeaponItemType == WeaponItemType.Rifle || 
+        arg.WeaponItemType == WeaponItemType.Melee)
     {
         // Remove the weapon
-        WeaponItemType weaponType = WeaponItemType.NONE;
-        if (arg.WeaponItem == WeaponItem.HANDGUN || arg.WeaponItem.ToString().Contains("Handgun"))
-            weaponType = WeaponItemType.Handgun;
-        else if (arg.WeaponItem == WeaponItem.RIFLE || arg.WeaponItem.ToString().Contains("Rifle"))
-            weaponType = WeaponItemType.Rifle;
-        else if (arg.WeaponItem == WeaponItem.MELEE || arg.WeaponItem.ToString().Contains("Melee"))
-            weaponType = WeaponItemType.Melee;
+        player.RemoveWeaponItemType(arg.WeaponItemType);
         
-        if (weaponType != WeaponItemType.NONE)
-        {
-            player.RemoveWeaponItemType(weaponType);
-            
-            // Give 2 shurikens
-            player.GiveWeaponItem(WeaponItem.SHURIKEN);
-            player.GiveWeaponItem(WeaponItem.SHURIKEN);
-            
-            Game.PlaySound("GetAmmoHandgun", player.GetWorldPosition());
-        }
+        // Give 2 shurikens
+        player.GiveWeaponItem(WeaponItem.SHURIKEN);
+        player.GiveWeaponItem(WeaponItem.SHURIKEN);
+        
+        Game.PlaySound("GetAmmoHandgun", player.GetWorldPosition());
     }
 }
 
