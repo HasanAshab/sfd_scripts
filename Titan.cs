@@ -7504,69 +7504,166 @@ private void BeastBotExecuteFlee(IPlayer bot, int botId, Vector2 botPos)
 }
 
 /// <summary>
-/// Execute break crates action: find and break nearby crates to find weapons
+/// Execute break crates action: programmatically break crates with rocks and pick up items (especially shurikens)
 /// </summary>
 private void BeastBotExecuteBreakCrates(IPlayer bot, int botId, Vector2 botPos)
 {
-    // Find nearest crate
-    IObject closestCrate = null;
-    float closestDist = float.MaxValue;
+    // First priority: Check for nearby weapon items on ground (especially shurikens)
+    IObject[] nearbyObjects = Game.GetObjectsByArea(new Area(
+        botPos.Y + 60f,
+        botPos.X - 60f,
+        botPos.Y - 60f,
+        botPos.X + 60f
+    ));
     
-    Area searchArea = new Area(
-        botPos.Y + 80f,
-        botPos.X - 80f,
-        botPos.Y - 80f,
-        botPos.X + 80f
+    IObject closestWeapon = null;
+    float closestWeaponDist = float.MaxValue;
+    
+    foreach (IObject obj in nearbyObjects)
+    {
+        if (obj == null || obj.IsRemoved) continue;
+        
+        IObjectWeaponItem weaponItem = obj as IObjectWeaponItem;
+        if (weaponItem != null && weaponItem.WeaponItemType == WeaponItemType.Thrown)
+        {
+            float dist = Vector2.Distance(obj.GetWorldPosition(), botPos);
+            if (dist < closestWeaponDist && dist < 20f) // Pickup radius
+            {
+                closestWeaponDist = dist;
+                closestWeapon = obj;
+            }
+        }
+    }
+    
+    // If close to a weapon, try to pick it up by moving toward it
+    if (closestWeapon != null)
+    {
+        Vector2 weaponPos = closestWeapon.GetWorldPosition();
+        
+        // Face the weapon
+        int targetFacing = (weaponPos.X >= botPos.X) ? 1 : -1;
+        bot.SetFaceDirection(targetFacing);
+        
+        // Move toward weapon to trigger pickup
+        if (Vector2.Distance(botPos, weaponPos) > 5f)
+        {
+            bot.SetInputEnabled(false);
+            bot.AddCommand(new PlayerCommand(PlayerCommandType.StartMoveToPosition, weaponPos));
+            bot.AddCommand(new PlayerCommand(PlayerCommandType.Sprint));
+            
+            Game.Events.StartUpdateCallback(dlt =>
+            {
+                if (bot != null && !bot.IsRemoved)
+                    bot.SetInputEnabled(true);
+            }, 300, 1);
+        }
+        return;
+    }
+    
+    // Second priority: Find and break nearest crate with rocks
+    IObject closestCrate = null;
+    float closestCrateDist = float.MaxValue;
+    
+    Area crateSearchArea = new Area(
+        botPos.Y + 100f,
+        botPos.X - 100f,
+        botPos.Y - 100f,
+        botPos.X + 100f
     );
     
-    IObject[] objects = Game.GetObjectsByArea(searchArea);
+    IObject[] objects = Game.GetObjectsByArea(crateSearchArea);
     foreach (IObject obj in objects)
     {
         if (obj == null || obj.IsRemoved) continue;
         if (obj.Name == null) continue;
-        if (!obj.Destructable) continue; // Skip non-destructible objects
+        if (!obj.Destructable) continue;
+        if (obj.GetHealth() <= 0f) continue;
         
         string name = obj.Name.ToLower();
         if (name.Contains("crate") || name.Contains("box") || name.Contains("barrel"))
         {
             float dist = Vector2.Distance(obj.GetWorldPosition(), botPos);
-            if (dist < closestDist)
+            if (dist < closestCrateDist)
             {
-                closestDist = dist;
+                closestCrateDist = dist;
                 closestCrate = obj;
             }
         }
     }
     
-    if (closestCrate != null)
+    if (closestCrate != null && closestCrateDist < 80f)
     {
-        // Move toward and attack crate
+        // Throw rock at crate to break it
         Vector2 cratePos = closestCrate.GetWorldPosition();
-        bot.SetBotBehaviorActive(true);
-        bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
         
-        // Ensure melee is still disabled even when breaking crates
-        BotBehaviorSet crateSet = bot.GetBotBehaviorSet();
-        crateSet.MeleeUsage = false;
-        crateSet.MeleeWeaponUsage = false;
-        bot.SetBotBehaviorSet(crateSet);
-        
-        bot.SetGuardTarget(closestCrate);
-        
-        // Face crate and attack
-        if (Vector2.Distance(botPos, cratePos) < 20f)
+        // Check if we have shurikens
+        ThrownWeaponItem currentThrown = bot.CurrentThrownItem;
+        if (currentThrown.WeaponItem != WeaponItem.SHURIKEN || currentThrown.CurrentAmmo <= 0)
         {
-            int targetFacing = (cratePos.X >= botPos.X) ? 1 : -1;
-            if (bot.FacingDirection != targetFacing)
+            // Give shurikens
+            AddShurikens(bot, 2);
+            return;
+        }
+        
+        // Check throw cooldown
+        float lastThrow = beastTitanBotLastThrowTime.ContainsKey(botId) ? beastTitanBotLastThrowTime[botId] : 0f;
+        float currentTime = Game.TotalElapsedRealTime;
+        if (currentTime - lastThrow < BEAST_BOT_THROW_COOLDOWN)
+        {
+            // On cooldown, move toward crate
+            bot.SetInputEnabled(false);
+            bot.AddCommand(new PlayerCommand(PlayerCommandType.StartMoveToPosition, cratePos));
+            bot.AddCommand(new PlayerCommand(PlayerCommandType.Sprint));
+            
+            Game.Events.StartUpdateCallback(dlt =>
             {
-                bot.SetFaceDirection(targetFacing);
-            }
+                if (bot != null && !bot.IsRemoved)
+                    bot.SetInputEnabled(true);
+            }, 300, 1);
+            return;
+        }
+        
+        // Can throw - face crate
+        int crateFacing = (cratePos.X >= botPos.X) ? 1 : -1;
+        bot.SetFaceDirection(crateFacing);
+        
+        // Throw rock at crate (simple aim, no prediction needed)
+        Vector2 aimPos = new Vector2(cratePos.X, cratePos.Y + 5f);
+        
+        if (bot.IsOnGround && !bot.IsThrowing && !bot.IsHoldingActiveThrowable)
+        {
+            bot.SetInputEnabled(false);
+            bot.AddCommand(new PlayerCommand(PlayerCommandType.DrawThrowable));
+            bot.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimPos));
+            bot.AddCommand(new PlayerCommand(PlayerCommandType.PrepareThrow, 120));
+            bot.AddCommand(new PlayerCommand(PlayerCommandType.Throw));
+            bot.AddCommand(new PlayerCommand(PlayerCommandType.StopAim));
+            
+            beastTitanBotLastThrowTime[botId] = currentTime;
+            
+            Game.Events.StartUpdateCallback(dlt =>
+            {
+                if (bot != null && !bot.IsRemoved)
+                    bot.SetInputEnabled(true);
+            }, 800, 1);
         }
     }
     else
     {
-        // No crates found, switch to throw action
-        beastTitanBotAction[botId] = BeastBotAction.Throw;
+        // No crates found nearby, wander a bit to find items/crates
+        Vector2 wanderTarget = new Vector2(
+            botPos.X + ((float)rnd.NextDouble() - 0.5f) * 100f,
+            botPos.Y
+        );
+        
+        bot.SetInputEnabled(false);
+        bot.AddCommand(new PlayerCommand(PlayerCommandType.StartMoveToPosition, wanderTarget));
+        
+        Game.Events.StartUpdateCallback(dlt =>
+        {
+            if (bot != null && !bot.IsRemoved)
+                bot.SetInputEnabled(true);
+        }, 500, 1);
     }
 }
 
