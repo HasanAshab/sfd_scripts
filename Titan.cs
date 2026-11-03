@@ -195,6 +195,14 @@ private const float BEAST_THROW_DETECT_RANGE = 50f;
 private const float BEAST_MIN_REAL_THROW_MS = 3f;
 private const float BEAST_FALLBACK_THROW_MS = 25f;
 
+// Beast Titan bot AI constants
+private const float BEAST_BOT_ACTION_CHECK_INTERVAL = 2000f; // How often to decide action (ms)
+private const float BEAST_BOT_THROW_CHANCE = 0.50f;          // 50% throw rocks
+private const float BEAST_BOT_FLEE_CHANCE = 0.25f;           // 25% run away
+private const float BEAST_BOT_CRATE_CHANCE = 0.25f;          // 25% break crates for weapons
+private const float BEAST_BOT_ROCK_TYPE_CHECK_INTERVAL = 1500f; // How often to re-evaluate rock type
+private const float BEAST_BOT_FLEE_DISTANCE = 80f;           // Distance to flee from enemies
+
 // Cart Titan uphead gun energy costs
 private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.03f;    // 3% per bullet
 private const float CART_GUN_ENERGY_PER_BULLET_SNIPER = 0.25f;  // 25% per bullet
@@ -338,6 +346,15 @@ private Dictionary<int, int> beastTitanFireThrows = new Dictionary<int, int>(); 
 private List<BeastRockState> beastRocks = new List<BeastRockState>(); // Active rocks
 private List<IObject> beastPendingShurikens = new List<IObject>(); // Shurikens to delete
 private float beastRockUnitsPerMeter = BEAST_ROCK_UNITS_PER_METER; // Auto-calibrated units per meter
+
+// Beast Titan bot AI state
+private enum BeastBotAction { Throw, Flee, BreakCrates }
+private Dictionary<int, BeastBotAction> beastTitanBotAction = new Dictionary<int, BeastBotAction>(); // Current bot action
+private Dictionary<int, float> beastTitanBotLastActionCheck = new Dictionary<int, float>(); // Rate-limit action evaluation
+private Dictionary<int, float> beastTitanBotLastRockTypeCheck = new Dictionary<int, float>(); // Rate-limit rock type evaluation
+private Dictionary<int, int> beastTitanBotLockedEnemy = new Dictionary<int, int>(); // Locked target ID for rock-type decision
+private Dictionary<int, bool> beastTitanBotLockedIsLarge = new Dictionary<int, bool>(); // Locked rock type for current target
+private Dictionary<int, IObjectPathNode> beastTitanBotFleeTarget = new Dictionary<int, IObjectPathNode>(); // Flee destination node
 
 // Beast Titan rock state class
 private class BeastRockState
@@ -3433,6 +3450,12 @@ public void OnUpdate(float elapsed)
                 // Beast Titan updates
                 UpdateBeastTitanRocks(elapsed);
                 
+                // Bot AI: action decision and behavior
+                if (player.IsBot)
+                {
+                    BeastTitanBotUpdate(player, playerId, currentTime, playerPos);
+                }
+                
                 // Beast Titan also has exhaustion
                 CheckTitanExhaustion(player, playerId);
             }
@@ -6473,6 +6496,18 @@ private void CleanupCartTitanData(int playerId)
     cartTitanBotIsAvoiding.Remove(playerId);
     cartTitanBotLockedEnemy.Remove(playerId);
     cartTitanBotLockedIsSniper.Remove(playerId);
+    
+    // Beast Titan state
+    beastTitanRockMode.Remove(playerId);
+    beastTitanFireThrows.Remove(playerId);
+    
+    // Beast Titan bot state
+    beastTitanBotAction.Remove(playerId);
+    beastTitanBotLastActionCheck.Remove(playerId);
+    beastTitanBotLastRockTypeCheck.Remove(playerId);
+    beastTitanBotLockedEnemy.Remove(playerId);
+    beastTitanBotLockedIsLarge.Remove(playerId);
+    beastTitanBotFleeTarget.Remove(playerId);
 }
 
 // ============================================================
@@ -7186,6 +7221,237 @@ private void ShatterBeastRock(BeastRockState r, Vector2 at, Vector2 impactVel)
         BeastRockState piece = CreateBeastRockText(at, v, r.Fire, r.BaseScale * BEAST_FRAGMENT_SCALE, true, false);
         piece.OwnerId = r.OwnerId;
         beastRocks.Add(piece);
+    }
+}
+
+// ============================================================
+// BEAST TITAN BOT AI
+// ============================================================
+
+/// <summary>
+/// Main Beast Titan bot update: decides between throw, flee, or break crates actions
+/// </summary>
+private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime, Vector2 botPos)
+{
+    // Periodic action evaluation
+    float lastCheck = beastTitanBotLastActionCheck.ContainsKey(botId) ? beastTitanBotLastActionCheck[botId] : 0f;
+    if (currentTime - lastCheck >= BEAST_BOT_ACTION_CHECK_INTERVAL)
+    {
+        beastTitanBotLastActionCheck[botId] = currentTime;
+        BeastBotAction newAction = BeastBotDecideAction(bot, botId, botPos);
+        beastTitanBotAction[botId] = newAction;
+    }
+    
+    BeastBotAction currentAction = beastTitanBotAction.ContainsKey(botId) ? beastTitanBotAction[botId] : BeastBotAction.Throw;
+    
+    // Execute current action
+    if (currentAction == BeastBotAction.Throw)
+    {
+        BeastBotExecuteThrow(bot, botId, currentTime, botPos);
+    }
+    else if (currentAction == BeastBotAction.Flee)
+    {
+        BeastBotExecuteFlee(bot, botId, botPos);
+    }
+    else if (currentAction == BeastBotAction.BreakCrates)
+    {
+        BeastBotExecuteBreakCrates(bot, botId, botPos);
+    }
+}
+
+/// <summary>
+/// Decide Beast Titan bot action: 50% throw, 25% flee, 25% break crates
+/// </summary>
+private BeastBotAction BeastBotDecideAction(IPlayer bot, int botId, Vector2 botPos)
+{
+    double roll = rnd.NextDouble();
+    
+    if (roll < BEAST_BOT_THROW_CHANCE)
+        return BeastBotAction.Throw;
+    else if (roll < BEAST_BOT_THROW_CHANCE + BEAST_BOT_FLEE_CHANCE)
+        return BeastBotAction.Flee;
+    else
+        return BeastBotAction.BreakCrates;
+}
+
+/// <summary>
+/// Execute throw action: aim and throw rocks at enemies, decide rock type based on enemy size
+/// </summary>
+private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vector2 botPos)
+{
+    // Find nearest enemy
+    IPlayer closestEnemy = null;
+    float closestDist = float.MaxValue;
+    
+    foreach (IPlayer p in Game.GetPlayers())
+    {
+        if (p == null || p.IsDead || p.UniqueID == botId) continue;
+        if (p.GetTeam() == bot.GetTeam()) continue;
+        
+        float dist = Vector2.Distance(p.GetWorldPosition(), botPos);
+        if (dist < closestDist)
+        {
+            closestDist = dist;
+            closestEnemy = p;
+        }
+    }
+    
+    if (closestEnemy == null) return;
+    
+    // Decide rock type based on enemy size (same formula as Cart Titan bullet type)
+    int currentEnemyId = closestEnemy.UniqueID;
+    bool lockedEnemy = beastTitanBotLockedEnemy.ContainsKey(botId) && beastTitanBotLockedEnemy[botId] == currentEnemyId;
+    
+    float lastRockTypeCheck = beastTitanBotLastRockTypeCheck.ContainsKey(botId) ? beastTitanBotLastRockTypeCheck[botId] : 0f;
+    if (!lockedEnemy || currentTime - lastRockTypeCheck >= BEAST_BOT_ROCK_TYPE_CHECK_INTERVAL)
+    {
+        beastTitanBotLastRockTypeCheck[botId] = currentTime;
+        
+        float enemySize = 1.0f;
+        if (titanSizes.ContainsKey(currentEnemyId))
+            enemySize = titanSizes[currentEnemyId];
+        else
+        {
+            PlayerModifiers em = closestEnemy.GetModifiers();
+            enemySize = em.SizeModifier;
+        }
+        
+        // Size-based decision: larger enemies = more likely to use large rocks
+        float sizeMin = 0.5f; 
+        float sizeMax = 1.7f;
+        float t = MathHelper.Clamp((enemySize - sizeMin) / (sizeMax - sizeMin), 0f, 1f);
+        float largeRockChance = 0.05f + t * 0.90f; // 5% at size=0.5, 95% at size=1.7
+        
+        bool useLarge = rnd.NextDouble() < (double)largeRockChance;
+        beastTitanBotLockedEnemy[botId] = currentEnemyId;
+        beastTitanBotLockedIsLarge[botId] = useLarge;
+    }
+    
+    // Set rock mode
+    bool wantsLarge = beastTitanBotLockedIsLarge.ContainsKey(botId) && beastTitanBotLockedIsLarge[botId];
+    BeastRockMode desiredMode = wantsLarge ? BeastRockMode.Large : BeastRockMode.Small;
+    BeastRockMode currentMode = beastTitanRockMode.ContainsKey(botId) ? beastTitanRockMode[botId] : BeastRockMode.Large;
+    
+    if (desiredMode != currentMode)
+    {
+        beastTitanRockMode[botId] = desiredMode;
+    }
+    
+    // Face enemy and throw
+    bot.SetFaceDirectionLeft(closestEnemy.GetWorldPosition().X < botPos.X);
+    
+    // Calculate predicted collision position for accurate aim
+    Vector2 enemyPos = closestEnemy.GetWorldPosition();
+    Vector2 enemyVel = closestEnemy.GetLinearVelocity();
+    float distance = Vector2.Distance(botPos, enemyPos);
+    
+    // Estimate time to hit (simple approximation)
+    float estimatedTime = distance / 20f; // Approximate rock speed
+    Vector2 predictedPos = enemyPos + enemyVel * estimatedTime;
+    
+    // Aim at predicted position
+    bot.SetAimTarget(predictedPos);
+    
+    // Throw shurikens (which will be converted to rocks)
+    ThrownWeaponItem thrown = bot.CurrentThrownItem;
+    if (thrown.WeaponItem == WeaponItem.SHURIKEN && thrown.CurrentAmmo > 0)
+    {
+        // Simulate throw key press
+        bot.SetInputEnabled(true);
+    }
+}
+
+/// <summary>
+/// Execute flee action: run away from enemies using pathfinding (copied from Cart Titan)
+/// </summary>
+private void BeastBotExecuteFlee(IPlayer bot, int botId, Vector2 botPos)
+{
+    // Find nearest enemy
+    IPlayer closestEnemy = null;
+    float closestDist = float.MaxValue;
+    
+    foreach (IPlayer p in Game.GetPlayers())
+    {
+        if (p == null || p.IsDead || p.UniqueID == botId) continue;
+        if (p.GetTeam() == bot.GetTeam()) continue;
+        
+        float dist = Vector2.Distance(p.GetWorldPosition(), botPos);
+        if (dist < closestDist)
+        {
+            closestDist = dist;
+            closestEnemy = p;
+        }
+    }
+    
+    if (closestEnemy == null) return;
+    
+    // Find flee node (reuse Cart Titan logic)
+    IObjectPathNode fleeNode = CrtBotFindFleeNode(bot, closestEnemy.GetWorldPosition());
+    
+    if (fleeNode != null)
+    {
+        beastTitanBotFleeTarget[botId] = fleeNode;
+        bot.SetBotBehaviorActive(true);
+        bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
+        BotBehaviorSet set = new BotBehaviorSet();
+        set.OffensiveSprintLevel = 100;
+        set.DefensiveSprintLevel = 100;
+        set.OffensiveRollFireLevel = 100;
+        set.DefensiveRollFireLevel = 100;
+        set.RangedWeaponAccuracy = 0; // Don't shoot while fleeing
+        bot.SetBotBehaviorSet(set);
+        bot.SetBotBehaviorSearchTarget(fleeNode.GetWorldPosition());
+    }
+}
+
+/// <summary>
+/// Execute break crates action: find and break nearby crates to find weapons
+/// </summary>
+private void BeastBotExecuteBreakCrates(IPlayer bot, int botId, Vector2 botPos)
+{
+    // Find nearest crate
+    IObject closestCrate = null;
+    float closestDist = float.MaxValue;
+    
+    Area searchArea = Area.FromCenter(botPos, 80f);
+    foreach (IObject obj in Game.GetObjectsByArea(searchArea))
+    {
+        if (obj == null || obj.IsRemoved) continue;
+        if (obj.Name == null) continue;
+        
+        string name = obj.Name.ToLower();
+        if (name.Contains("crate") || name.Contains("box") || name.Contains("barrel"))
+        {
+            if (obj.Destructable == null) continue;
+            if (obj.Destructable.IsDestroyed) continue;
+            
+            float dist = Vector2.Distance(obj.GetWorldPosition(), botPos);
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closestCrate = obj;
+            }
+        }
+    }
+    
+    if (closestCrate != null)
+    {
+        // Move toward and attack crate
+        Vector2 cratePos = closestCrate.GetWorldPosition();
+        bot.SetBotBehaviorActive(true);
+        bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
+        bot.SetBotBehaviorSearchTarget(cratePos);
+        
+        // Face crate and attack
+        if (Vector2.Distance(botPos, cratePos) < 20f)
+        {
+            bot.SetFaceDirectionLeft(cratePos.X < botPos.X);
+        }
+    }
+    else
+    {
+        // No crates found, switch to throw action
+        beastTitanBotAction[botId] = BeastBotAction.Throw;
     }
 }
 
