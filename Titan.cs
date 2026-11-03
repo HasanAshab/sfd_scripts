@@ -6510,9 +6510,7 @@ private void CleanupCartTitanData(int playerId)
     beastTitanFireThrows.Remove(playerId);
     
     // Beast Titan bot state
-    beastTitanBotAction.Remove(playerId);
     beastTitanBotMode.Remove(playerId);
-    beastTitanBotLastActionCheck.Remove(playerId);
     beastTitanBotLastThrowTime.Remove(playerId);
     beastTitanBotThrowLockUntil.Remove(playerId);
     beastTitanBotLastRockTypeCheck.Remove(playerId);
