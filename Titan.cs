@@ -7356,6 +7356,11 @@ private void BeastBotEnterPickup(IPlayer bot, int botId)
 /// </summary>
 private void BeastBotStartThrow(IPlayer bot, int botId, Vector2 botPos, IPlayer enemy, float currentTime)
 {
+    // If already in Throw mode, do not restart the sequence
+    BeastBotMode currentBotMode;
+    if (beastTitanBotMode.TryGetValue(botId, out currentBotMode) && currentBotMode == BeastBotMode.Throw)
+        return;
+    
     if (!bot.IsOnGround || bot.IsStunned || bot.IsStaggering) return; // Wait a tick, state is unchanged
     
     Vector2 enemyPos = enemy.GetWorldPosition();
@@ -7410,8 +7415,8 @@ private void BeastBotStartThrow(IPlayer bot, int botId, Vector2 botPos, IPlayer 
     
     bot.AddCommand(new PlayerCommand(PlayerCommandType.DrawThrowable, 0, 150));            // Let draw anim finish
     bot.AddCommand(new PlayerCommand(PlayerCommandType.EnterThrowingMode));
-    bot.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimPos, 180));   // Give the arm time to rotate
-    bot.AddCommand(new PlayerCommand(PlayerCommandType.PrepareThrow, 0, 120));
+    bot.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimPos, (PlayerCommandFaceDirection)facing, 600));   // Give the arm time to rotate
+    // bot.AddCommand(new PlayerCommand(PlayerCommandType.PrepareThrow, 0, 120));
     bot.AddCommand(new PlayerCommand(PlayerCommandType.Throw, 0, 50));
     bot.AddCommand(new PlayerCommand(PlayerCommandType.ExitThrowingMode));
     bot.AddCommand(new PlayerCommand(PlayerCommandType.StopAim));
