@@ -3329,8 +3329,8 @@ private void TransformToBeastTitan(IPlayer player, int playerId)
     // Store titan size
     titanSizes[playerId] = BEAST_TITAN_SIZE;
     
-    // Give 2 shurikens to start
-    AddShurikens(player, 2);
+    // Give 5 shurikens to start
+    AddShurikens(player, 5);
 }
 
 public void OnUpdate(float elapsed)
