@@ -7397,8 +7397,7 @@ private void BeastBotExecuteFlee(IPlayer bot, int botId, Vector2 botPos)
         bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
         BotBehaviorSet set = bot.GetBotBehaviorSet();
         set.OffensiveSprintLevel = 100;
-        set.DefensiveSprintLevel = 100;
-        set.OffensiveRollFireLevel = 100;
+        set.DefensiveRollFireLevel = 100;
         set.RangedWeaponAccuracy = 0; // Don't shoot while fleeing
         bot.SetBotBehaviorSet(set);
         bot.SetGuardTarget(fleeNode);
