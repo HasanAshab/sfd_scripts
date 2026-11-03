@@ -200,6 +200,10 @@ private const float BEAST_BOT_ACTION_CHECK_INTERVAL = 500f;      // How often to
 private const float BEAST_BOT_ROCK_TYPE_CHECK_INTERVAL = 1500f; // How often to re-evaluate rock type
 private const float BEAST_BOT_THROW_COOLDOWN = 1200f;           // Cooldown between throws (ms)
 private const float BEAST_BOT_FLEE_DISTANCE = 80f;               // Distance to flee from enemies
+private const float BEAST_BOT_FLEE_THRESHOLD = 15f;              // Only flee if enemy closer than this
+private const float BEAST_BOT_MIN_THROW_RANGE = 20f;             // Don't throw if too close
+private const float BEAST_BOT_MAX_THROW_RANGE = 150f;            // Don't throw if too far
+private const float BEAST_BOT_OPTIMAL_RANGE = 50f;               // Preferred combat distance
 
 // Cart Titan uphead gun energy costs
 private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.03f;    // 3% per bullet
@@ -7272,13 +7276,14 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
 
 /// <summary>
 /// Decide Beast Titan bot action with priority system:
-/// 1. Flee if any enemy is too close
+/// 1. Flee if any enemy is too close (within 15f)
 /// 2. Pickup/break crates if no enemy within 60f or no shurikens left
-/// 3. Throw otherwise
+/// 3. Reposition if enemy too close (15-20f) or too far (150f+)
+/// 4. Throw otherwise (20-150f optimal range)
 /// </summary>
 private BeastBotAction BeastBotDecideAction(IPlayer bot, int botId, Vector2 botPos)
 {
-    // Find closest enemy
+    // Find closest enemy and their distance
     float closestEnemyDist = float.MaxValue;
     foreach (IPlayer p in Game.GetPlayers())
     {
@@ -7290,8 +7295,8 @@ private BeastBotAction BeastBotDecideAction(IPlayer bot, int botId, Vector2 botP
             closestEnemyDist = dist;
     }
     
-    // Priority 1: Flee if any enemy is too close (within 25f)
-    if (closestEnemyDist <= 25f)
+    // Priority 1: Flee if any enemy is VERY close (within 15f)
+    if (closestEnemyDist <= BEAST_BOT_FLEE_THRESHOLD)
         return BeastBotAction.Flee;
     
     // Check shuriken status
@@ -7302,7 +7307,7 @@ private BeastBotAction BeastBotDecideAction(IPlayer bot, int botId, Vector2 botP
     if (closestEnemyDist > 60f || !hasShurikens)
         return BeastBotAction.BreakCrates;
     
-    // Priority 3: Throw at enemies
+    // Priority 3: Throw at enemies (enemy is in 15-60f range and have ammo)
     return BeastBotAction.Throw;
 }
 
@@ -7311,11 +7316,6 @@ private BeastBotAction BeastBotDecideAction(IPlayer bot, int botId, Vector2 botP
 /// </summary>
 private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vector2 botPos)
 {
-    // Check throw cooldown first
-    float lastThrow = beastTitanBotLastThrowTime.ContainsKey(botId) ? beastTitanBotLastThrowTime[botId] : 0f;
-    if (currentTime - lastThrow < BEAST_BOT_THROW_COOLDOWN)
-        return; // Still on cooldown
-    
     // Find nearest enemy
     IPlayer closestEnemy = null;
     float closestDist = float.MaxValue;
@@ -7334,6 +7334,69 @@ private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vec
     }
     
     if (closestEnemy == null) return;
+    
+    Vector2 enemyPos = closestEnemy.GetWorldPosition();
+    
+    // Check range - reposition if needed
+    if (closestDist < BEAST_BOT_MIN_THROW_RANGE)
+    {
+        // Too close - back away
+        int retreatDir = (enemyPos.X >= botPos.X) ? -1 : 1;
+        Vector2 retreatPos = new Vector2(botPos.X + retreatDir * 30f, botPos.Y);
+        
+        bot.SetInputEnabled(false);
+        bot.SetFaceDirection(retreatDir);
+        bot.AddCommand(new PlayerCommand(PlayerCommandType.StartMoveToPosition, retreatPos));
+        bot.AddCommand(new PlayerCommand(PlayerCommandType.Sprint));
+        
+        Game.Events.StartUpdateCallback(dlt =>
+        {
+            if (bot != null && !bot.IsRemoved)
+                bot.SetInputEnabled(true);
+        }, 400, 1);
+        return;
+    }
+    else if (closestDist > BEAST_BOT_MAX_THROW_RANGE)
+    {
+        // Too far - move closer
+        int approachDir = (enemyPos.X >= botPos.X) ? 1 : -1;
+        Vector2 approachPos = new Vector2(enemyPos.X - approachDir * BEAST_BOT_OPTIMAL_RANGE, enemyPos.Y);
+        
+        bot.SetInputEnabled(false);
+        bot.SetFaceDirection(approachDir);
+        bot.AddCommand(new PlayerCommand(PlayerCommandType.StartMoveToPosition, approachPos));
+        bot.AddCommand(new PlayerCommand(PlayerCommandType.Sprint));
+        
+        Game.Events.StartUpdateCallback(dlt =>
+        {
+            if (bot != null && !bot.IsRemoved)
+                bot.SetInputEnabled(true);
+        }, 400, 1);
+        return;
+    }
+    
+    // Check throw cooldown
+    float lastThrow = beastTitanBotLastThrowTime.ContainsKey(botId) ? beastTitanBotLastThrowTime[botId] : 0f;
+    if (currentTime - lastThrow < BEAST_BOT_THROW_COOLDOWN)
+    {
+        // On cooldown - circle strafe to maintain distance
+        int strafeDir = (rnd.NextDouble() > 0.5) ? 1 : -1;
+        Vector2 strafePos = new Vector2(botPos.X + strafeDir * 20f, botPos.Y);
+        
+        // Always face enemy while strafing
+        int enemyFacing = (enemyPos.X >= botPos.X) ? 1 : -1;
+        bot.SetFaceDirection(enemyFacing);
+        
+        bot.SetInputEnabled(false);
+        bot.AddCommand(new PlayerCommand(PlayerCommandType.StartMoveToPosition, strafePos));
+        
+        Game.Events.StartUpdateCallback(dlt =>
+        {
+            if (bot != null && !bot.IsRemoved)
+                bot.SetInputEnabled(true);
+        }, 300, 1);
+        return;
+    }
     
     // Check if bot has shurikens
     ThrownWeaponItem currentThrown = bot.CurrentThrownItem;
@@ -7388,7 +7451,6 @@ private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vec
     }
     
     // Face enemy BEFORE calculating aim
-    Vector2 enemyPos = closestEnemy.GetWorldPosition();
     int targetFacing = (enemyPos.X >= botPos.X) ? 1 : -1;
     bot.SetFaceDirection(targetFacing);
     
