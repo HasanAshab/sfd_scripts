@@ -7506,6 +7506,7 @@ private void BeastBotExecuteFlee(IPlayer bot, int botId, Vector2 botPos)
         set.MeleeWeaponUsage = false;
         set.MeleeUsage = false;
         set.PowerupUsage = false;
+        set.SearchForItems = false;          // Don't search while fleeing - focus on guard target
         set.ChaseRange = 20;
         set.GuardRange = 9;
         set.ChokePointPlayerCountThreshold = 0;
