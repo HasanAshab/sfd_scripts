@@ -197,9 +197,11 @@ private const float BEAST_FALLBACK_THROW_MS = 25f;
 
 // Beast Titan bot AI constants
 private const float BEAST_BOT_ROCK_TYPE_CHECK_INTERVAL = 1500f; // How often to re-evaluate rock type
-private const float BEAST_BOT_THROW_SEQUENCE_TIME = 650f;        // Time for complete throw sequence (ms)
+private const float BEAST_BOT_THROW_SEQUENCE_TIME = 900f;        // Time for complete throw sequence (ms)
 private const float BEAST_BOT_FLEE_RANGE = 15f;                  // Flee if enemy closer than this
 private const float BEAST_BOT_THROW_MAX_RANGE = 450f;            // Farthest distance to throw from
+private const float BEAST_AIM_WINDUP_SEC = 0.45f;                // Draw + aim + prep time before release (for lead)
+private const float BEAST_AIM_ARC_PER_UNIT = 0.04f;              // Upward arc per unit of distance
 
 // Cart Titan uphead gun energy costs
 private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.03f;    // 3% per bullet
@@ -7279,30 +7281,30 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
     bool hasShurikens = thrown.WeaponItem == WeaponItem.SHURIKEN && thrown.CurrentAmmo > 0;
     bool wantsMoreShurikens = !(thrown.WeaponItem == WeaponItem.SHURIKEN && thrown.CurrentAmmo >= thrown.MaxCarriedAmmo);
     
-    // 3) Decide mode - Priority system
-    if (closestEnemy != null && closestDist <= BEAST_BOT_FLEE_RANGE)
-    {
-        BeastBotSetMode(bot, botId, BeastBotMode.Flee);
-        BeastBotExecuteFlee(bot, botId, botPos);
-        return;
-    }
-    
-    bool enemyInThrowRange = closestEnemy != null && closestDist <= BEAST_BOT_THROW_MAX_RANGE;
-    
-    if (enemyInThrowRange && hasShurikens)
-    {
-        BeastBotStartThrow(bot, botId, botPos, closestEnemy, currentTime);
-        return;
-    }
-    
-    // No ammo, or nobody in range: go collect shurikens
-    if (!hasShurikens || wantsMoreShurikens)
+    // 3) Decide mode - NO SHURIKENS = 100% pickup, even if an enemy is close
+    if (!hasShurikens)
     {
         BeastBotEnterPickup(bot, botId);
         return;
     }
     
-    // Full ammo, nobody in range: idle
+    if (closestEnemy != null && closestDist <= BEAST_BOT_FLEE_RANGE)
+    {
+        beastTitanBotMode[botId] = BeastBotMode.Flee;
+        BeastBotExecuteFlee(bot, botId, botPos);
+        return;
+    }
+    
+    bool enemyInThrowRange = closestEnemy != null && closestDist <= BEAST_BOT_THROW_MAX_RANGE;
+    if (enemyInThrowRange)
+    {
+        BeastBotStartThrow(bot, botId, botPos, closestEnemy, currentTime);
+        return;
+    }
+    
+    // Has ammo but nobody in range: top up
+    if (wantsMoreShurikens)
+        BeastBotEnterPickup(bot, botId);
 }
 
 /// <summary>
@@ -7313,6 +7315,19 @@ private void BeastBotSetMode(IPlayer bot, int botId, BeastBotMode mode)
     BeastBotMode cur;
     if (beastTitanBotMode.TryGetValue(botId, out cur) && cur == mode) return;
     beastTitanBotMode[botId] = mode;
+}
+
+/// <summary>
+/// Apply passive AI settings: no melee, no powerups, no shooting
+/// </summary>
+private void BeastBotApplyPassiveBehavior(IPlayer bot)
+{
+    BotBehaviorSet set = bot.GetBotBehaviorSet();
+    set.EliminateEnemies = false;
+    set.MeleeUsage = false;
+    set.MeleeWeaponUsage = false;
+    set.PowerupUsage = false;
+    set.RangedWeaponUsage = false;
 }
 
 /// <summary>
@@ -7329,15 +7344,11 @@ private void BeastBotEnterPickup(IPlayer bot, int botId)
     bot.SetBotBehaviorActive(true);
     bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
     
+    BeastBotApplyPassiveBehavior(bot);  // Must be AFTER SetBotBehavior, which resets the set
     BotBehaviorSet set = bot.GetBotBehaviorSet();
-    set.EliminateEnemies = false;
-    set.RangedWeaponUsage = false;
-    set.MeleeWeaponUsage = false;
-    set.MeleeUsage = false;
-    set.PowerupUsage = false;
     set.SearchForItems = true;
-    set.SearchItems = SearchItems.Throwable;   // Only look for throwables
-    set.SearchItemRange = 0f;                  // 0 = infinite range
+    set.SearchItems = SearchItems.Throwable;
+    set.SearchItemRange = 0f;            // Infinite
 }
 
 /// <summary>
@@ -7397,10 +7408,12 @@ private void BeastBotStartThrow(IPlayer bot, int botId, Vector2 botPos, IPlayer 
     bot.SetInputEnabled(false);
     bot.SetFaceDirection(facing);
     
-    bot.AddCommand(new PlayerCommand(PlayerCommandType.DrawThrowable));
-    bot.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimPos, 100));
-    bot.AddCommand(new PlayerCommand(PlayerCommandType.PrepareThrow, 0, 120));  // 120 = real delay now
+    bot.AddCommand(new PlayerCommand(PlayerCommandType.DrawThrowable, 0, 150));            // Let draw anim finish
+    bot.AddCommand(new PlayerCommand(PlayerCommandType.EnterThrowingMode));
+    bot.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimPos, 180));   // Give the arm time to rotate
+    bot.AddCommand(new PlayerCommand(PlayerCommandType.PrepareThrow, 0, 120));
     bot.AddCommand(new PlayerCommand(PlayerCommandType.Throw, 0, 50));
+    bot.AddCommand(new PlayerCommand(PlayerCommandType.ExitThrowingMode));
     bot.AddCommand(new PlayerCommand(PlayerCommandType.StopAim));
     
     beastTitanBotMode[botId] = BeastBotMode.Throw;
@@ -7409,48 +7422,26 @@ private void BeastBotStartThrow(IPlayer bot, int botId, Vector2 botPos, IPlayer 
 }
 
 /// <summary>
-/// Calculate throw aim for Beast Titan rocks accounting for custom physics
+/// Calculate throw aim for Beast Titan rocks: aim AT the predicted target, small arc only
 /// </summary>
 private Vector2 BeastBotCalculateThrowAim(Vector2 botPos, Vector2 targetPos, Vector2 targetVel, bool largeRock)
 {
-    float horizontalDistance = Math.Abs(targetPos.X - botPos.X);
+    float dx = Math.Abs(targetPos.X - botPos.X);
     
-    // Estimate lead time based on distance and rock speed
-    // Beast rocks are slower than normal shurikens due to gravity and drag
-    float baseSpeed = largeRock ? 22f : 28f; // Adjusted for actual rock speeds
-    float leadTime = horizontalDistance / baseSpeed;
-    leadTime = Math.Min(0.6f, Math.Max(0.08f, leadTime));
+    float speed = largeRock ? 22f : 28f;                    // Keep tuned values
+    float flightTime = Math.Min(0.6f, dx / speed);
+    float leadTime = BEAST_AIM_WINDUP_SEC + flightTime;
+    // Target keeps moving during wind-up too
     
-    // Predict target position with clamped velocity
-    float leadX = MathHelper.Clamp(targetVel.X * leadTime, -35f, 35f);
-    float leadY = MathHelper.Clamp(targetVel.Y * leadTime, -12f, 12f);
-    Vector2 predictedPos = new Vector2(targetPos.X + leadX, targetPos.Y + leadY);
+    float leadX = MathHelper.Clamp(targetVel.X * leadTime, -45f, 45f);
+    float leadY = MathHelper.Clamp(targetVel.Y * leadTime, -20f, 20f);
+    Vector2 predicted = new Vector2(targetPos.X + leadX, targetPos.Y + leadY);
     
-    // Calculate height difference
-    float heightDiff = predictedPos.Y - botPos.Y;
+    // Only compensate gravity drop over distance. Up/down is handled by aiming at the real point
+    float arc = dx * BEAST_AIM_ARC_PER_UNIT + (largeRock ? 2f : 0f);
+    arc = MathHelper.Clamp(arc, 0f, 25f);
     
-    // Base elevation - lower than before for more direct throws
-    float baseElevation = 3f;
-    
-    // Distance-based arc - reduced for flatter trajectory
-    float arcAdjust = Math.Min(25f, horizontalDistance * 0.08f);
-    
-    // Height adjustment - compensate for throwing up or down
-    float heightAdjust = 0f;
-    if (heightDiff > 0f)
-        heightAdjust = Math.Min(20f, heightDiff * 0.3f); // Throwing upward
-    else
-        heightAdjust = Math.Max(-10f, heightDiff * 0.1f); // Throwing downward
-    
-    // Large rocks need slightly more elevation
-    float sizeAdjust = largeRock ? 3f : 0f;
-    
-    // Total elevation with tighter bounds
-    float totalElevation = baseElevation + arcAdjust + heightAdjust + sizeAdjust;
-    totalElevation = MathHelper.Clamp(totalElevation, -5f, 35f);
-    
-    // Return aim point - target center with elevation offset
-    return new Vector2(predictedPos.X, predictedPos.Y + totalElevation);
+    return new Vector2(predicted.X, predicted.Y + arc);
 }
 
 /// <summary>
