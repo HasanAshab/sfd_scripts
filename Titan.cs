@@ -7258,10 +7258,8 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
         beastTitanBotThrowLockUntil.Remove(botId);
         bot.ClearCommandQueue();
         bot.SetInputEnabled(true);
-        bot.SetBotBehaviorActive(true);
         beastTitanBotMode[botId] = BeastBotMode.None;
-        // Re-apply passive behavior after re-enabling AI
-        BeastBotApplyPassiveBehavior(bot);
+        // Don't set behavior here - let the decision logic below handle it
     }
     
     // 2) Find closest enemy
@@ -7338,20 +7336,21 @@ private void BeastBotSetMode(IPlayer bot, int botId, BeastBotMode mode)
 }
 
 /// <summary>
-/// Apply passive AI settings: no melee, no powerups, no shooting
+/// Apply passive AI settings: no combat, but allow crate breaking
 /// </summary>
 private void BeastBotApplyPassiveBehavior(IPlayer bot)
 {
     BotBehaviorSet set = bot.GetBotBehaviorSet();
-    set.EliminateEnemies = false;
-    set.MeleeUsage = false;
-    set.MeleeWeaponUsage = false;
-    set.PowerupUsage = false;
-    set.RangedWeaponUsage = false;
+    set.EliminateEnemies = false;       // Don't seek combat
+    set.MeleeUsage = true;              // Allow melee (for breaking crates)
+    set.MeleeWeaponUsage = false;       // Don't use melee weapons
+    set.PowerupUsage = false;           // Don't use powerups
+    set.RangedWeaponUsage = false;      // Don't shoot guns
+    bot.SetBotBehaviorSet(set);
 }
 
 /// <summary>
-/// Enter pickup mode: use native AI to search for and pick up throwable items
+/// Enter pickup mode: use native AI to search for and pick up items (throwables, weapons, fire ammo)
 /// </summary>
 private void BeastBotEnterPickup(IPlayer bot, int botId)
 {
@@ -7367,8 +7366,9 @@ private void BeastBotEnterPickup(IPlayer bot, int botId)
     BeastBotApplyPassiveBehavior(bot);  // Must be AFTER SetBotBehavior, which resets the set
     BotBehaviorSet set = bot.GetBotBehaviorSet();
     set.SearchForItems = true;
-    set.SearchItems = SearchItems.Throwable;
+    set.SearchItems = SearchItems.Throwable | SearchItems.Primary | SearchItems.Secondary | SearchItems.Melee | SearchItems.Makeshift;
     set.SearchItemRange = 0f;            // Infinite
+    bot.SetBotBehaviorSet(set);
 }
 
 /// <summary>
