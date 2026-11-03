@@ -477,13 +477,16 @@ public void InitializeTitanDistribution(TriggerArgs args)
     {
         // Scenario A / C: permanent per-player powers.
         bool hasStoredPowers = RestoreAssignedPowersFromStorage();
+        bool hasPendingPowers = HasPendingTitanPowers();
         LoadPlayerExpiryFromStorage();
         
-        if (hasStoredPowers && !HasDuplicateHumanoids(allPlayers))
+        if ((hasStoredPowers || hasPendingPowers) && !HasDuplicateHumanoids(allPlayers))
         {
             Game.ShowChatMessage("[Titan] Restoring permanent distribution (Scenario " + distributionMode + ")...", Color.Green);
             // Check if any restored power expired while the game was away
             CheckScenarioAExpiry();
+            // Assign pending extracted powers to team pure titans
+            AssignPendingTitanPowers(allPlayers);
         }
         else
         {
@@ -496,6 +499,9 @@ public void InitializeTitanDistribution(TriggerArgs args)
         // Scenario B: expires after 30 minutes per player.
         RestoreAssignedPowersFromStorage();
         LoadPlayerExpiryFromStorage();
+        
+        // Assign pending extracted powers before Scenario B handles missing humanoids
+        AssignPendingTitanPowers(allPlayers);
         
         // Handles existing powers, removes expired, and redistributes only missing humanoids
         HandleScenarioBDistribution(allPlayers);
@@ -647,6 +653,181 @@ private void RemoveStoredPlayerExpiry(string playerName)
     IScriptStorage storage = GetCurrentStorage();
     string key = "EXPIRY_" + playerName;
     storage.SetItem(key, "");
+}
+
+// --- Pending Extracted Powers Storage & Assignment ---
+private class PendingTitanPower
+{
+    public TitanType Power;
+    public PlayerTeam Team;
+    public PendingTitanPower(TitanType power, PlayerTeam team)
+    {
+        Power = power;
+        Team = team;
+    }
+}
+
+private const string PENDING_POWERS_KEY = "PENDING_TITAN_POWERS";
+
+private void AddPendingTitanPower(TitanType power, PlayerTeam team)
+{
+    IScriptStorage storage = GetCurrentStorage();
+    string val = "";
+    storage.TryGetItemString(PENDING_POWERS_KEY, out val);
+    string entry = ((int)power).ToString() + ":" + ((int)team).ToString();
+    if (string.IsNullOrEmpty(val))
+    {
+        storage.SetItem(PENDING_POWERS_KEY, entry);
+    }
+    else
+    {
+        storage.SetItem(PENDING_POWERS_KEY, val + ";" + entry);
+    }
+}
+
+private List<PendingTitanPower> ReadPendingFromStorage(IScriptStorage storage)
+{
+    List<PendingTitanPower> list = new List<PendingTitanPower>();
+    if (storage == null) return list;
+    string val = "";
+    if (storage.TryGetItemString(PENDING_POWERS_KEY, out val) && !string.IsNullOrEmpty(val))
+    {
+        string[] entries = val.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (string entry in entries)
+        {
+            string[] parts = entry.Split(':');
+            if (parts.Length == 2)
+            {
+                int pVal, tVal;
+                if (int.TryParse(parts[0], out pVal) && int.TryParse(parts[1], out tVal))
+                {
+                    list.Add(new PendingTitanPower((TitanType)pVal, (PlayerTeam)tVal));
+                }
+            }
+        }
+    }
+    return list;
+}
+
+private List<PendingTitanPower> GetPendingTitanPowers()
+{
+    List<PendingTitanPower> list = ReadPendingFromStorage(GetCurrentStorage());
+    if (list.Count == 0)
+    {
+        if (distributionMode != "A")
+        {
+            list = ReadPendingFromStorage(Game.GetSharedStorage("TitanPowerStorageA"));
+            if (list.Count > 0)
+            {
+                Game.GetSharedStorage("TitanPowerStorageA").SetItem(PENDING_POWERS_KEY, "");
+                SavePendingTitanPowers(list);
+                return list;
+            }
+        }
+        if (distributionMode != "C")
+        {
+            list = ReadPendingFromStorage(Game.GetSharedStorage("TitanPowerStorageC"));
+            if (list.Count > 0)
+            {
+                Game.GetSharedStorage("TitanPowerStorageC").SetItem(PENDING_POWERS_KEY, "");
+                SavePendingTitanPowers(list);
+                return list;
+            }
+        }
+        if (distributionMode != "B")
+        {
+            list = ReadPendingFromStorage(Game.GetSharedStorage("TitanPowerStorageB"));
+            if (list.Count > 0)
+            {
+                Game.GetSharedStorage("TitanPowerStorageB").SetItem(PENDING_POWERS_KEY, "");
+                SavePendingTitanPowers(list);
+                return list;
+            }
+        }
+    }
+    return list;
+}
+
+private void SavePendingTitanPowers(List<PendingTitanPower> list)
+{
+    IScriptStorage storage = GetCurrentStorage();
+    if (list == null || list.Count == 0)
+    {
+        storage.SetItem(PENDING_POWERS_KEY, "");
+    }
+    else
+    {
+        List<string> parts = new List<string>();
+        foreach (var p in list)
+        {
+            parts.Add(((int)p.Power).ToString() + ":" + ((int)p.Team).ToString());
+        }
+        storage.SetItem(PENDING_POWERS_KEY, string.Join(";", parts.ToArray()));
+    }
+}
+
+private bool HasPendingTitanPowers()
+{
+    return GetPendingTitanPowers().Count > 0;
+}
+
+private void AssignPendingTitanPowers(IPlayer[] allPlayers)
+{
+    List<PendingTitanPower> pendingList = GetPendingTitanPowers();
+    if (pendingList.Count == 0) return;
+    
+    List<PendingTitanPower> remaining = new List<PendingTitanPower>();
+    bool anyAssigned = false;
+    
+    foreach (PendingTitanPower pending in pendingList)
+    {
+        if (pending.Power == TitanType.Pure) continue;
+        
+        // Prevent duplicate if someone already holds this power among present players
+        bool alreadyHeld = false;
+        foreach (var kvp in assignedTitanPowers)
+        {
+            if (kvp.Value == pending.Power)
+            {
+                alreadyHeld = true;
+                break;
+            }
+        }
+        if (alreadyHeld) continue;
+        
+        IPlayer candidate = GetRandomPureTitanOnTeam(pending.Team, allPlayers);
+        if (candidate != null)
+        {
+            int cid = candidate.UniqueID;
+            assignedTitanPowers[cid] = pending.Power;
+            
+            long expiry;
+            if (distributionMode == "A" || distributionMode == "C")
+                expiry = GetUnixDay() + 2;
+            else
+                expiry = GetUnixMinute() + 30L;
+                
+            playerPowerExpiry[candidate.Name] = expiry;
+            SetStoredPlayerPower(candidate.Name, pending.Power);
+            SetStoredPlayerExpiry(candidate.Name, expiry);
+            
+            Game.ShowChatMessage("[Titan] Extracted " + GetTitanPowerName(pending.Power) + " power assigned to " + candidate.Name + " (" + candidate.GetTeam().ToString() + ")!", Color.Yellow);
+            anyAssigned = true;
+        }
+        else
+        {
+            // Teammate not available this match; keep pending for next match
+            remaining.Add(pending);
+        }
+    }
+    
+    SavePendingTitanPowers(remaining);
+    
+    if (anyAssigned)
+    {
+        SaveAssignedPowersToStorage();
+        SaveExpiryToStorage();
+    }
 }
 
 public void DistributeTitanPowers(TriggerArgs args)
@@ -2770,60 +2951,33 @@ private void ExtractTitanPower(IPlayer pureTitan, int pureTitanId, IPlayer victi
         // 2. Handle power distribution based on whether extractor is temporary
         if (isTemporaryPlayer)
         {
-            // Temporary player: Give power to random Pure Titan teammate
-            IPlayer randomTeammatePureTitan = GetRandomPureTitanTeammate(humanPlayer);
+            // Save pending power and team to storage for next match assignment
+            AddPendingTitanPower(extractedPower, pureTitanTeam);
             
-            if (randomTeammatePureTitan != null)
+            // Victim gets Pure Titan power
+            assignedTitanPowers[victimId] = TitanType.Pure;
+            
+            if (!string.IsNullOrEmpty(victimName))
             {
-                int teammateId = randomTeammatePureTitan.UniqueID;
-                if (assignedTitanPowers.ContainsKey(teammateId))
-                {
-                    TitanType teammatePower = assignedTitanPowers[teammateId];
-                    assignedTitanPowers[teammateId] = extractedPower;
-                    assignedTitanPowers[victimId] = teammatePower;
-                    assignedTitanPowers[humanPlayerId] = TitanType.Pure;
-                    
-                    UpdateLabelsAfterPowerSwap(teammateId, victimId);
-                    CreateLabelForPlayer(humanPlayer, humanPlayerId, TitanType.Pure);
-                    
-                    if (distributionMode == "A" || distributionMode == "C")
-                        playerPowerExpiry[randomTeammatePureTitan.Name] = GetUnixDay() + 2;
-                    else
-                        playerPowerExpiry[randomTeammatePureTitan.Name] = GetUnixMinute() + 30L;
-
-                    if (!string.IsNullOrEmpty(victimName))
-                    {
-                        playerPowerExpiry.Remove(victimName);
-                        RemoveStoredPlayerExpiry(victimName);
-                    }
-                    SaveExpiryToStorage();
-                    
-                    // Force-write both affected players' powers by name directly so the next
-                    // match restores them correctly (SaveAssignedPowersToStorage uses UniqueID
-                    // lookup which can fail for dead/removed players).
-                    SetStoredPlayerPower(randomTeammatePureTitan.Name, extractedPower);
-                    if (!string.IsNullOrEmpty(victimName))
-                        SetStoredPlayerPower(victimName, TitanType.Pure);
-                    
-                    // Remove the temporary player's entry so it doesn't pollute storage
-                    assignedTitanPowers.Remove(humanPlayerId);
-                    
-                    Game.ShowChatMessage(playerName + " extracted the " + powerName + " power and transferred it to " + randomTeammatePureTitan.Name + "!", Color.Yellow);
-                    
-                    // Remove the temporary player from the map now that the power has been transferred
-                    if (humanPlayer != null && !humanPlayer.IsRemoved)
-                        humanPlayer.Remove();
-                }
+                playerPowerExpiry.Remove(victimName);
+                RemoveStoredPlayerExpiry(victimName);
+                SetStoredPlayerPower(victimName, TitanType.Pure);
             }
-            else
+            SaveExpiryToStorage();
+            
+            if (victim != null && !victim.IsRemoved && assignedTitanPowers.ContainsKey(victimId))
             {
-                assignedTitanPowers[humanPlayerId] = TitanType.Pure;
-                CreateLabelForPlayer(humanPlayer, humanPlayerId, TitanType.Pure);
-                Game.ShowChatMessage(playerName + " extracted a power but had no teammate to transfer it to!", Color.Red);
-                // Remove the temporary player from the map even if no teammate was found
-                if (humanPlayer != null && !humanPlayer.IsRemoved)
-                    humanPlayer.Remove();
+                CreateLabelForPlayer(victim, victimId, TitanType.Pure);
             }
+            
+            // Remove the temporary player's entry so it doesn't pollute storage
+            assignedTitanPowers.Remove(humanPlayerId);
+            
+            Game.ShowChatMessage(playerName + " extracted the " + powerName + " power! It will be assigned to a " + pureTitanTeam.ToString() + " teammate next match.", Color.Yellow);
+            
+            // Remove the temporary player from the map now that extraction is complete
+            if (humanPlayer != null && !humanPlayer.IsRemoved)
+                humanPlayer.Remove();
         }
         else
         {
@@ -2910,26 +3064,16 @@ private void UpdateLabelsAfterPowerSwap(int player1Id, int player2Id)
     }
 }
 
-private IPlayer GetRandomPureTitanTeammate(IPlayer player)
+private IPlayer GetRandomPureTitanOnTeam(PlayerTeam targetTeam, IPlayer[] allPlayers)
 {
-    // Find all Pure Titan teammates (not transformed, just assigned Pure power)
-    PlayerTeam playerTeam = player.GetTeam();
-    List<IPlayer> pureTitanTeammates = new List<IPlayer>();
+    if (targetTeam == PlayerTeam.Independent) return null;
     
-    IPlayer[] allPlayers = Game.GetPlayers();
+    List<IPlayer> pureTitanTeammates = new List<IPlayer>();
     foreach (IPlayer p in allPlayers)
     {
-        if (p == null || p.IsDead || p.UniqueID == player.UniqueID) continue;
-        
-        // Check if on same team
-        PlayerTeam pTeam = p.GetTeam();
-        if (playerTeam == PlayerTeam.Independent)
-        {
-            // Independent players have no teammates
-            continue;
-        }
-        
-        if (pTeam != playerTeam) continue;
+        if (p == null || p.IsDead) continue;
+        if (p.Name.ToLower() == TEMPORARY_PLAYER_NAME.ToLower()) continue;
+        if (p.GetTeam() != targetTeam) continue;
         
         // Check if has Pure Titan power assigned
         if (assignedTitanPowers.ContainsKey(p.UniqueID) && 
@@ -2947,6 +3091,12 @@ private IPlayer GetRandomPureTitanTeammate(IPlayer player)
     }
     
     return null;
+}
+
+private IPlayer GetRandomPureTitanTeammate(IPlayer player)
+{
+    if (player == null) return null;
+    return GetRandomPureTitanOnTeam(player.GetTeam(), Game.GetPlayers());
 }
 
 private void MakeNearbyPlayersFall(Vector2 explosionPos, float radius, int titanPlayerId)
