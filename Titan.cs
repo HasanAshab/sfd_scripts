@@ -12,7 +12,8 @@ private enum TitanType
     Attack,
     Jaw,
     Armored,
-    Cart
+    Cart,
+    Beast
 }
 
 // Attack Titan hardening mode enum
@@ -148,6 +149,51 @@ private const float CART_OFFENSIVE_HP_BONUS = 0.40f;        // +40% HP
 // Cart Titan rescue ally mechanics
 private const float CART_RESCUE_LIFT_COST_PER_SEC = 0.005f; // 0.5% of max energy per second
 private const float CART_RESCUE_ALLY_DMG_REDUCTION = 0.50f; // 50% all damage reduction while lifted
+
+// Beast Titan stats
+private const float BEAST_TITAN_HP_BONUS = 0.10f;           // +10% HP
+private const float BEAST_TITAN_MELEE_DAMAGE_BONUS = 0.0f;  // +0% melee damage
+private const float BEAST_TITAN_MELEE_FORCE_BONUS = 0.0f;   // +0% melee force
+private const float BEAST_TITAN_SPEED_BONUS = 0.01f;        // +1% speed
+private const float BEAST_TITAN_ENERGY_BONUS = 0.01f;       // +1% energy
+private const float BEAST_TITAN_SIZE = 1.15f;               // Fixed size
+
+// Beast Titan rock throw mechanics
+private const string BEAST_ROCK_TEXT = ".";
+private const float BEAST_ROCK_TEXT_SCALE_LARGE = 10f;      // Large rock size
+private const float BEAST_ROCK_TEXT_SCALE_SMALL = 1.111f;   // Small rock size (large/9)
+private const float BEAST_ROCK_HIT_RADIUS = 6f;             // Hit detection radius
+private const float BEAST_ROCK_VISUAL_OFFSET_Y = 30f;       // Visual offset
+private const float BEAST_ROCK_MAX_LIFETIME = 6000f;        // Rock lifetime in ms
+private const float BEAST_ROCK_DAMAGE_BASE = 7f;            // Base damage per rock
+private const float BEAST_ROCK_DAMAGE_LARGE_MULTIPLIER = 9f; // Large rock damage multiplier
+private const int BEAST_ROCK_SMALL_COUNT = 9;               // Number of small rocks
+private const float BEAST_ROCK_SMALL_FALL_CHANCE = 0.11f;   // 11% chance to fall on small rock hit
+
+// Beast Titan rock physics
+private const float BEAST_ROCK_UNITS_PER_METER = 12.5f;
+private const float BEAST_ROCK_GRAVITY_MS2 = 18f;
+private const float BEAST_ROCK_AIR_DRAG = 0.08f;
+private const float BEAST_ROCK_LAUNCH_BOOST = 1f;
+private const float BEAST_ROCK_MAX_FRAME_MS = 50f;
+
+// Beast Titan rock fragments
+private const int BEAST_ROCK_FRAGMENT_COUNT = 7;
+private const float BEAST_FRAGMENT_LIFETIME = 700f;
+private const float BEAST_FRAGMENT_SCALE = 0.45f;
+private const float BEAST_FRAGMENT_MIN_SPEED = 60f;
+private const float BEAST_FRAGMENT_MAX_SPEED = 150f;
+private const float BEAST_FRAGMENT_SPREAD = 2.6f;
+
+// Beast Titan fire rocks
+private const int BEAST_FIRE_THROWS_PER_PICKUP = 3;
+private const float BEAST_FIRE_PARTICLE_INTERVAL = 40f;
+private const float BEAST_FIRE_SIDE_OFFSET = 7f;
+
+// Beast Titan weapon conversion
+private const float BEAST_THROW_DETECT_RANGE = 50f;
+private const float BEAST_MIN_REAL_THROW_MS = 3f;
+private const float BEAST_FALLBACK_THROW_MS = 25f;
 
 // Cart Titan uphead gun energy costs
 private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.03f;    // 3% per bullet
@@ -285,6 +331,30 @@ private Dictionary<int, bool> cartTitanBotIsAvoiding = new Dictionary<int, bool>
 private Dictionary<int, int> cartTitanBotLockedEnemy = new Dictionary<int, int>(); // Locked target ID for bullet-type decision
 private Dictionary<int, bool> cartTitanBotLockedIsSniper = new Dictionary<int, bool>(); // Locked bullet type for current target
 
+// Track Beast Titan specific data
+private enum BeastRockMode { Large, Small }
+private Dictionary<int, BeastRockMode> beastTitanRockMode = new Dictionary<int, BeastRockMode>(); // Rock mode toggle
+private Dictionary<int, int> beastTitanFireThrows = new Dictionary<int, int>(); // Remaining fire rock throws
+private List<BeastRockState> beastRocks = new List<BeastRockState>(); // Active rocks
+private List<IObject> beastPendingShurikens = new List<IObject>(); // Shurikens to delete
+private float beastRockUnitsPerMeter = BEAST_ROCK_UNITS_PER_METER; // Auto-calibrated units per meter
+
+// Beast Titan rock state class
+private class BeastRockState
+{
+    public IObjectText Obj;
+    public Vector2 Vel;         // Velocity in world units/second
+    public Vector2 Pos;         // Current position
+    public float Age;           // Age in ms
+    public bool Fire;           // Is fire rock
+    public bool IsFragment;     // Is fragment (burst piece)
+    public int OwnerId;         // Beast Titan player ID
+    public float BaseScale;     // Base scale
+    public Color BaseColor;     // Base color
+    public float FireTimer;     // Fire particle timer
+    public bool IsLarge;        // Large rock (hits allies) vs small rocks (enemies only)
+}
+
 // Track assigned titan powers (does not mean transformed, just assigned power)
 private Dictionary<int, TitanType> assignedTitanPowers = new Dictionary<int, TitanType>();
 
@@ -399,6 +469,12 @@ public void OnStartup()
     
     // Set up player damage callback for Armored Titan safety net
     Events.PlayerDamageCallback.Start(OnPlayerDamage);
+    
+    // Set up object created callback for Beast Titan rock throw
+    Events.ObjectCreatedCallback.Start(OnBeastObjectCreated);
+    
+    // Set up weapon added callback for Beast Titan fire rocks and weapon conversion
+    Events.PlayerWeaponAddedActionCallback.Start(OnBeastWeaponAdded);
     
     // Delay initialization until all players are spawned (500ms wait for other scripts)
     IObjectTimerTrigger initTimer = (IObjectTimerTrigger)Game.CreateObject("TimerTrigger");
@@ -855,10 +931,10 @@ public void DistributeTitanPowers(TriggerArgs args)
     Game.ShowChatMessage("[Titan] Powers distributed! Pick up strength boost to transform.", Color.Cyan);
 }
 
-// --- Scenario A: VIP present. 50% humanoid per player, all 4 types guaranteed, NO DUPLICATION, 2-day expiry ---
+// --- Scenario A: VIP present. 50% humanoid per player, all 5 types guaranteed, NO DUPLICATION, 2-day expiry ---
 private void DistributeScenarioA(IPlayer[] allPlayers)
 {
-    List<TitanType> humanoidPool = new List<TitanType> { TitanType.Attack, TitanType.Jaw, TitanType.Armored, TitanType.Cart };
+    List<TitanType> humanoidPool = new List<TitanType> { TitanType.Attack, TitanType.Jaw, TitanType.Armored, TitanType.Cart, TitanType.Beast };
     
     // Shuffle humanoid pool
     for (int i = humanoidPool.Count - 1; i > 0; i--)
@@ -900,7 +976,7 @@ private void DistributeScenarioA(IPlayer[] allPlayers)
         IPlayer tmp = pureCandidates[i]; pureCandidates[i] = pureCandidates[j]; pureCandidates[j] = tmp;
     }
     
-    // Ensure all 3 humanoid types are covered: pull from pure candidates if not enough won the 50% roll
+    // Ensure all 5 humanoid types are covered: pull from pure candidates if not enough won the 50% roll
     while (humanoidCandidates.Count < targetHumanoidCount && pureCandidates.Count > 0)
     {
         IPlayer p = pureCandidates[0];
@@ -1010,7 +1086,7 @@ private void HandleScenarioBDistribution(IPlayer[] allPlayers)
     }
     
     // 3. Find which humanoid titans are MISSING among present players
-    List<TitanType> allHumanoidTypes = new List<TitanType> { TitanType.Attack, TitanType.Jaw, TitanType.Armored, TitanType.Cart };
+    List<TitanType> allHumanoidTypes = new List<TitanType> { TitanType.Attack, TitanType.Jaw, TitanType.Armored, TitanType.Cart, TitanType.Beast };
     List<TitanType> missingHumanoids = new List<TitanType>();
     foreach (TitanType t in allHumanoidTypes)
     {
@@ -1362,6 +1438,11 @@ private void CreateLabelForPlayer(IPlayer player, int playerId, TitanType titanT
         labelText = "[CRT";
         labelColor = new Color(100, 200, 255);
     }
+    else if (titanType == TitanType.Beast)
+    {
+        labelText = "[BST";
+        labelColor = new Color(160, 120, 80); // Brown/tan color
+    }
     else return;
     
     // Append expiry info for Scenario A and C
@@ -1472,6 +1553,10 @@ private void TransformToTitan(IPlayer player)
     {
         TransformToCartTitan(player, playerId);
     }
+    else if (titanType == TitanType.Beast)
+    {
+        TransformToBeastTitan(player, playerId);
+    }
     else
     {
         TransformToArmoredTitan(player, playerId);
@@ -1500,6 +1585,10 @@ private void TransformToTitan(IPlayer player)
     else if (titanType == TitanType.Cart)
     {
         titanTypeName = "CART TITAN";
+    }
+    else if (titanType == TitanType.Beast)
+    {
+        titanTypeName = "BEAST TITAN";
     }
     else
     {
@@ -2050,7 +2139,36 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
                 CartTitanSetBlockMode(player, playerId, blockHeld);
             }
         }
+        return;
     }
+    
+    // Check if player is a Beast Titan
+    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Beast)
+    {
+        // Only allow human players to use abilities
+        if (player.IsBot) return;
+        
+        foreach (VirtualKeyInfo keyInfo in keyInfos)
+        {
+            // SHEATHE key: Toggle rock mode (Large <-> Small)
+            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.SHEATHE)
+            {
+                ToggleBeastTitanRockMode(player, playerId);
+            }
+        }
+        return;
+    }
+}
+
+private void ToggleBeastTitanRockMode(IPlayer player, int playerId)
+{
+    BeastRockMode currentMode = beastTitanRockMode.ContainsKey(playerId) ? beastTitanRockMode[playerId] : BeastRockMode.Large;
+    BeastRockMode newMode = (currentMode == BeastRockMode.Large) ? BeastRockMode.Small : BeastRockMode.Large;
+    beastTitanRockMode[playerId] = newMode;
+    
+    string modeName = (newMode == BeastRockMode.Large) ? "SINGLE LARGE ROCK" : "MULTIPLE SMALL ROCKS";
+    Game.PlayEffect(EffectName.CustomFloatText, player.GetWorldPosition(), modeName);
+    Game.PlaySound("StrengthBoostStart", player.GetWorldPosition());
 }
 
 private void ActivateAttackTitanSlowmo(IPlayer player, int playerId)
@@ -3125,6 +3243,68 @@ private void MakeNearbyPlayersFall(Vector2 explosionPos, float radius, int titan
     }
 }
 
+// ============================================================
+// BEAST TITAN TRANSFORMATION
+// ============================================================
+private void TransformToBeastTitan(IPlayer player, int playerId)
+{
+    // Clear all items FIRST before profile change
+    player.RemoveWeaponItemType(WeaponItemType.Rifle);
+    player.RemoveWeaponItemType(WeaponItemType.Handgun);
+    player.RemoveWeaponItemType(WeaponItemType.Melee);
+    player.RemoveWeaponItemType(WeaponItemType.Thrown);
+    player.RemoveWeaponItemType(WeaponItemType.Powerup);
+    
+    // Set Beast Titan profile
+    player.SetProfile(new IProfile()
+    {
+        Gender = Gender.Male,
+        Skin = new IProfileClothingItem("BearSkin", ""),
+    });
+    
+    // Remove strength boost
+    player.SetStrengthBoostTime(0);
+    
+    // Get modifiers
+    PlayerModifiers mods = player.GetModifiers();
+    
+    // Apply Beast Titan base stats
+    int newMaxHealth = (int)(mods.MaxHealth * (1f + BEAST_TITAN_HP_BONUS));
+    newMaxHealth = Math.Max(1, newMaxHealth);
+    mods.MaxHealth = newMaxHealth;
+    mods.CurrentHealth = newMaxHealth;
+    
+    mods.MeleeDamageDealtModifier *= (1f + BEAST_TITAN_MELEE_DAMAGE_BONUS);
+    mods.MeleeForceModifier       *= (1f + BEAST_TITAN_MELEE_FORCE_BONUS);
+    mods.RunSpeedModifier          *= (1f + BEAST_TITAN_SPEED_BONUS);
+    mods.SprintSpeedModifier       *= (1f + BEAST_TITAN_SPEED_BONUS);
+    
+    mods.MaxEnergy = (int)(mods.MaxEnergy * (1f + BEAST_TITAN_ENERGY_BONUS));
+    mods.CurrentEnergy = mods.MaxEnergy;
+    
+    mods.SizeModifier = BEAST_TITAN_SIZE;
+    mods.ItemDropMode = 1;
+    
+    player.SetModifiers(mods);
+    
+    // Bot behaviour
+    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
+    BotBehaviorSet bS = player.GetBotBehaviorSet();
+    bS.SearchItems = 0;
+    player.SetBotBehaviorSet(bS);
+    
+    // Initialize Beast Titan state (Large rock mode by default)
+    beastTitanRockMode[playerId] = BeastRockMode.Large;
+    beastTitanFireThrows[playerId] = 0;
+    
+    // Store titan size
+    titanSizes[playerId] = BEAST_TITAN_SIZE;
+    
+    // Give 2 shurikens to start
+    player.GiveWeaponItem(WeaponItem.SHURIKEN);
+    player.GiveWeaponItem(WeaponItem.SHURIKEN);
+}
+
 public void OnUpdate(float elapsed)
 {
     IPlayer[] allPlayers = Game.GetPlayers();
@@ -3247,6 +3427,14 @@ public void OnUpdate(float elapsed)
                 CartTitanUpdate(player, playerId, currentTime);
                 
                 // Cart Titan also has exhaustion
+                CheckTitanExhaustion(player, playerId);
+            }
+            else if (titanType == TitanType.Beast)
+            {
+                // Beast Titan updates
+                UpdateBeastTitanRocks(elapsed);
+                
+                // Beast Titan also has exhaustion
                 CheckTitanExhaustion(player, playerId);
             }
             
@@ -6552,6 +6740,418 @@ private void HumanBotFearCleanup(float currentTime)
         humanBotFear.Remove(id);
         humanBotFearNextCheck.Remove(id);
         humanBotFearCooldownUntil.Remove(id);
+    }
+}
+
+// ============================================================
+// BEAST TITAN ROCK THROW MECHANICS
+// ============================================================
+
+public void OnBeastObjectCreated(IObject[] objs)
+{
+    foreach (IObject obj in objs)
+    {
+        if (obj == null) continue;
+        
+        // Check if this is a shuriken thrown by a Beast Titan
+        if (IsShurikenThrownByBeastTitan(obj, out int beastTitanId))
+        {
+            ConvertShurikenToRock(obj, beastTitanId);
+        }
+    }
+}
+
+public void OnBeastWeaponAdded(IPlayer player, PlayerWeaponAddedArg arg)
+{
+    if (player == null) return;
+    int playerId = player.UniqueID;
+    
+    // Check if player is a Beast Titan
+    if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] != TitanType.Beast) return;
+    
+    // Fire ammo pickup → next 3 throws are fire rocks
+    if (arg.WeaponItem == WeaponItem.FIREAMMO)
+    {
+        beastTitanFireThrows[playerId] = BEAST_FIRE_THROWS_PER_PICKUP;
+        Game.PlayEffect(EffectName.CustomFloatText, player.GetWorldPosition(), "FIRE x" + BEAST_FIRE_THROWS_PER_PICKUP);
+        return;
+    }
+    
+    // Convert Handgun/Rifle/Melee → 2 shurikens
+    if (arg.WeaponItem == WeaponItem.HANDGUN || arg.WeaponItem == WeaponItem.RIFLE || arg.WeaponItem == WeaponItem.MELEE ||
+        arg.WeaponItem.ToString().Contains("Handgun") || arg.WeaponItem.ToString().Contains("Rifle") || 
+        arg.WeaponItem.ToString().Contains("Melee"))
+    {
+        // Remove the weapon
+        WeaponItemType weaponType = WeaponItemType.NONE;
+        if (arg.WeaponItem == WeaponItem.HANDGUN || arg.WeaponItem.ToString().Contains("Handgun"))
+            weaponType = WeaponItemType.Handgun;
+        else if (arg.WeaponItem == WeaponItem.RIFLE || arg.WeaponItem.ToString().Contains("Rifle"))
+            weaponType = WeaponItemType.Rifle;
+        else if (arg.WeaponItem == WeaponItem.MELEE || arg.WeaponItem.ToString().Contains("Melee"))
+            weaponType = WeaponItemType.Melee;
+        
+        if (weaponType != WeaponItemType.NONE)
+        {
+            player.RemoveWeaponItemType(weaponType);
+            
+            // Give 2 shurikens
+            player.GiveWeaponItem(WeaponItem.SHURIKEN);
+            player.GiveWeaponItem(WeaponItem.SHURIKEN);
+            
+            Game.PlaySound("GetAmmoHandgun", player.GetWorldPosition());
+        }
+    }
+}
+
+private bool IsShurikenThrownByBeastTitan(IObject obj, out int beastTitanId)
+{
+    beastTitanId = -1;
+    
+    string name = obj.Name;
+    if (name == null) return false;
+    if (name.ToLower().IndexOf("shuriken") < 0) return false;
+    
+    // Shuriken lying around as pick-up is not a throw
+    if (obj is IObjectWeaponItem && !obj.IsMissile) return false;
+    
+    // Find nearest Beast Titan
+    Vector2 pos = obj.GetWorldPosition();
+    float bestDist = BEAST_THROW_DETECT_RANGE * BEAST_THROW_DETECT_RANGE;
+    
+    foreach (var kvp in titanPlayers)
+    {
+        if (kvp.Value != TitanType.Beast) continue;
+        
+        IPlayer beastTitan = Game.GetPlayer(kvp.Key);
+        if (beastTitan == null || beastTitan.IsDead) continue;
+        
+        float dist = Vector2.DistanceSquared(pos, beastTitan.GetWorldPosition());
+        if (dist < bestDist)
+        {
+            bestDist = dist;
+            beastTitanId = kvp.Key;
+        }
+    }
+    
+    return beastTitanId != -1;
+}
+
+private void ConvertShurikenToRock(IObject shuriken, int beastTitanId)
+{
+    IPlayer beastTitan = Game.GetPlayer(beastTitanId);
+    if (beastTitan == null) return;
+    
+    Vector2 pos = shuriken.GetWorldPosition();
+    Vector2 velMs = shuriken.GetLinearVelocity();
+    
+    // Safety net: if no real velocity, use aim direction
+    if (velMs.LengthSquared() < BEAST_MIN_REAL_THROW_MS * BEAST_MIN_REAL_THROW_MS)
+    {
+        Vector2 aim = beastTitan.AimVector;
+        if (aim.LengthSquared() > 0.0001f) aim.Normalize();
+        else aim = new Vector2(beastTitan.FacingDirection, 0f);
+        velMs = new Vector2(aim.X, aim.Y + 0.2f) * BEAST_FALLBACK_THROW_MS;
+    }
+    
+    // Convert to world units/second
+    Vector2 vel = velMs * (beastRockUnitsPerMeter * BEAST_ROCK_LAUNCH_BOOST);
+    
+    // Delete shuriken
+    shuriken.Remove();
+    beastPendingShurikens.Add(shuriken);
+    
+    // Check if fire rock
+    bool fire = false;
+    if (beastTitanFireThrows.ContainsKey(beastTitanId) && beastTitanFireThrows[beastTitanId] > 0)
+    {
+        fire = true;
+        beastTitanFireThrows[beastTitanId]--;
+    }
+    
+    // Check rock mode
+    BeastRockMode mode = beastTitanRockMode.ContainsKey(beastTitanId) ? beastTitanRockMode[beastTitanId] : BeastRockMode.Large;
+    
+    if (mode == BeastRockMode.Large)
+    {
+        // Spawn single large rock
+        SpawnBeastRock(pos, vel, fire, beastTitanId, true);
+    }
+    else
+    {
+        // Spawn 9 small rocks in a spread
+        SpawnBeastSmallRocks(pos, vel, fire, beastTitanId);
+    }
+}
+
+private void SpawnBeastRock(Vector2 pos, Vector2 vel, bool fire, int ownerId, bool isLarge)
+{
+    float scale = isLarge ? BEAST_ROCK_TEXT_SCALE_LARGE : BEAST_ROCK_TEXT_SCALE_SMALL;
+    BeastRockState rock = CreateBeastRockText(pos, vel, fire, scale, false, isLarge);
+    rock.OwnerId = ownerId;
+    beastRocks.Add(rock);
+}
+
+private void SpawnBeastSmallRocks(Vector2 pos, Vector2 vel, bool fire, int ownerId)
+{
+    // Spawn 9 small rocks in a spread pattern
+    float baseAngle = (float)Math.Atan2(vel.Y, vel.X);
+    float spreadAngle = 0.5f; // ~28 degrees total spread
+    float angleStep = spreadAngle / 4f; // 9 rocks: -4, -3, -2, -1, 0, 1, 2, 3, 4 steps
+    
+    for (int i = 0; i < BEAST_ROCK_SMALL_COUNT; i++)
+    {
+        int offset = i - 4; // Center at 0
+        float angle = baseAngle + (offset * angleStep);
+        float speed = vel.Length();
+        
+        Vector2 rockVel = new Vector2((float)Math.Cos(angle) * speed, (float)Math.Sin(angle) * speed);
+        
+        BeastRockState rock = CreateBeastRockText(pos, rockVel, fire, BEAST_ROCK_TEXT_SCALE_SMALL, false, false);
+        rock.OwnerId = ownerId;
+        beastRocks.Add(rock);
+    }
+}
+
+private BeastRockState CreateBeastRockText(Vector2 pos, Vector2 vel, bool fire, float scale, bool isFragment, bool isLarge)
+{
+    IObjectText t = (IObjectText)Game.CreateObject("Text", pos);
+    t.SetText(BEAST_ROCK_TEXT);
+    t.SetTextAlignment(TextAlignment.Middle);
+    t.SetTextScale(scale);
+    
+    Color c = fire ? new Color(255, 120, 20) : new Color(115, 105, 95);
+    t.SetTextColor(c);
+    
+    BeastRockState r = new BeastRockState();
+    r.Obj = t;
+    r.Vel = vel;
+    r.Pos = pos;
+    r.Age = 0f;
+    r.Fire = fire;
+    r.IsFragment = isFragment;
+    r.BaseScale = scale;
+    r.BaseColor = c;
+    r.FireTimer = 0f;
+    r.IsLarge = isLarge;
+    return r;
+}
+
+private void UpdateBeastTitanRocks(float elapsed)
+{
+    // Delete pending shurikens
+    if (beastPendingShurikens.Count > 0)
+    {
+        foreach (IObject s in beastPendingShurikens)
+        {
+            if (s != null && !s.IsRemoved && !s.RemovalInitiated) s.Remove();
+        }
+        beastPendingShurikens.Clear();
+    }
+    
+    Vector2 visualOffset = new Vector2(0f, BEAST_ROCK_VISUAL_OFFSET_Y);
+    float stepMs = Math.Min(elapsed, BEAST_ROCK_MAX_FRAME_MS);
+    float dt = stepMs / 1000f;
+    
+    for (int i = beastRocks.Count - 1; i >= 0; i--)
+    {
+        BeastRockState r = beastRocks[i];
+        if (r.Obj == null || r.Obj.IsRemoved)
+        {
+            beastRocks.RemoveAt(i);
+            continue;
+        }
+        
+        r.Age += elapsed;
+        
+        Vector2 prev = r.Pos;
+        r.Vel = StepBeastRockVelocity(r.Vel, dt);
+        Vector2 next = prev + r.Vel * dt;
+        Vector2 velNow = r.Vel;
+        
+        // Handle fragments (burst pieces)
+        if (r.IsFragment)
+        {
+            float life = r.Age / BEAST_FRAGMENT_LIFETIME;
+            if (life >= 1f)
+            {
+                r.Obj.Remove();
+                beastRocks.RemoveAt(i);
+                continue;
+            }
+            
+            r.Pos = next;
+            r.Obj.SetWorldPosition(next + visualOffset);
+            r.Obj.SetTextScale(Math.Max(0.1f, r.BaseScale * (1f - life)));
+            
+            if (life > 0.5f)
+            {
+                float a = 1f - (life - 0.5f) / 0.5f;
+                r.Obj.SetTextColor(new Color(r.BaseColor.R, r.BaseColor.G, r.BaseColor.B, (byte)(255f * a)));
+            }
+            
+            if (r.Fire) EmitBeastFireParticles(r, velNow, false, elapsed);
+            continue;
+        }
+        
+        // Check for player hit
+        IPlayer victim = FindBeastRockHitPlayer(prev, next, r.OwnerId, r.IsLarge);
+        if (victim != null)
+        {
+            HitBeastRockPlayer(victim, r, next, velNow);
+            beastRocks.RemoveAt(i);
+            continue;
+        }
+        
+        // Timeout
+        if (r.Age >= BEAST_ROCK_MAX_LIFETIME)
+        {
+            ShatterBeastRock(r, next, velNow);
+            beastRocks.RemoveAt(i);
+            continue;
+        }
+        
+        // Move
+        r.Pos = next;
+        r.Obj.SetWorldPosition(next + visualOffset);
+        if (r.Fire) EmitBeastFireParticles(r, velNow, true, elapsed);
+    }
+}
+
+private Vector2 StepBeastRockVelocity(Vector2 vel, float dt)
+{
+    float gravityUnits = BEAST_ROCK_GRAVITY_MS2 * beastRockUnitsPerMeter;
+    vel.Y -= gravityUnits * dt;
+    
+    float keep = 1f - BEAST_ROCK_AIR_DRAG * dt;
+    if (keep < 0f) keep = 0f;
+    return vel * keep;
+}
+
+private void EmitBeastFireParticles(BeastRockState r, Vector2 vel, bool sides, float elapsed)
+{
+    r.FireTimer += elapsed;
+    if (r.FireTimer < BEAST_FIRE_PARTICLE_INTERVAL) return;
+    r.FireTimer = 0f;
+    
+    if (!sides)
+    {
+        Game.PlayEffect(EffectName.FireTrail, r.Pos);
+        return;
+    }
+    
+    Vector2 dir = vel;
+    if (dir.LengthSquared() > 0.0001f) dir.Normalize();
+    else dir = Vector2.UnitX;
+    
+    Vector2 side = new Vector2(-dir.Y, dir.X) * BEAST_FIRE_SIDE_OFFSET;
+    Game.PlayEffect(EffectName.FireTrail, r.Pos + side);
+    Game.PlayEffect(EffectName.FireTrail, r.Pos - side);
+}
+
+private IPlayer FindBeastRockHitPlayer(Vector2 prev, Vector2 next, int ownerId, bool isLarge)
+{
+    IPlayer beastTitan = Game.GetPlayer(ownerId);
+    if (beastTitan == null) return null;
+    
+    PlayerTeam beastTeam = beastTitan.GetTeam();
+    
+    foreach (IPlayer pl in Game.GetPlayers())
+    {
+        if (pl.IsDead || pl.UniqueID == ownerId) continue;
+        
+        // Large rocks hit everyone including allies
+        // Small rocks only hit enemies
+        if (!isLarge)
+        {
+            PlayerTeam plTeam = pl.GetTeam();
+            // Skip teammates and independent allies
+            if (beastTeam != PlayerTeam.Independent && plTeam == beastTeam) continue;
+        }
+        
+        Area box = pl.GetAABB();
+        box.Grow(BEAST_ROCK_HIT_RADIUS);
+        
+        // Sample along path
+        for (int s = 0; s <= 3; s++)
+        {
+            if (box.Contains(Vector2.Lerp(prev, next, s / 3f))) return pl;
+        }
+    }
+    return null;
+}
+
+private void HitBeastRockPlayer(IPlayer victim, BeastRockState r, Vector2 at, Vector2 impactVel)
+{
+    IPlayer beastTitan = Game.GetPlayer(r.OwnerId);
+    if (beastTitan == null) return;
+    
+    PlayerModifiers beastMods = beastTitan.GetModifiers();
+    float baseDamage = BEAST_ROCK_DAMAGE_BASE * beastMods.MeleeDamageDealtModifier;
+    
+    if (r.IsLarge)
+    {
+        // Large rock: 7 * melee mod * 9
+        float damage = baseDamage * BEAST_ROCK_DAMAGE_LARGE_MULTIPLIER;
+        victim.DealDamage(damage, r.OwnerId);
+        
+        // Knockback effect
+        Vector2 knockback = impactVel;
+        if (knockback.LengthSquared() > 0.0001f)
+        {
+            knockback.Normalize();
+            victim.SetLinearVelocity(knockback * 15f); // Moderate knockback
+        }
+        
+        // Explosion sound
+        Game.PlaySound("ExplosionLargeObject", at);
+    }
+    else
+    {
+        // Small rock: 7 * melee mod
+        victim.DealDamage(baseDamage, r.OwnerId);
+        
+        // 11% chance to fall
+        if (rnd.NextDouble() < BEAST_ROCK_SMALL_FALL_CHANCE)
+        {
+            QuickCommand(victim, new PlayerCommand(PlayerCommandType.Fall));
+        }
+        
+        // Metal hit sound
+        Game.PlaySound("BulletHitMetal", at);
+    }
+    
+    Game.PlayEffect(EffectName.MeleeHitBlunt, at);
+    
+    // Set on fire if fire rock
+    if (r.Fire) victim.SetMaxFire();
+    
+    // Shatter rock
+    ShatterBeastRock(r, at, impactVel);
+}
+
+private void ShatterBeastRock(BeastRockState r, Vector2 at, Vector2 impactVel)
+{
+    r.Obj.Remove();
+    Game.PlayEffect(EffectName.DestroyDefault, at);
+    if (r.Fire) Game.PlayEffect(EffectName.Fire, at);
+    
+    // Spawn fragments
+    Vector2 back = -impactVel;
+    float baseAngle = (back.LengthSquared() > 0.0001f) ? (float)Math.Atan2(back.Y, back.X) : MathHelper.PIOver2;
+    float step = BEAST_FRAGMENT_SPREAD / (BEAST_ROCK_FRAGMENT_COUNT - 1);
+    
+    for (int k = 0; k < BEAST_ROCK_FRAGMENT_COUNT; k++)
+    {
+        float jitter = ((float)rnd.NextDouble() - 0.5f) * 0.4f;
+        float ang = baseAngle - BEAST_FRAGMENT_SPREAD * 0.5f + step * k + jitter;
+        float spd = BEAST_FRAGMENT_MIN_SPEED + (float)rnd.NextDouble() * (BEAST_FRAGMENT_MAX_SPEED - BEAST_FRAGMENT_MIN_SPEED);
+        
+        Vector2 v = new Vector2((float)Math.Cos(ang) * spd, (float)Math.Sin(ang) * spd + 40f);
+        
+        BeastRockState piece = CreateBeastRockText(at, v, r.Fire, r.BaseScale * BEAST_FRAGMENT_SCALE, true, false);
+        piece.OwnerId = r.OwnerId;
+        beastRocks.Add(piece);
     }
 }
 
