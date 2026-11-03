@@ -7387,16 +7387,20 @@ private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vec
         beastTitanRockMode[botId] = desiredMode;
     }
     
-    // Face enemy
+    // Face enemy BEFORE calculating aim
     Vector2 enemyPos = closestEnemy.GetWorldPosition();
     int targetFacing = (enemyPos.X >= botPos.X) ? 1 : -1;
-    if (bot.FacingDirection != targetFacing)
-    {
-        bot.SetFaceDirection(targetFacing);
-    }
+    bot.SetFaceDirection(targetFacing);
     
     // Calculate predicted aim position accounting for Beast rock physics
     Vector2 aimPos = BeastBotCalculateThrowAim(botPos, enemyPos, closestEnemy.GetLinearVelocity(), wantsLarge);
+    
+    // Double-check facing is still correct after aim calculation
+    int aimFacing = (aimPos.X >= botPos.X) ? 1 : -1;
+    if (bot.FacingDirection != aimFacing)
+    {
+        bot.SetFaceDirection(aimFacing);
+    }
     
     // Execute throw command
     bot.SetInputEnabled(false);
@@ -7426,35 +7430,39 @@ private Vector2 BeastBotCalculateThrowAim(Vector2 botPos, Vector2 targetPos, Vec
     
     // Estimate lead time based on distance and rock speed
     // Beast rocks are slower than normal shurikens due to gravity and drag
-    float baseSpeed = largeRock ? 25f : 30f; // Large rocks are slower
+    float baseSpeed = largeRock ? 22f : 28f; // Adjusted for actual rock speeds
     float leadTime = horizontalDistance / baseSpeed;
-    leadTime = Math.Min(0.5f, Math.Max(0.1f, leadTime));
+    leadTime = Math.Min(0.6f, Math.Max(0.08f, leadTime));
     
-    // Predict target position
-    float leadX = MathHelper.Clamp(targetVel.X * leadTime, -40f, 40f);
-    float leadY = MathHelper.Clamp(targetVel.Y * leadTime, -15f, 15f);
+    // Predict target position with clamped velocity
+    float leadX = MathHelper.Clamp(targetVel.X * leadTime, -35f, 35f);
+    float leadY = MathHelper.Clamp(targetVel.Y * leadTime, -12f, 12f);
     Vector2 predictedPos = new Vector2(targetPos.X + leadX, targetPos.Y + leadY);
     
-    // Add elevation to compensate for gravity drop
+    // Calculate height difference
     float heightDiff = predictedPos.Y - botPos.Y;
-    float baseElevation = 8f; // Base elevation for shurikens
     
-    // Add distance-based arc
-    float arcAdjust = horizontalDistance * 0.12f;
+    // Base elevation - lower than before for more direct throws
+    float baseElevation = 3f;
     
-    // Add height-based adjustment
+    // Distance-based arc - reduced for flatter trajectory
+    float arcAdjust = Math.Min(25f, horizontalDistance * 0.08f);
+    
+    // Height adjustment - compensate for throwing up or down
     float heightAdjust = 0f;
     if (heightDiff > 0f)
-        heightAdjust = heightDiff * 0.25f; // Throwing upward
+        heightAdjust = Math.Min(20f, heightDiff * 0.3f); // Throwing upward
     else
-        heightAdjust = heightDiff * 0.08f; // Throwing downward
+        heightAdjust = Math.Max(-10f, heightDiff * 0.1f); // Throwing downward
     
-    // Large rocks need more elevation due to weight
-    float sizeAdjust = largeRock ? 5f : 0f;
+    // Large rocks need slightly more elevation
+    float sizeAdjust = largeRock ? 3f : 0f;
     
+    // Total elevation with tighter bounds
     float totalElevation = baseElevation + arcAdjust + heightAdjust + sizeAdjust;
-    totalElevation = MathHelper.Clamp(totalElevation, 0f, 45f);
+    totalElevation = MathHelper.Clamp(totalElevation, -5f, 35f);
     
+    // Return aim point - target center with elevation offset
     return new Vector2(predictedPos.X, predictedPos.Y + totalElevation);
 }
 
