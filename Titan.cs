@@ -201,7 +201,7 @@ private const float BEAST_BOT_THROW_SEQUENCE_TIME = 900f;        // Time for com
 private const float BEAST_BOT_FLEE_RANGE = 15f;                  // Flee if enemy closer than this
 private const float BEAST_BOT_THROW_MAX_RANGE = 260f;            // Farthest distance to throw from
 private const float BEAST_AIM_WINDUP_SEC = 0.45f;                // Draw + aim + prep time before release (for lead)
-private const float BEAST_AIM_ARC_PER_UNIT = 0.04f;              // Upward arc per unit of distance
+private const float BEAST_AIM_ARC_PER_UNIT = 0.04f;             // Upward arc per unit of distance
 
 // Cart Titan uphead gun energy costs
 private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.03f;    // 3% per bullet
