@@ -198,7 +198,8 @@ private const float BEAST_FALLBACK_THROW_MS = 25f;
 // Beast Titan bot AI constants
 private const float BEAST_BOT_ROCK_TYPE_CHECK_INTERVAL = 1500f; // How often to re-evaluate rock type
 private const float BEAST_BOT_THROW_SEQUENCE_TIME = 900f;        // Time for complete throw sequence (ms)
-private const float BEAST_BOT_FLEE_RANGE = 15f;                  // Flee if enemy closer than this
+private const float BEAST_BOT_FLEE_RANGE = 40f;                  // Flee if enemy closer than this (inside min throw range)
+private const float BEAST_BOT_THROW_MIN_RANGE = 50f;             // Minimum distance to throw from (too close = flee)
 private const float BEAST_BOT_THROW_MAX_RANGE = 260f;            // Farthest distance to throw from
 private const float BEAST_AIM_WINDUP_SEC = 0.45f;                // Draw + aim + prep time before release (for lead)
 private const float BEAST_AIM_ARC_PER_UNIT = 0.04f;             // Upward arc per unit of distance
@@ -7284,13 +7285,7 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
     bool hasShurikens = thrown.WeaponItem == WeaponItem.SHURIKEN && thrown.CurrentAmmo > 0;
     bool wantsMoreShurikens = !(thrown.WeaponItem == WeaponItem.SHURIKEN && thrown.CurrentAmmo >= thrown.MaxCarriedAmmo);
     
-    // 3) Decide mode - NO SHURIKENS = 100% pickup, even if an enemy is close
-    if (!hasShurikens)
-    {
-        BeastBotEnterPickup(bot, botId);
-        return;
-    }
-    
+    // 3) Decide mode - FLEE takes priority over everything when enemy is too close
     if (closestEnemy != null && closestDist <= BEAST_BOT_FLEE_RANGE)
     {
         beastTitanBotMode[botId] = BeastBotMode.Flee;
@@ -7298,7 +7293,16 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
         return;
     }
     
-    bool enemyInThrowRange = closestEnemy != null && closestDist <= BEAST_BOT_THROW_MAX_RANGE;
+    // NO SHURIKENS = pickup (but flee check already happened above)
+    if (!hasShurikens)
+    {
+        BeastBotEnterPickup(bot, botId);
+        return;
+    }
+    
+    bool enemyInThrowRange = closestEnemy != null && 
+                             closestDist >= BEAST_BOT_THROW_MIN_RANGE && 
+                             closestDist <= BEAST_BOT_THROW_MAX_RANGE;
     if (enemyInThrowRange)
     {
         BeastBotStartThrow(bot, botId, botPos, closestEnemy, currentTime);
@@ -7512,6 +7516,14 @@ private void BeastBotExecuteFlee(IPlayer bot, int botId, Vector2 botPos)
         set.ChokePointPlayerCountThreshold = 0;
         bot.SetBotBehaviorSet(set);
         bot.SetGuardTarget(fleeNode);
+    }
+    else
+    {
+        // No flee node found - just enable AI with passive behavior to allow some movement
+        bot.SetBotBehaviorActive(true);
+        bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
+        BeastBotApplyPassiveBehavior(bot);
+        bot.SetGuardTarget(null);
     }
 }
 
