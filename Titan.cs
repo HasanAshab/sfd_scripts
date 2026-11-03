@@ -7254,12 +7254,12 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
     {
         if (currentTime < lockUntil) return; // Sequence still running
         
-        // Sequence finished - clean up once
+        // Sequence finished - clean up once and continue to decision logic
         beastTitanBotThrowLockUntil.Remove(botId);
         bot.ClearCommandQueue();
         bot.SetInputEnabled(true);
         beastTitanBotMode[botId] = BeastBotMode.None;
-        // Don't set behavior here - let the decision logic below handle it
+        // Fall through to decision logic below
     }
     
     // 2) Find closest enemy
@@ -7312,8 +7312,7 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
     }
     else
     {
-        // Idle state: has full ammo, no enemies in range
-        // Ensure passive behavior is active so bot doesn't attack randomly
+        // Idle state: has full ammo, no enemies in range - set up patrol behavior
         BeastBotMode currentMode;
         if (!beastTitanBotMode.TryGetValue(botId, out currentMode) || currentMode != BeastBotMode.None)
         {
@@ -7321,6 +7320,7 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
             bot.SetBotBehaviorActive(true);
             bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
             BeastBotApplyPassiveBehavior(bot);
+            bot.SetGuardTarget(null);  // Clear any guard target to allow free movement
         }
     }
 }
@@ -7336,16 +7336,19 @@ private void BeastBotSetMode(IPlayer bot, int botId, BeastBotMode mode)
 }
 
 /// <summary>
-/// Apply passive AI settings: no combat, but allow crate breaking
+/// Apply passive AI settings: no combat, always searching for items to encourage movement
 /// </summary>
 private void BeastBotApplyPassiveBehavior(IPlayer bot)
 {
     BotBehaviorSet set = bot.GetBotBehaviorSet();
     set.EliminateEnemies = false;       // Don't seek combat
     set.MeleeUsage = true;              // Allow melee (for breaking crates)
-    set.MeleeWeaponUsage = false;       // Don't use melee weapons
+    set.MeleeWeaponUsage = false;       // Don't use melee weapons in combat
     set.PowerupUsage = false;           // Don't use powerups
     set.RangedWeaponUsage = false;      // Don't shoot guns
+    set.SearchForItems = true;          // Always search for items to encourage movement
+    set.SearchItems = SearchItems.Throwable | SearchItems.Primary | SearchItems.Secondary | SearchItems.Melee | SearchItems.Makeshift;
+    set.SearchItemRange = 0f;           // Infinite range
     bot.SetBotBehaviorSet(set);
 }
 
