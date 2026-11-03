@@ -7391,7 +7391,7 @@ private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vec
 /// <summary>
 /// Calculate throw aim for Beast Titan rocks accounting for custom physics
 /// </summary>
-private Vector2 BeastBotCalculateThrowAim(Vector2 botPos, Vector2 targetPos, Vector2 targetVel, bool largRock)
+private Vector2 BeastBotCalculateThrowAim(Vector2 botPos, Vector2 targetPos, Vector2 targetVel, bool largeRock)
 {
     float horizontalDistance = Math.Abs(targetPos.X - botPos.X);
     
