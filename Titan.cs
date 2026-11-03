@@ -3310,12 +3310,14 @@ private void TransformToBeastTitan(IPlayer player, int playerId)
     BotBehaviorSet bS = player.GetBotBehaviorSet();
     bS.SearchItems = 0;
     
-    // Disable melee and powerup usage for Beast Titan bots (they should only throw rocks)
+    // Disable melee, ranged, and powerup usage for Beast Titan bots (they should only throw rocks)
     if (player.IsBot)
     {
+        bS.EliminateEnemies = false;
         bS.MeleeUsage = false;
         bS.MeleeWeaponUsage = false;
         bS.PowerupUsage = false;
+        bS.RangedWeaponUsage = false;
     }
     
     player.SetBotBehaviorSet(bS);
@@ -7256,7 +7258,10 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
         beastTitanBotThrowLockUntil.Remove(botId);
         bot.ClearCommandQueue();
         bot.SetInputEnabled(true);
+        bot.SetBotBehaviorActive(true);
         beastTitanBotMode[botId] = BeastBotMode.None;
+        // Re-apply passive behavior after re-enabling AI
+        BeastBotApplyPassiveBehavior(bot);
     }
     
     // 2) Find closest enemy
@@ -7304,7 +7309,22 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
     
     // Has ammo but nobody in range: top up
     if (wantsMoreShurikens)
+    {
         BeastBotEnterPickup(bot, botId);
+    }
+    else
+    {
+        // Idle state: has full ammo, no enemies in range
+        // Ensure passive behavior is active so bot doesn't attack randomly
+        BeastBotMode currentMode;
+        if (!beastTitanBotMode.TryGetValue(botId, out currentMode) || currentMode != BeastBotMode.None)
+        {
+            beastTitanBotMode[botId] = BeastBotMode.None;
+            bot.SetBotBehaviorActive(true);
+            bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
+            BeastBotApplyPassiveBehavior(bot);
+        }
+    }
 }
 
 /// <summary>
