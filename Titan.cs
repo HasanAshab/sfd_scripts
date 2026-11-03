@@ -7343,9 +7343,9 @@ private void BeastBotApplyPassiveBehavior(IPlayer bot)
     BotBehaviorSet set = bot.GetBotBehaviorSet();
     set.EliminateEnemies = false;       // Don't seek combat
     set.MeleeUsage = true;              // Allow melee (for breaking crates)
-    set.MeleeWeaponUsage = false;       // Don't use melee weapons in combat
+    set.MeleeWeaponUsage = true;        // Allow melee weapon pickup
     set.PowerupUsage = false;           // Don't use powerups
-    set.RangedWeaponUsage = false;      // Don't shoot guns
+    set.RangedWeaponUsage = true;       // Allow gun pickup (but won't shoot if EliminateEnemies is false)
     set.SearchForItems = true;          // Always search for items to encourage movement
     set.SearchItems = SearchItems.Throwable | SearchItems.Primary | SearchItems.Secondary | SearchItems.Melee | SearchItems.Makeshift;
     set.SearchItemRange = 0f;           // Infinite range
@@ -7366,12 +7366,8 @@ private void BeastBotEnterPickup(IPlayer bot, int botId)
     bot.SetBotBehaviorActive(true);
     bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
     
-    BeastBotApplyPassiveBehavior(bot);  // Must be AFTER SetBotBehavior, which resets the set
-    BotBehaviorSet set = bot.GetBotBehaviorSet();
-    set.SearchForItems = true;
-    set.SearchItems = SearchItems.Throwable | SearchItems.Primary | SearchItems.Secondary | SearchItems.Melee | SearchItems.Makeshift;
-    set.SearchItemRange = 0f;            // Infinite
-    bot.SetBotBehaviorSet(set);
+    // BeastBotApplyPassiveBehavior already sets up item searching, so just call it
+    BeastBotApplyPassiveBehavior(bot);
 }
 
 /// <summary>
