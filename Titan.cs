@@ -7093,7 +7093,7 @@ private void HitBeastRockPlayer(IPlayer victim, BeastRockState r, Vector2 at, Ve
         }
         
         // Explosion sound
-        Game.PlaySound("ExplosionLargeObject", at);
+        Game.PlaySound("Explosion", at);
     }
     else
     {
