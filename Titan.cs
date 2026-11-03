@@ -7262,16 +7262,26 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
 }
 
 /// <summary>
-/// Decide Beast Titan bot action: 50% throw, 25% flee, 25% break crates
+/// Decide Beast Titan bot action: flee if enemy within 25f, else 50% throw, 50% break crates
 /// </summary>
 private BeastBotAction BeastBotDecideAction(IPlayer bot, int botId, Vector2 botPos)
 {
+    // Check if any enemy is within 25f range - if so, flee
+    foreach (IPlayer p in Game.GetPlayers())
+    {
+        if (p == null || p.IsDead || p.UniqueID == botId) continue;
+        if (p.GetTeam() == bot.GetTeam()) continue;
+        
+        float dist = Vector2.Distance(p.GetWorldPosition(), botPos);
+        if (dist <= 25f)
+            return BeastBotAction.Flee;
+    }
+    
+    // No close enemies - choose between throw and break crates
     double roll = rnd.NextDouble();
     
-    if (roll < BEAST_BOT_THROW_CHANCE)
+    if (roll < 0.5f)
         return BeastBotAction.Throw;
-    else if (roll < BEAST_BOT_THROW_CHANCE + BEAST_BOT_FLEE_CHANCE)
-        return BeastBotAction.Flee;
     else
         return BeastBotAction.BreakCrates;
 }
@@ -7299,6 +7309,15 @@ private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vec
     }
     
     if (closestEnemy == null) return;
+    
+    // Check if bot has shurikens
+    ThrownWeaponItem currentThrown = bot.CurrentThrownItem;
+    if (currentThrown.WeaponItem != WeaponItem.SHURIKEN || currentThrown.CurrentAmmo <= 0)
+    {
+        // Need shurikens - give them
+        AddShurikens(bot, 2);
+        return;
+    }
     
     // Decide rock type based on enemy size (same formula as Cart Titan bullet type)
     int currentEnemyId = closestEnemy.UniqueID;
@@ -7340,27 +7359,74 @@ private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vec
     }
     
     // Face enemy
-    int targetFacing = (closestEnemy.GetWorldPosition().X >= botPos.X) ? 1 : -1;
+    Vector2 enemyPos = closestEnemy.GetWorldPosition();
+    int targetFacing = (enemyPos.X >= botPos.X) ? 1 : -1;
     if (bot.FacingDirection != targetFacing)
     {
         bot.SetFaceDirection(targetFacing);
     }
     
-    // Calculate predicted collision position for accurate aim
-    Vector2 enemyPos = closestEnemy.GetWorldPosition();
-    Vector2 enemyVel = closestEnemy.GetLinearVelocity();
-    float distance = Vector2.Distance(botPos, enemyPos);
+    // Calculate predicted aim position accounting for Beast rock physics
+    Vector2 aimPos = BeastBotCalculateThrowAim(botPos, enemyPos, closestEnemy.GetLinearVelocity(), wantsLarge);
     
-    // Estimate time to hit (simple approximation)
-    float estimatedTime = distance / 20f; // Approximate rock speed
-    Vector2 predictedPos = enemyPos + enemyVel * estimatedTime;
+    // Prepare and throw - bots need manual commands to throw
+    if (bot.IsOnGround && !bot.IsThrowing && !bot.IsHoldingActiveThrowable)
+    {
+        bot.SetInputEnabled(false);
+        bot.AddCommand(new PlayerCommand(PlayerCommandType.DrawThrowable));
+        bot.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimPos));
+        bot.AddCommand(new PlayerCommand(PlayerCommandType.PrepareThrow, 120)); // Shuriken prep time
+        bot.AddCommand(new PlayerCommand(PlayerCommandType.Throw));
+        bot.AddCommand(new PlayerCommand(PlayerCommandType.StopAim));
+        
+        // Re-enable input after throw completes
+        Game.Events.StartUpdateCallback(dlt =>
+        {
+            if (bot != null && !bot.IsRemoved)
+                bot.SetInputEnabled(true);
+        }, 800, 1);
+    }
+}
+
+/// <summary>
+/// Calculate throw aim for Beast Titan rocks accounting for custom physics
+/// </summary>
+private Vector2 BeastBotCalculateThrowAim(Vector2 botPos, Vector2 targetPos, Vector2 targetVel, bool largRock)
+{
+    float horizontalDistance = Math.Abs(targetPos.X - botPos.X);
     
-    // Bot doesn't have SetAimTarget - bots aim automatically at their target through bot behavior
-    // Just ensure the bot is active and has normal behavior
-    bot.SetBotBehaviorActive(true);
+    // Estimate lead time based on distance and rock speed
+    // Beast rocks are slower than normal shurikens due to gravity and drag
+    float baseSpeed = largeRock ? 25f : 30f; // Large rocks are slower
+    float leadTime = horizontalDistance / baseSpeed;
+    leadTime = Math.Min(0.5f, Math.Max(0.1f, leadTime));
     
-    // Throw shurikens (which will be converted to rocks)
-    // Bots throw automatically when they have ranged weapons and are in combat
+    // Predict target position
+    float leadX = MathHelper.Clamp(targetVel.X * leadTime, -40f, 40f);
+    float leadY = MathHelper.Clamp(targetVel.Y * leadTime, -15f, 15f);
+    Vector2 predictedPos = new Vector2(targetPos.X + leadX, targetPos.Y + leadY);
+    
+    // Add elevation to compensate for gravity drop
+    float heightDiff = predictedPos.Y - botPos.Y;
+    float baseElevation = 8f; // Base elevation for shurikens
+    
+    // Add distance-based arc
+    float arcAdjust = horizontalDistance * 0.12f;
+    
+    // Add height-based adjustment
+    float heightAdjust = 0f;
+    if (heightDiff > 0f)
+        heightAdjust = heightDiff * 0.25f; // Throwing upward
+    else
+        heightAdjust = heightDiff * 0.08f; // Throwing downward
+    
+    // Large rocks need more elevation due to weight
+    float sizeAdjust = largeRock ? 5f : 0f;
+    
+    float totalElevation = baseElevation + arcAdjust + heightAdjust + sizeAdjust;
+    totalElevation = MathHelper.Clamp(totalElevation, 0f, 45f);
+    
+    return new Vector2(predictedPos.X, predictedPos.Y + totalElevation);
 }
 
 /// <summary>
@@ -7396,9 +7462,13 @@ private void BeastBotExecuteFlee(IPlayer bot, int botId, Vector2 botPos)
         bot.SetBotBehaviorActive(true);
         bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
         BotBehaviorSet set = bot.GetBotBehaviorSet();
-        set.OffensiveSprintLevel = 100;
-        set.DefensiveRollFireLevel = 100;
-        set.RangedWeaponAccuracy = 0; // Don't shoot while fleeing
+        set.EliminateEnemies = false;
+        set.RangedWeaponUsage = false;
+        set.MeleeWeaponUsage = false;
+        set.MeleeUsage = false;
+        set.ChaseRange = 20;
+        set.GuardRange = 9;
+        set.ChokePointPlayerCountThreshold = 0;
         bot.SetBotBehaviorSet(set);
         bot.SetGuardTarget(fleeNode);
     }
