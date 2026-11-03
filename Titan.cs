@@ -172,9 +172,9 @@ private const float BEAST_ROCK_SMALL_FALL_CHANCE = 0.21f;   // chance to fall on
 
 // Beast Titan rock physics
 private const float BEAST_ROCK_UNITS_PER_METER = 12.5f;
-private const float BEAST_ROCK_GRAVITY_MS2 = 18f;
-private const float BEAST_ROCK_AIR_DRAG = 0.08f;
-private const float BEAST_ROCK_LAUNCH_BOOST = 1f;
+private const float BEAST_ROCK_GRAVITY_MS2 = 12f;
+private const float BEAST_ROCK_AIR_DRAG = 0.02f;
+private const float BEAST_ROCK_LAUNCH_BOOST = 1.5f;
 private const float BEAST_ROCK_MAX_FRAME_MS = 50f;
 
 // Beast Titan rock fragments
