@@ -3301,8 +3301,7 @@ private void TransformToBeastTitan(IPlayer player, int playerId)
     titanSizes[playerId] = BEAST_TITAN_SIZE;
     
     // Give 2 shurikens to start
-    player.GiveWeaponItem(WeaponItem.SHURIKEN);
-    player.GiveWeaponItem(WeaponItem.SHURIKEN);
+    AddShurikens(player, 2);
 }
 
 public void OnUpdate(float elapsed)
@@ -6786,11 +6785,34 @@ public void OnBeastWeaponAdded(IPlayer player, PlayerWeaponAddedArg arg)
         player.RemoveWeaponItemType(arg.WeaponItemType);
         
         // Give 2 shurikens
-        player.GiveWeaponItem(WeaponItem.SHURIKEN);
-        player.GiveWeaponItem(WeaponItem.SHURIKEN);
+        AddShurikens(player, 2);
         
         Game.PlaySound("GetAmmoHandgun", player.GetWorldPosition());
     }
+}
+
+private static void AddShurikens(IPlayer player, int amount)
+{
+    ThrownWeaponItem current = player.CurrentThrownItem;
+    // No throwable equipped (checked by ammo, so it doesn't depend on what an empty slot reports)
+    bool hasNone = current.WeaponItem == WeaponItem.NONE || current.CurrentAmmo <= 0;
+    bool hasShurikens = !hasNone && current.WeaponItem == WeaponItem.SHURIKEN;
+    
+    if (hasShurikens)
+    {
+        // Already holding shurikens: just raise the count. Capped at the item's max automatically.
+        player.SetCurrentThrownItemAmmo(current.CurrentAmmo + amount);
+    }
+    else if (hasNone)
+    {
+        // Nothing equipped: give the item once, then trim to the exact amount
+        if (player.GiveWeaponItem(WeaponItem.SHURIKEN))
+        {
+            player.SetCurrentThrownItemAmmo(amount);
+        }
+    }
+    // else: the player holds another throwable (grenades, mines, etc.). Only one throwable
+    // type fits at a time, so this deliberately does nothing. See below if you want to override.
 }
 
 private bool IsShurikenThrownByBeastTitan(IObject obj, out int beastTitanId)
@@ -7084,12 +7106,35 @@ private void HitBeastRockPlayer(IPlayer victim, BeastRockState r, Vector2 at, Ve
         float damage = baseDamage * BEAST_ROCK_DAMAGE_LARGE_MULTIPLIER;
         victim.DealDamage(damage, r.OwnerId);
         
-        // Knockback effect
-        Vector2 knockback = impactVel;
-        if (knockback.LengthSquared() > 0.0001f)
+        // Throw effect (copied from Armored Rush)
+        float beastForce = GetPlayerForce(beastTitan);
+        float beastHeight = GetPlayerHeight(beastTitan);
+        float beastPower = beastForce * beastHeight;
+        if (beastTitan.GetStrengthBoostTime() > 0)
         {
-            knockback.Normalize();
-            victim.SetLinearVelocity(knockback * 15f); // Moderate knockback
+            beastPower *= 1.4f;
+        }
+        
+        float victimForce = GetPlayerForce(victim);
+        float victimHeight = GetPlayerHeight(victim);
+        float victimPower = victimForce * victimHeight;
+        if (victim.GetStrengthBoostTime() > 0)
+        {
+            victimPower *= 1.4f;
+        }
+        
+        float throwPower = (beastPower - (victimPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_RUSH_BALANCER_MOD;
+        throwPower = Math.Max(throwPower, 0f);
+        
+        // Apply throw velocity
+        if (throwPower > 0)
+        {
+            float velocity = throwPower * ARMORED_RUSH_THROW_SCALE;
+            float throwDirection = impactVel.X >= 0 ? 1f : -1f; // Direction based on rock velocity
+            victim.SetLinearVelocity(new Vector2(throwDirection * velocity, velocity * ARMORED_RUSH_THROW_UP_RATIO));
+            
+            // Make player fall while being thrown
+            QuickCommand(victim, new PlayerCommand(PlayerCommandType.Fall));
         }
         
         // Explosion sound
