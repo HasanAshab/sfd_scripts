@@ -161,14 +161,14 @@ private const float BEAST_TITAN_SIZE = 1.15f;               // Fixed size
 // Beast Titan rock throw mechanics
 private const string BEAST_ROCK_TEXT = ".";
 private const float BEAST_ROCK_TEXT_SCALE_LARGE = 10f;      // Large rock size
-private const float BEAST_ROCK_TEXT_SCALE_SMALL = 1.111f;   // Small rock size (large/9)
+private const float BEAST_ROCK_TEXT_SCALE_SMALL = 3f;   // Small rock size (large/9)
 private const float BEAST_ROCK_HIT_RADIUS = 6f;             // Hit detection radius
 private const float BEAST_ROCK_VISUAL_OFFSET_Y = 30f;       // Visual offset
 private const float BEAST_ROCK_MAX_LIFETIME = 6000f;        // Rock lifetime in ms
 private const float BEAST_ROCK_DAMAGE_BASE = 7f;            // Base damage per rock
 private const float BEAST_ROCK_DAMAGE_LARGE_MULTIPLIER = 9f; // Large rock damage multiplier
-private const int BEAST_ROCK_SMALL_COUNT = 9;               // Number of small rocks
-private const float BEAST_ROCK_SMALL_FALL_CHANCE = 0.11f;   // 11% chance to fall on small rock hit
+private const int BEAST_ROCK_SMALL_COUNT = 6;               // Number of small rocks
+private const float BEAST_ROCK_SMALL_FALL_CHANCE = 0.21f;   // chance to fall on small rock hit
 
 // Beast Titan rock physics
 private const float BEAST_ROCK_UNITS_PER_METER = 12.5f;
