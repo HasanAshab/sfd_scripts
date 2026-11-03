@@ -7426,13 +7426,11 @@ private void BeastBotExecuteBreakCrates(IPlayer bot, int botId, Vector2 botPos)
     {
         if (obj == null || obj.IsRemoved) continue;
         if (obj.Name == null) continue;
+        if (!obj.Destructable) continue; // Skip non-destructible objects
         
         string name = obj.Name.ToLower();
         if (name.Contains("crate") || name.Contains("box") || name.Contains("barrel"))
         {
-            if (obj.Destructable == null) continue;
-            if (obj.Destructable.IsDestroyed) continue;
-            
             float dist = Vector2.Distance(obj.GetWorldPosition(), botPos);
             if (dist < closestDist)
             {
