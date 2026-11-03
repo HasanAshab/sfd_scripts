@@ -199,7 +199,7 @@ private const float BEAST_FALLBACK_THROW_MS = 25f;
 private const float BEAST_BOT_ROCK_TYPE_CHECK_INTERVAL = 1500f; // How often to re-evaluate rock type
 private const float BEAST_BOT_THROW_SEQUENCE_TIME = 900f;        // Time for complete throw sequence (ms)
 private const float BEAST_BOT_FLEE_RANGE = 15f;                  // Flee if enemy closer than this
-private const float BEAST_BOT_THROW_MAX_RANGE = 450f;            // Farthest distance to throw from
+private const float BEAST_BOT_THROW_MAX_RANGE = 260f;            // Farthest distance to throw from
 private const float BEAST_AIM_WINDUP_SEC = 0.45f;                // Draw + aim + prep time before release (for lead)
 private const float BEAST_AIM_ARC_PER_UNIT = 0.04f;              // Upward arc per unit of distance
 
