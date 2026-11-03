@@ -196,12 +196,10 @@ private const float BEAST_MIN_REAL_THROW_MS = 3f;
 private const float BEAST_FALLBACK_THROW_MS = 25f;
 
 // Beast Titan bot AI constants
-private const float BEAST_BOT_ACTION_CHECK_INTERVAL = 2000f; // How often to decide action (ms)
-private const float BEAST_BOT_THROW_CHANCE = 0.50f;          // 50% throw rocks
-private const float BEAST_BOT_FLEE_CHANCE = 0.25f;           // 25% run away
-private const float BEAST_BOT_CRATE_CHANCE = 0.25f;          // 25% break crates for weapons
+private const float BEAST_BOT_ACTION_CHECK_INTERVAL = 500f;      // How often to decide action (ms) - more responsive
 private const float BEAST_BOT_ROCK_TYPE_CHECK_INTERVAL = 1500f; // How often to re-evaluate rock type
-private const float BEAST_BOT_FLEE_DISTANCE = 80f;           // Distance to flee from enemies
+private const float BEAST_BOT_THROW_COOLDOWN = 1200f;           // Cooldown between throws (ms)
+private const float BEAST_BOT_FLEE_DISTANCE = 80f;               // Distance to flee from enemies
 
 // Cart Titan uphead gun energy costs
 private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.03f;    // 3% per bullet
@@ -351,6 +349,7 @@ private float beastRockUnitsPerMeter = BEAST_ROCK_UNITS_PER_METER; // Auto-calib
 private enum BeastBotAction { Throw, Flee, BreakCrates }
 private Dictionary<int, BeastBotAction> beastTitanBotAction = new Dictionary<int, BeastBotAction>(); // Current bot action
 private Dictionary<int, float> beastTitanBotLastActionCheck = new Dictionary<int, float>(); // Rate-limit action evaluation
+private Dictionary<int, float> beastTitanBotLastThrowTime = new Dictionary<int, float>(); // Track last throw time for cooldown
 private Dictionary<int, float> beastTitanBotLastRockTypeCheck = new Dictionary<int, float>(); // Rate-limit rock type evaluation
 private Dictionary<int, int> beastTitanBotLockedEnemy = new Dictionary<int, int>(); // Locked target ID for rock-type decision
 private Dictionary<int, bool> beastTitanBotLockedIsLarge = new Dictionary<int, bool>(); // Locked rock type for current target
@@ -3308,6 +3307,15 @@ private void TransformToBeastTitan(IPlayer player, int playerId)
     player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotA));
     BotBehaviorSet bS = player.GetBotBehaviorSet();
     bS.SearchItems = 0;
+    
+    // Disable melee and powerup usage for Beast Titan bots (they should only throw rocks)
+    if (player.IsBot)
+    {
+        bS.MeleeUsage = false;
+        bS.MeleeWeaponUsage = false;
+        bS.PowerupUsage = false;
+    }
+    
     player.SetBotBehaviorSet(bS);
     
     // Initialize Beast Titan state (Large rock mode by default)
@@ -6504,6 +6512,7 @@ private void CleanupCartTitanData(int playerId)
     // Beast Titan bot state
     beastTitanBotAction.Remove(playerId);
     beastTitanBotLastActionCheck.Remove(playerId);
+    beastTitanBotLastThrowTime.Remove(playerId);
     beastTitanBotLastRockTypeCheck.Remove(playerId);
     beastTitanBotLockedEnemy.Remove(playerId);
     beastTitanBotLockedIsLarge.Remove(playerId);
@@ -7262,28 +7271,39 @@ private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
 }
 
 /// <summary>
-/// Decide Beast Titan bot action: flee if enemy within 25f, else 50% throw, 50% break crates
+/// Decide Beast Titan bot action with priority system:
+/// 1. Flee if any enemy is too close
+/// 2. Pickup/break crates if no enemy within 60f or no shurikens left
+/// 3. Throw otherwise
 /// </summary>
 private BeastBotAction BeastBotDecideAction(IPlayer bot, int botId, Vector2 botPos)
 {
-    // Check if any enemy is within 25f range - if so, flee
+    // Find closest enemy
+    float closestEnemyDist = float.MaxValue;
     foreach (IPlayer p in Game.GetPlayers())
     {
         if (p == null || p.IsDead || p.UniqueID == botId) continue;
         if (p.GetTeam() == bot.GetTeam()) continue;
         
         float dist = Vector2.Distance(p.GetWorldPosition(), botPos);
-        if (dist <= 25f)
-            return BeastBotAction.Flee;
+        if (dist < closestEnemyDist)
+            closestEnemyDist = dist;
     }
     
-    // No close enemies - choose between throw and break crates
-    double roll = rnd.NextDouble();
+    // Priority 1: Flee if any enemy is too close (within 25f)
+    if (closestEnemyDist <= 25f)
+        return BeastBotAction.Flee;
     
-    if (roll < 0.5f)
-        return BeastBotAction.Throw;
-    else
+    // Check shuriken status
+    ThrownWeaponItem currentThrown = bot.CurrentThrownItem;
+    bool hasShurikens = (currentThrown.WeaponItem == WeaponItem.SHURIKEN && currentThrown.CurrentAmmo > 0);
+    
+    // Priority 2: Pickup/break crates if no enemy within 60f OR no shurikens left
+    if (closestEnemyDist > 60f || !hasShurikens)
         return BeastBotAction.BreakCrates;
+    
+    // Priority 3: Throw at enemies
+    return BeastBotAction.Throw;
 }
 
 /// <summary>
@@ -7291,6 +7311,11 @@ private BeastBotAction BeastBotDecideAction(IPlayer bot, int botId, Vector2 botP
 /// </summary>
 private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vector2 botPos)
 {
+    // Check throw cooldown first
+    float lastThrow = beastTitanBotLastThrowTime.ContainsKey(botId) ? beastTitanBotLastThrowTime[botId] : 0f;
+    if (currentTime - lastThrow < BEAST_BOT_THROW_COOLDOWN)
+        return; // Still on cooldown
+    
     // Find nearest enemy
     IPlayer closestEnemy = null;
     float closestDist = float.MaxValue;
@@ -7318,6 +7343,10 @@ private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vec
         AddShurikens(bot, 2);
         return;
     }
+    
+    // Only throw if bot is on ground and not already throwing
+    if (!bot.IsOnGround || bot.IsThrowing || bot.IsHoldingActiveThrowable)
+        return;
     
     // Decide rock type based on enemy size (same formula as Cart Titan bullet type)
     int currentEnemyId = closestEnemy.UniqueID;
@@ -7369,23 +7398,23 @@ private void BeastBotExecuteThrow(IPlayer bot, int botId, float currentTime, Vec
     // Calculate predicted aim position accounting for Beast rock physics
     Vector2 aimPos = BeastBotCalculateThrowAim(botPos, enemyPos, closestEnemy.GetLinearVelocity(), wantsLarge);
     
-    // Prepare and throw - bots need manual commands to throw
-    if (bot.IsOnGround && !bot.IsThrowing && !bot.IsHoldingActiveThrowable)
+    // Execute throw command
+    bot.SetInputEnabled(false);
+    bot.AddCommand(new PlayerCommand(PlayerCommandType.DrawThrowable));
+    bot.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimPos));
+    bot.AddCommand(new PlayerCommand(PlayerCommandType.PrepareThrow, 120)); // Shuriken prep time
+    bot.AddCommand(new PlayerCommand(PlayerCommandType.Throw));
+    bot.AddCommand(new PlayerCommand(PlayerCommandType.StopAim));
+    
+    // Record throw time
+    beastTitanBotLastThrowTime[botId] = currentTime;
+    
+    // Re-enable input after throw completes
+    Game.Events.StartUpdateCallback(dlt =>
     {
-        bot.SetInputEnabled(false);
-        bot.AddCommand(new PlayerCommand(PlayerCommandType.DrawThrowable));
-        bot.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimPos));
-        bot.AddCommand(new PlayerCommand(PlayerCommandType.PrepareThrow, 120)); // Shuriken prep time
-        bot.AddCommand(new PlayerCommand(PlayerCommandType.Throw));
-        bot.AddCommand(new PlayerCommand(PlayerCommandType.StopAim));
-        
-        // Re-enable input after throw completes
-        Game.Events.StartUpdateCallback(dlt =>
-        {
-            if (bot != null && !bot.IsRemoved)
-                bot.SetInputEnabled(true);
-        }, 800, 1);
-    }
+        if (bot != null && !bot.IsRemoved)
+            bot.SetInputEnabled(true);
+    }, 800, 1);
 }
 
 /// <summary>
@@ -7515,6 +7544,13 @@ private void BeastBotExecuteBreakCrates(IPlayer bot, int botId, Vector2 botPos)
         Vector2 cratePos = closestCrate.GetWorldPosition();
         bot.SetBotBehaviorActive(true);
         bot.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
+        
+        // Ensure melee is still disabled even when breaking crates
+        BotBehaviorSet crateSet = bot.GetBotBehaviorSet();
+        crateSet.MeleeUsage = false;
+        crateSet.MeleeWeaponUsage = false;
+        bot.SetBotBehaviorSet(crateSet);
+        
         bot.SetGuardTarget(closestCrate);
         
         // Face crate and attack
