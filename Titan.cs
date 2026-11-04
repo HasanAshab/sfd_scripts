@@ -165,8 +165,8 @@ private const float BEAST_ROCK_TEXT_SCALE_SMALL = 3f;   // Small rock size (larg
 private const float BEAST_ROCK_HIT_RADIUS = 6f;             // Hit detection radius
 private const float BEAST_ROCK_VISUAL_OFFSET_Y = 30f;       // Visual offset
 private const float BEAST_ROCK_MAX_LIFETIME = 6000f;        // Rock lifetime in ms
-private const float BEAST_ROCK_DAMAGE_BASE = 7f;            // Base damage per rock
-private const float BEAST_ROCK_DAMAGE_LARGE_MULTIPLIER = 9f; // Large rock damage multiplier
+private const float BEAST_ROCK_DAMAGE_BASE = 8f;            // Base damage per rock
+private const float BEAST_ROCK_DAMAGE_LARGE_MULTIPLIER = 5f; // Large rock damage multiplier
 private const int BEAST_ROCK_SMALL_COUNT = 6;               // Number of small rocks
 private const float BEAST_ROCK_SMALL_FALL_CHANCE = 0.21f;   // chance to fall on small rock hit
 
