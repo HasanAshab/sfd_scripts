@@ -197,7 +197,7 @@ private const float BEAST_FALLBACK_THROW_MS = 25f;
 
 // Beast Titan bot AI constants
 private const float BEAST_BOT_ROCK_TYPE_CHECK_INTERVAL = 1500f; // How often to re-evaluate rock type
-private const float BEAST_BOT_THROW_SEQUENCE_TIME = 900f;        // Time for complete throw sequence (ms)
+private const float BEAST_BOT_THROW_SEQUENCE_TIME = 800f;        // Time for complete throw sequence (ms)
 private const float BEAST_BOT_FLEE_RANGE = 40f;                  // Flee if enemy closer than this (inside min throw range)
 private const float BEAST_BOT_THROW_MIN_RANGE = 50f;             // Minimum distance to throw from (too close = flee)
 private const float BEAST_BOT_THROW_MAX_RANGE = 260f;            // Farthest distance to throw from
