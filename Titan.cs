@@ -357,6 +357,10 @@ private Dictionary<int, float> beastTitanBotLastRockTypeCheck = new Dictionary<i
 private Dictionary<int, int> beastTitanBotLockedEnemy = new Dictionary<int, int>(); // Locked target ID for rock-type decision
 private Dictionary<int, bool> beastTitanBotLockedIsLarge = new Dictionary<int, bool>(); // Locked rock type for current target
 private Dictionary<int, IObjectPathNode> beastTitanBotFleeTarget = new Dictionary<int, IObjectPathNode>(); // Flee destination node
+private Dictionary<int, float> beastTitanBotLastShurikenGiveTime = new Dictionary<int, float>(); // Track last shuriken regeneration time
+
+// Beast Titan bot shuriken regeneration
+private const float BEAST_BOT_SHURIKEN_REGEN_INTERVAL = 7000f; // Give 1 shuriken every 7 seconds
 
 // Beast Titan rock state class
 private class BeastRockState
@@ -3466,6 +3470,9 @@ public void OnUpdate(float elapsed)
                 // Bot AI: action decision and behavior
                 if (player.IsBot)
                 {
+                    // Shuriken regeneration for bots (1 shuriken every 7 seconds)
+                    BeastBotShurikenRegen(player, playerId, currentTime);
+                    
                     BeastTitanBotUpdate(player, playerId, currentTime);
                 }
                 
@@ -6521,6 +6528,7 @@ private void CleanupCartTitanData(int playerId)
     beastTitanBotLastRockTypeCheck.Remove(playerId);
     beastTitanBotLockedEnemy.Remove(playerId);
     beastTitanBotLockedIsLarge.Remove(playerId);
+    beastTitanBotLastShurikenGiveTime.Remove(playerId);
     beastTitanBotFleeTarget.Remove(playerId);
 }
 
@@ -7243,6 +7251,27 @@ private void ShatterBeastRock(BeastRockState r, Vector2 at, Vector2 impactVel)
 // ============================================================
 
 /// <summary>
+/// Give Beast Titan bots 1 shuriken every 7 seconds
+/// </summary>
+private void BeastBotShurikenRegen(IPlayer bot, int botId, float currentTime)
+{
+    float lastGiveTime;
+    if (!beastTitanBotLastShurikenGiveTime.TryGetValue(botId, out lastGiveTime))
+    {
+        // First time - initialize
+        beastTitanBotLastShurikenGiveTime[botId] = currentTime;
+        return;
+    }
+    
+    // Check if 7 seconds have passed
+    if (currentTime - lastGiveTime >= BEAST_BOT_SHURIKEN_REGEN_INTERVAL)
+    {
+        AddShurikens(bot, 1);
+        beastTitanBotLastShurikenGiveTime[botId] = currentTime;
+    }
+}
+
+/// <summary>
 /// Main Beast Titan bot update: lock-based throw system with native AI pickup
 /// </summary>
 private void BeastTitanBotUpdate(IPlayer bot, int botId, float currentTime)
@@ -7441,7 +7470,7 @@ private void BeastBotStartThrow(IPlayer bot, int botId, Vector2 botPos, IPlayer 
     bot.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimPos, (PlayerCommandFaceDirection)facing, 600));   // Give the arm time to rotate
     // bot.AddCommand(new PlayerCommand(PlayerCommandType.PrepareThrow, 0, 120));
     bot.AddCommand(new PlayerCommand(PlayerCommandType.Throw, 0, 50));
-    // bot.AddCommand(new PlayerCommand(PlayerCommandType.ExitThrowingMode));
+    // bot.AddCommand(new PlayerCommand(PlayerCommandType.EnterThrowingMode));
     bot.AddCommand(new PlayerCommand(PlayerCommandType.StopAim));
     
     beastTitanBotMode[botId] = BeastBotMode.Throw;
