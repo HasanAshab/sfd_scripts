@@ -7154,6 +7154,34 @@ private void HitBeastRockPlayer(IPlayer victim, BeastRockState r, Vector2 at, Ve
     IPlayer beastTitan = Game.GetPlayer(r.OwnerId);
     if (beastTitan == null) return;
     
+    int victimId = victim.UniqueID;
+    
+    // Check if victim is Armored Titan with armor ON
+    bool isArmoredWithArmorOn = titanPlayers.ContainsKey(victimId) && 
+                                 titanPlayers[victimId] == TitanType.Armored &&
+                                 armoredTitanArmorOn.ContainsKey(victimId) && 
+                                 armoredTitanArmorOn[victimId];
+    
+    // Check if rock hit from front (based on rock velocity direction vs victim facing)
+    bool isFrontHit = false;
+    if (isArmoredWithArmorOn)
+    {
+        // Rock coming from the direction the victim is facing = front hit
+        isFrontHit = IsArmoredInFront(victim, at);
+        
+        if (isFrontHit)
+        {
+            // Front hit on armored titan with armor ON - immune!
+            // Play deflection effect and sound
+            Game.PlayEffect(EffectName.Electric, at);
+            Game.PlaySound("BulletHitMetal", at);
+            
+            // Shatter rock without dealing damage
+            ShatterBeastRock(r, at, impactVel);
+            return;
+        }
+    }
+    
     PlayerModifiers beastMods = beastTitan.GetModifiers();
     float baseDamage = BEAST_ROCK_DAMAGE_BASE * beastMods.MeleeDamageDealtModifier;
     
