@@ -7305,6 +7305,8 @@ private void BeastBotShurikenRegen(IPlayer bot, int botId, float currentTime)
     if (currentTime - lastGiveTime >= BEAST_BOT_SHURIKEN_REGEN_INTERVAL)
     {
         AddShurikens(bot, 1);
+        if (rnd.Next(100) < 5)
+            bot.GiveWeaponItem(WeaponItem.FIREAMMO);
         beastTitanBotLastShurikenGiveTime[botId] = currentTime;
     }
 }
