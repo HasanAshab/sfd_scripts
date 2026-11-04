@@ -7128,14 +7128,9 @@ private IPlayer FindBeastRockHitPlayer(Vector2 prev, Vector2 next, int ownerId, 
     {
         if (pl.IsDead || pl.UniqueID == ownerId) continue;
         
-        // Large rocks hit everyone including allies
-        // Small rocks only hit enemies
-        if (!isLarge)
-        {
-            PlayerTeam plTeam = pl.GetTeam();
-            // Skip teammates and independent allies
-            if (beastTeam != PlayerTeam.Independent && plTeam == beastTeam) continue;
-        }
+        PlayerTeam plTeam = pl.GetTeam();
+        // Skip teammates and independent allies
+        if (beastTeam != PlayerTeam.Independent && plTeam == beastTeam) continue;
         
         Area box = pl.GetAABB();
         box.Grow(BEAST_ROCK_HIT_RADIUS);
