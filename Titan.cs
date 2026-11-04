@@ -7220,8 +7220,8 @@ private void HitBeastRockPlayer(IPlayer victim, BeastRockState r, Vector2 at, Ve
         {
             victimPower *= 1.4f;
         }
-        
-        float throwPower = (beastPower - (victimPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_RUSH_BALANCER_MOD;
+        // constant force for now
+        float throwPower = 0.022f; // (beastPower - (victimPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_RUSH_BALANCER_MOD;
         throwPower = Math.Max(throwPower, 0f);
         
         // Apply throw velocity
@@ -7240,7 +7240,7 @@ private void HitBeastRockPlayer(IPlayer victim, BeastRockState r, Vector2 at, Ve
     }
     else
     {
-        // Small rock: 11% chance to fall
+        // Small rock: chance to fall
         if (rnd.NextDouble() < BEAST_ROCK_SMALL_FALL_CHANCE)
         {
             QuickCommand(victim, new PlayerCommand(PlayerCommandType.Fall));
@@ -7418,7 +7418,7 @@ private void BeastBotApplyPassiveBehavior(IPlayer bot)
     set.PowerupUsage = false;           // Don't use powerups
     set.RangedWeaponUsage = true;       // Allow gun pickup (but won't shoot if EliminateEnemies is false)
     set.SearchForItems = true;          // Always search for items to encourage movement
-    set.SearchItems = SearchItems.Throwable | SearchItems.Primary | SearchItems.Secondary | SearchItems.Melee | SearchItems.Makeshift;
+    set.SearchItems = SearchItems.Throwable | SearchItems.Primary | SearchItems.Secondary | SearchItems.Melee | SearchItems.Makeshift | SearchItems.Powerups;
     set.SearchItemRange = 0f;           // Infinite range
     bot.SetBotBehaviorSet(set);
 }
