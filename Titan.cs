@@ -7156,24 +7156,41 @@ private void HitBeastRockPlayer(IPlayer victim, BeastRockState r, Vector2 at, Ve
     
     int victimId = victim.UniqueID;
     
+    // Calculate damage first
+    PlayerModifiers beastMods = beastTitan.GetModifiers();
+    float baseDamage = BEAST_ROCK_DAMAGE_BASE * beastMods.MeleeDamageDealtModifier;
+    float damage = r.IsLarge ? (baseDamage * BEAST_ROCK_DAMAGE_LARGE_MULTIPLIER) : baseDamage;
+    
     // Check if victim is Armored Titan with armor ON
     bool isArmoredWithArmorOn = titanPlayers.ContainsKey(victimId) && 
                                  titanPlayers[victimId] == TitanType.Armored &&
                                  armoredTitanArmorOn.ContainsKey(victimId) && 
                                  armoredTitanArmorOn[victimId];
     
-    // Check if rock hit from front (based on rock velocity direction vs victim facing)
+    // Check if rock hit from front (only if armored with armor on)
     bool isFrontHit = false;
     if (isArmoredWithArmorOn)
     {
         // Rock coming from the direction the victim is facing = front hit
-        isFrontHit = IsArmoredInFront(victim, at);
+        // Need stricter check than IsArmoredInFront to avoid back hits being counted as front
+        Vector2 titanPos = victim.GetWorldPosition();
+        int facing = victim.FacingDirection;
+        float dx = at.X - titanPos.X;
+        float forwardDistance = dx * facing;
+        
+        // Only front if clearly in front (no tolerance for back hits)
+        isFrontHit = forwardDistance > 5f; // Positive = in front, with some margin
         
         if (isFrontHit)
         {
-            // Front hit on armored titan with armor ON - immune!
+            // Front hit on armored titan with armor ON - absorb damage and drain energy
+            PlayerModifiers titanMods = victim.GetModifiers();
+            float energyDrain = damage * ARMORED_SHIELD_ENERGY_DRAIN_RATIO;
+            titanMods.CurrentEnergy = Math.Max(0f, titanMods.CurrentEnergy - energyDrain);
+            victim.SetModifiers(titanMods);
+            
             // Play deflection effect and sound
-            Game.PlayEffect(EffectName.Electric, at);
+            Game.PlayEffect(EffectName.Sparks, at);
             Game.PlaySound("BulletHitMetal", at);
             
             // Shatter rock without dealing damage
@@ -7182,15 +7199,11 @@ private void HitBeastRockPlayer(IPlayer victim, BeastRockState r, Vector2 at, Ve
         }
     }
     
-    PlayerModifiers beastMods = beastTitan.GetModifiers();
-    float baseDamage = BEAST_ROCK_DAMAGE_BASE * beastMods.MeleeDamageDealtModifier;
+    // Deal damage (either not armored, armor off, or hit from back)
+    victim.DealDamage(damage, r.OwnerId);
     
     if (r.IsLarge)
     {
-        // Large rock: 7 * melee mod * 9
-        float damage = baseDamage * BEAST_ROCK_DAMAGE_LARGE_MULTIPLIER;
-        victim.DealDamage(damage, r.OwnerId);
-        
         // Throw effect (copied from Armored Rush)
         float beastForce = GetPlayerForce(beastTitan);
         float beastHeight = GetPlayerHeight(beastTitan);
@@ -7227,10 +7240,7 @@ private void HitBeastRockPlayer(IPlayer victim, BeastRockState r, Vector2 at, Ve
     }
     else
     {
-        // Small rock: 7 * melee mod
-        victim.DealDamage(baseDamage, r.OwnerId);
-        
-        // 11% chance to fall
+        // Small rock: 11% chance to fall
         if (rnd.NextDouble() < BEAST_ROCK_SMALL_FALL_CHANCE)
         {
             QuickCommand(victim, new PlayerCommand(PlayerCommandType.Fall));
