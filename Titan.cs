@@ -3330,8 +3330,8 @@ private void TransformToBeastTitan(IPlayer player, int playerId)
     // Store titan size
     titanSizes[playerId] = BEAST_TITAN_SIZE;
     
-    // Give 5 shurikens to start
-    AddShurikens(player, 5);
+    // Give 3 shurikens to start
+    AddShurikens(player, 3);
 }
 
 public void OnUpdate(float elapsed)
@@ -7437,11 +7437,11 @@ private void BeastBotStartThrow(IPlayer bot, int botId, Vector2 botPos, IPlayer 
     bot.SetFaceDirection(facing);
     
     bot.AddCommand(new PlayerCommand(PlayerCommandType.DrawThrowable, 0, 150));            // Let draw anim finish
-    bot.AddCommand(new PlayerCommand(PlayerCommandType.EnterThrowingMode));
+    // bot.AddCommand(new PlayerCommand(PlayerCommandType.EnterThrowingMode));
     bot.AddCommand(new PlayerCommand(PlayerCommandType.StartAimAtPrecise, aimPos, (PlayerCommandFaceDirection)facing, 600));   // Give the arm time to rotate
     // bot.AddCommand(new PlayerCommand(PlayerCommandType.PrepareThrow, 0, 120));
     bot.AddCommand(new PlayerCommand(PlayerCommandType.Throw, 0, 50));
-    bot.AddCommand(new PlayerCommand(PlayerCommandType.ExitThrowingMode));
+    // bot.AddCommand(new PlayerCommand(PlayerCommandType.ExitThrowingMode));
     bot.AddCommand(new PlayerCommand(PlayerCommandType.StopAim));
     
     beastTitanBotMode[botId] = BeastBotMode.Throw;
