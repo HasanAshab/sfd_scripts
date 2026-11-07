@@ -166,7 +166,7 @@ private const float BEAST_ROCK_HIT_RADIUS = 6f;             // Hit detection rad
 private const float BEAST_ROCK_VISUAL_OFFSET_Y = 30f;       // Visual offset
 private const float BEAST_ROCK_MAX_LIFETIME = 6000f;        // Rock lifetime in ms
 private const float BEAST_ROCK_DAMAGE_BASE = 8f;            // Base damage per rock
-private const float BEAST_ROCK_DAMAGE_LARGE_MULTIPLIER = 5f; // Large rock damage multiplier
+private const float BEAST_ROCK_DAMAGE_LARGE_MULTIPLIER = 4f; // Large rock damage multiplier
 private const int BEAST_ROCK_SMALL_COUNT = 6;               // Number of small rocks
 private const float BEAST_ROCK_SMALL_FALL_CHANCE = 0.21f;   // chance to fall on small rock hit
 
@@ -7216,7 +7216,7 @@ private void HitBeastRockPlayer(IPlayer victim, BeastRockState r, Vector2 at, Ve
             victimPower *= 1.4f;
         }
         // constant force for now
-        float throwPower = 0.022f; // (beastPower - (victimPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_RUSH_BALANCER_MOD;
+        float throwPower = 0.04f; // (beastPower - (victimPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_RUSH_BALANCER_MOD;
         throwPower = Math.Max(throwPower, 0f);
         
         // Apply throw velocity
@@ -7300,7 +7300,7 @@ private void BeastBotShurikenRegen(IPlayer bot, int botId, float currentTime)
     if (currentTime - lastGiveTime >= BEAST_BOT_SHURIKEN_REGEN_INTERVAL)
     {
         AddShurikens(bot, 1);
-        if (rnd.Next(100) < 5)
+        if (rnd.Next(100) < 10)
             bot.GiveWeaponItem(WeaponItem.FIREAMMO);
         beastTitanBotLastShurikenGiveTime[botId] = currentTime;
     }
