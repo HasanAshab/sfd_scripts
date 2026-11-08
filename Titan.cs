@@ -7216,7 +7216,7 @@ private void HitBeastRockPlayer(IPlayer victim, BeastRockState r, Vector2 at, Ve
             victimPower *= 1.4f;
         }
         // constant force for now
-        float throwPower = 0.04f; // (beastPower - (victimPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_RUSH_BALANCER_MOD;
+        float throwPower = 0.03f; // (beastPower - (victimPower * ARMORED_RUSH_TARGET_FORCE_WEIGHT)) * ARMORED_RUSH_BALANCER_MOD;
         throwPower = Math.Max(throwPower, 0f);
         
         // Apply throw velocity
