@@ -1803,7 +1803,7 @@ private void TransformToJawTitan(IPlayer player, int playerId)
         Skin = new IProfileClothingItem("Zombie_fem", ""),
         Head = new IProfileClothingItem("Hood", "ClothingDarkGray"),
         Accesory = new IProfileClothingItem("GoalieMask", ""),
-    }
+    };
     player.SetProfile(titanProfile);
     
     // Remove strength boost after transformation
