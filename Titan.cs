@@ -224,6 +224,13 @@ private const float CART_GUN_PIPE_DEFAULT_ROTATION = 7.9f;
 // Cart Titan aim crosshair update interval
 private const float CART_AIM_UPDATE_INTERVAL = 50f; // 50ms
 
+// Cart Titan progressive aim speed (starts slow, increases with hold time)
+private const float CART_AIM_SPEED_INITIAL = 0.015f; // Initial aim speed (slower start)
+private const float CART_AIM_SPEED_MAX = 0.12f; // Maximum aim speed after prolonged hold
+private const float CART_AIM_SPEED_SNIPER_INITIAL = 0.008f; // Initial aim speed for sniper
+private const float CART_AIM_SPEED_SNIPER_MAX = 0.07f; // Maximum aim speed for sniper
+private const float CART_AIM_ACCEL_TIME = 500f; // Time (ms) to reach max speed
+
 // Cart Titan bot constants
 private const float CRT_BOT_MODE_CHECK_INTERVAL  = 1500f; // How often (ms) to re-evaluate Rescue vs Offensive mode
 private const float CRT_BOT_BEH_CHECK_INTERVAL   = 2500f; // How often (ms) to flip avoid/fight roll in Offensive mode
@@ -327,6 +334,8 @@ private Dictionary<int, IObject> cartTitanGunPipe = new Dictionary<int, IObject>
 private Dictionary<int, bool> cartTitanGunIsSniper = new Dictionary<int, bool>(); // true=Sniper, false=M60
 private Dictionary<int, bool> cartTitanBlockHeld = new Dictionary<int, bool>(); // Is block currently held?
 private Dictionary<int, float> cartTitanGunAimAngle = new Dictionary<int, float>(); // Stored aim angle offset in radians (relative to forward)
+private Dictionary<int, float> cartTitanAimUpHoldTime = new Dictionary<int, float>(); // Duration JUMP held for aim up
+private Dictionary<int, float> cartTitanAimDownHoldTime = new Dictionary<int, float>(); // Duration CROUCH held for aim down
 private Dictionary<int, IObjectText> cartTitanCrosshair = new Dictionary<int, IObjectText>(); // '+' crosshair text
 private Dictionary<int, float> cartTitanLastBulletFireTime = new Dictionary<int, float>(); // Throttle bullet fire & energy cost
 
@@ -5793,15 +5802,45 @@ private void CartTitanUpdateAimFast(IPlayer player, int playerId, Vector2 player
     {
         float currentAngle = cartTitanGunAimAngle.ContainsKey(playerId) ? cartTitanGunAimAngle[playerId] : 0f;
         
-        // Aim adjust speed scaled for high-FPS 10ms updates (matching odm.cs smoothness)
-        float dtFactor = (elapsed > 0f) ? (elapsed / 50f) : 0.2f;
-        float aimSpeed = (isSniper ? 0.07f : 0.12f) * dtFactor;
+        // Track hold times for progressive aim speed
+        bool jumpPressed = player.KeyPressed(VirtualKey.JUMP);
+        bool crouchPressed = player.KeyPressed(VirtualKey.CROUCH_ROLL_DIVE);
         
-        // JUMP aims up (+Y in SFD), CROUCH aims down (-Y in SFD)
-        if (player.KeyPressed(VirtualKey.JUMP))
+        // Update hold times
+        if (!cartTitanAimUpHoldTime.ContainsKey(playerId))
+            cartTitanAimUpHoldTime[playerId] = 0f;
+        if (!cartTitanAimDownHoldTime.ContainsKey(playerId))
+            cartTitanAimDownHoldTime[playerId] = 0f;
+        
+        if (jumpPressed)
+            cartTitanAimUpHoldTime[playerId] += elapsed;
+        else
+            cartTitanAimUpHoldTime[playerId] = 0f;
+        
+        if (crouchPressed)
+            cartTitanAimDownHoldTime[playerId] += elapsed;
+        else
+            cartTitanAimDownHoldTime[playerId] = 0f;
+        
+        // Calculate progressive aim speed based on hold time
+        if (jumpPressed)
+        {
+            float holdTime = cartTitanAimUpHoldTime[playerId];
+            float speedMin = isSniper ? CART_AIM_SPEED_SNIPER_INITIAL : CART_AIM_SPEED_INITIAL;
+            float speedMax = isSniper ? CART_AIM_SPEED_SNIPER_MAX : CART_AIM_SPEED_MAX;
+            float t = Math.Min(1f, holdTime / CART_AIM_ACCEL_TIME);
+            float aimSpeed = speedMin + (speedMax - speedMin) * t;
             currentAngle += aimSpeed;
-        if (player.KeyPressed(VirtualKey.CROUCH_ROLL_DIVE))
+        }
+        else if (crouchPressed)
+        {
+            float holdTime = cartTitanAimDownHoldTime[playerId];
+            float speedMin = isSniper ? CART_AIM_SPEED_SNIPER_INITIAL : CART_AIM_SPEED_INITIAL;
+            float speedMax = isSniper ? CART_AIM_SPEED_SNIPER_MAX : CART_AIM_SPEED_MAX;
+            float t = Math.Min(1f, holdTime / CART_AIM_ACCEL_TIME);
+            float aimSpeed = speedMin + (speedMax - speedMin) * t;
             currentAngle -= aimSpeed;
+        }
             
         // Clamp to avoid aiming completely backwards or beyond down limit
         currentAngle = MathHelper.Clamp(currentAngle, CART_GUN_AIM_MIN_ANGLE, CART_GUN_AIM_MAX_ANGLE);
@@ -6574,6 +6613,8 @@ private void CleanupCartTitanData(int playerId)
     cartTitanGunIsSniper.Remove(playerId);
     cartTitanBlockHeld.Remove(playerId);
     cartTitanGunAimAngle.Remove(playerId);
+    cartTitanAimUpHoldTime.Remove(playerId);
+    cartTitanAimDownHoldTime.Remove(playerId);
     cartTitanLastBulletFireTime.Remove(playerId);
     
     // Cart Titan bot state
