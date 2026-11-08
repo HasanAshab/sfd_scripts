@@ -331,7 +331,7 @@ public void TransformPlayersToUjiri()
         mods.SprintSpeedModifier *= 1.45f;
         player.SetModifiers(mods);
 
-        player.GiveWeaponItem(WeaponItem.GRENADES);
-        player.GiveWeaponItem(WeaponItem.PISTOL);
+        // player.GiveWeaponItem(WeaponItem.GRENADES);
+        // player.GiveWeaponItem(WeaponItem.PISTOL);
     }
 }

@@ -1329,31 +1329,42 @@ private void CheckScenarioAExpiry()
     foreach (IPlayer p in allPlayers)
         if (p != null && !p.IsDead) nameToPlayer[p.Name] = p;
     
-    // Find expired humanoid powers
+    // Find all expired humanoid powers
     List<string> expiredNames = new List<string>();
+    Dictionary<string, TitanType> expiredPowers = new Dictionary<string, TitanType>();
+    
     foreach (var kvp in playerPowerExpiry)
     {
         if (nowDay >= kvp.Value)
-            expiredNames.Add(kvp.Key);
+        {
+            string playerName = kvp.Key;
+            if (!nameToPlayer.ContainsKey(playerName)) continue;
+            
+            IPlayer expiredPlayer = nameToPlayer[playerName];
+            int expiredId = expiredPlayer.UniqueID;
+            if (!assignedTitanPowers.ContainsKey(expiredId)) continue;
+            
+            TitanType expiredPower = assignedTitanPowers[expiredId];
+            if (expiredPower == TitanType.Pure) continue; // Already pure, skip
+            
+            expiredNames.Add(playerName);
+            expiredPowers[playerName] = expiredPower;
+        }
     }
     
+    if (expiredNames.Count == 0) return; // No expired powers
+    
+    // Process all expired powers
     foreach (string expiredName in expiredNames)
     {
-        // Find the expired player's ID and power
-        if (!nameToPlayer.ContainsKey(expiredName)) continue;
         IPlayer expiredPlayer = nameToPlayer[expiredName];
         int expiredId = expiredPlayer.UniqueID;
-        if (!assignedTitanPowers.ContainsKey(expiredId)) continue;
-        
-        TitanType expiredPower = assignedTitanPowers[expiredId];
-        if (expiredPower == TitanType.Pure) continue; // Already pure, skip
-        
+        TitanType expiredPower = expiredPowers[expiredName];
         string powerName = GetTitanPowerName(expiredPower);
-        
-        // Find a Pure Titan teammate to inherit
-        IPlayer inheritor = null;
         PlayerTeam expiredTeam = expiredPlayer.GetTeam();
-        List<IPlayer> candidates = new List<IPlayer>();
+        
+        // Find potential inheritors: teammates who are NOT expired
+        List<IPlayer> nonExpiredCandidates = new List<IPlayer>();
         
         foreach (IPlayer p in allPlayers)
         {
@@ -1362,11 +1373,41 @@ private void CheckScenarioAExpiry()
             if (assignedTitanPowers[p.UniqueID] != TitanType.Pure) continue;
             // Same team (or both independent)
             if (p.GetTeam() != expiredTeam && expiredTeam != PlayerTeam.Independent) continue;
-            candidates.Add(p);
+            // Must NOT be in expired list
+            if (expiredNames.Contains(p.Name)) continue;
+            
+            nonExpiredCandidates.Add(p);
         }
         
-        if (candidates.Count > 0)
-            inheritor = candidates[rnd.Next(0, candidates.Count)];
+        IPlayer inheritor = null;
+        
+        if (nonExpiredCandidates.Count > 0)
+        {
+            // Priority: give to non-expired teammates
+            inheritor = nonExpiredCandidates[rnd.Next(0, nonExpiredCandidates.Count)];
+        }
+        else
+        {
+            // Fallback: give to expired teammates, but NOT the same player who had this power
+            List<IPlayer> expiredCandidates = new List<IPlayer>();
+            
+            foreach (IPlayer p in allPlayers)
+            {
+                if (p == null || p.IsDead || p.UniqueID == expiredId) continue;
+                if (!assignedTitanPowers.ContainsKey(p.UniqueID)) continue;
+                // Same team (or both independent)
+                if (p.GetTeam() != expiredTeam && expiredTeam != PlayerTeam.Independent) continue;
+                // Must be in expired list (but not the current expired player)
+                if (!expiredNames.Contains(p.Name)) continue;
+                // Must not give them their own expired power back
+                if (expiredPowers.ContainsKey(p.Name) && expiredPowers[p.Name] == expiredPower) continue;
+                
+                expiredCandidates.Add(p);
+            }
+            
+            if (expiredCandidates.Count > 0)
+                inheritor = expiredCandidates[rnd.Next(0, expiredCandidates.Count)];
+        }
         
         // Transfer power
         assignedTitanPowers[expiredId] = TitanType.Pure;
