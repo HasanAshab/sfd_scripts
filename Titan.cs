@@ -4895,7 +4895,34 @@ private void CheckBotDetach(IPlayer player, int playerId, float currentTime)
     botLastDetachCheck[playerId] = currentTime;
     
     PlayerModifiers mods = player.GetModifiers();
-    float hpPercent = (mods.MaxHealth > 0) ? ((float)mods.CurrentHealth / mods.MaxHealth) : 1f;
+    
+    // Check if this is Attack Titan bot in blaze form (max size + strength boost)
+    bool isAttackTitanBlazeForm = false;
+    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Attack)
+    {
+        // Check if max size (1.600) and strength boost active
+        if (titanSizes.ContainsKey(playerId) && titanSizes[playerId] >= 1.600f && player.IsStrengthBoostActive)
+        {
+            isAttackTitanBlazeForm = true;
+        }
+    }
+    
+    float hpPercent;
+    
+    // Use boost health for Attack Titan blaze form, regular health otherwise
+    if (isAttackTitanBlazeForm && player.IsBoostHealthActive)
+    {
+        // Use boost health percentage for detach calculation
+        float boostHealth = player.GetBoostHealth();
+        float maxBoostHealth = 100f; // Boost health max is 100
+        hpPercent = (maxBoostHealth > 0) ? (boostHealth / maxBoostHealth) : 1f;
+    }
+    else
+    {
+        // Use regular health percentage
+        hpPercent = (mods.MaxHealth > 0) ? ((float)mods.CurrentHealth / mods.MaxHealth) : 1f;
+    }
+    
     hpPercent = Math.Max(0f, Math.Min(1f, hpPercent));
     
     // Only consider detach when HP is between 15% and 5%
