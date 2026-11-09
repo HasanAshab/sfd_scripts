@@ -152,7 +152,7 @@ private const float CART_RESCUE_ALLY_DMG_REDUCTION = 0.50f; // 50% all damage re
 
 // Beast Titan stats
 private const float BEAST_TITAN_HP_BONUS = 0.10f;           // +10% HP
-private const float BEAST_TITAN_MELEE_DAMAGE_BONUS = 0.0f;  // +0% melee damage
+private const float BEAST_TITAN_MELEE_DAMAGE_BONUS = -0.30f;  // -30% melee damage
 private const float BEAST_TITAN_MELEE_FORCE_BONUS = 0.0f;   // +0% melee force
 private const float BEAST_TITAN_SPEED_BONUS = 0.01f;        // +1% speed
 private const float BEAST_TITAN_ENERGY_BONUS = 0.01f;       // +1% energy
