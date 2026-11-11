@@ -38,7 +38,7 @@ private const float PURE_TITAN_SPEED_PENALTY = 0.30f; // 30% speed reduction (0.
 private const float ATTACK_TITAN_HP_BONUS = 0.40f; // 40% HP increase
 private const float ATTACK_TITAN_MELEE_DAMAGE_BONUS = 0.20f; // 20% melee damage increase
 private const float ATTACK_TITAN_MELEE_FORCE_BONUS = 0.01f; // 1% melee force increase
-private const float ATTACK_TITAN_SPEED_PENALTY = 0.20f; // 20% speed reduction
+private const float ATTACK_TITAN_SPEED_PENALTY = 0.10f; // 10% speed reduction
 private const float ATTACK_TITAN_ENERGY_BONUS = 0.30f; // 30% energy increase
 
 // Attack Titan hardening costs and bonuses
@@ -66,7 +66,7 @@ private const float SLOWMO_ACTIVATION_DELAY = 1000f; // 1 seconds before ending 
 private const float JAW_TITAN_HP_BONUS = 0.0f; // 0% HP increase
 private const float JAW_TITAN_MELEE_DAMAGE_BONUS = 0.25f; // 25% melee damage increase
 private const float JAW_TITAN_MELEE_FORCE_BONUS = 0.0f; // 0% melee force increase
-private const float JAW_TITAN_SPEED_PENALTY = 0.0f; // 0% speed reduction
+private const float JAW_TITAN_SPEED_PENALTY = -0.07f; // 7% speed increase
 private const float JAW_TITAN_ENERGY_BONUS = 0.10f; // 10% energy increase
 private const float JAW_TITAN_SIZE = 0.880f; // Fixed size
 
