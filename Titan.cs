@@ -204,7 +204,7 @@ private const float BEAST_BOT_THROW_MAX_RANGE = 260f;            // Farthest dis
 private const float BEAST_AIM_WINDUP_SEC = 0.45f;                // Draw + aim + prep time before release (for lead)
 private const float BEAST_AIM_ARC_PER_UNIT = 0.04f;             // Upward arc per unit of distance
 private const float BEAST_THROW_ENERGY_COST = 0.80f;            // 80% of max energy per throw
-private const float BEAST_TITAN_ENERGY_RECHARGE_BONUS = 1.70f;  // +170% energy recharge rate
+private const float BEAST_TITAN_ENERGY_RECHARGE_BONUS = 1.10f;  // +110% energy recharge rate
 
 // Cart Titan uphead gun energy costs
 private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.03f;    // 3% per bullet
