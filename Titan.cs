@@ -2301,6 +2301,10 @@ private void BeastTitanManageShurikenGate(IPlayer player, int playerId)
         {
             beastTitanReservedShurikens[playerId] = 0;
             AddShurikens(player, reserved);
+            if (!player.IsBot)
+            {
+                QuickCommand(player, new PlayerCommand(PlayerCommandType.DrawThrowable));
+            }
         }
     }
     else
@@ -3476,6 +3480,10 @@ private void TransformToBeastTitan(IPlayer player, int playerId)
     
     // Give 3 shurikens to start
     AddShurikens(player, 3);
+    if (!player.IsBot)
+    {
+        QuickCommand(player, new PlayerCommand(PlayerCommandType.DrawThrowable));
+    }
 }
 
 public void OnUpdate(float elapsed)
