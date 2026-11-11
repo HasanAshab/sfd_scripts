@@ -203,6 +203,8 @@ private const float BEAST_BOT_THROW_MIN_RANGE = 50f;             // Minimum dist
 private const float BEAST_BOT_THROW_MAX_RANGE = 260f;            // Farthest distance to throw from
 private const float BEAST_AIM_WINDUP_SEC = 0.45f;                // Draw + aim + prep time before release (for lead)
 private const float BEAST_AIM_ARC_PER_UNIT = 0.04f;             // Upward arc per unit of distance
+private const float BEAST_THROW_ENERGY_COST = 0.80f;            // 80% of max energy per throw
+private const float BEAST_TITAN_ENERGY_RECHARGE_BONUS = 0.60f;  // +60% energy recharge rate
 
 // Cart Titan uphead gun energy costs
 private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.03f;    // 3% per bullet
@@ -367,6 +369,7 @@ private Dictionary<int, int> beastTitanBotLockedEnemy = new Dictionary<int, int>
 private Dictionary<int, bool> beastTitanBotLockedIsLarge = new Dictionary<int, bool>(); // Locked rock type for current target
 private Dictionary<int, IObjectPathNode> beastTitanBotFleeTarget = new Dictionary<int, IObjectPathNode>(); // Flee destination node
 private Dictionary<int, float> beastTitanBotLastShurikenGiveTime = new Dictionary<int, float>(); // Track last shuriken regeneration time
+private Dictionary<int, int> beastTitanReservedShurikens = new Dictionary<int, int>(); // Shurikens held in reserve while energy < throw cost
 
 // Beast Titan bot shuriken regeneration
 private const float BEAST_BOT_SHURIKEN_REGEN_INTERVAL = 7000f; // Give 1 shuriken every 7 seconds
@@ -2228,6 +2231,12 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
             {
                 ToggleBeastTitanRockMode(player, playerId);
             }
+            
+            // DRAW_SPECIAL key: Convert current shurikens to fire mode (40% of current count)
+            if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.DRAW_SPECIAL)
+            {
+                BeastTitanActivateFireVolley(player, playerId);
+            }
         }
         return;
     }
@@ -2242,6 +2251,85 @@ private void ToggleBeastTitanRockMode(IPlayer player, int playerId)
     string modeName = (newMode == BeastRockMode.Large) ? "SINGLE LARGE ROCK" : "MULTIPLE SMALL ROCKS";
     Game.PlayEffect(EffectName.CustomFloatText, player.GetWorldPosition(), modeName);
     Game.PlaySound("StrengthBoostStart", player.GetWorldPosition());
+}
+
+private void BeastTitanActivateFireVolley(IPlayer player, int playerId)
+{
+    ThrownWeaponItem thrown = player.CurrentThrownItem;
+    int inHand = (thrown.WeaponItem == WeaponItem.SHURIKEN) ? thrown.CurrentAmmo : 0;
+    int reserved = beastTitanReservedShurikens.ContainsKey(playerId) ? beastTitanReservedShurikens[playerId] : 0;
+    int currentCount = inHand > 0 ? inHand : reserved;
+    
+    int fireCount = (int)Math.Floor((double)currentCount * 0.4);
+    if (fireCount <= 0)
+    {
+        Game.PlayEffect(EffectName.CustomFloatText, player.GetWorldPosition(), "Not Enough Rocks");
+        Game.PlaySound("OutOfAmmoHeavy", player.GetWorldPosition());
+        return;
+    }
+    
+    // Set current shuriken to floor(currentshurikenCount * 0.4), and all of them will be of fire
+    if (inHand > 0)
+    {
+        player.SetCurrentThrownItemAmmo(fireCount);
+    }
+    else
+    {
+        beastTitanReservedShurikens[playerId] = fireCount;
+    }
+    
+    beastTitanFireThrows[playerId] = fireCount;
+    
+    Game.PlayEffect(EffectName.CustomFloatText, player.GetWorldPosition(), "FIRE x" + fireCount);
+    Game.PlaySound("StrengthBoostStart", player.GetWorldPosition());
+}
+
+private void BeastTitanManageShurikenGate(IPlayer player, int playerId)
+{
+    PlayerModifiers mods = player.GetModifiers();
+    float throwCostAbs = mods.MaxEnergy * BEAST_THROW_ENERGY_COST;
+    bool canAfford = mods.CurrentEnergy >= throwCostAbs;
+    
+    ThrownWeaponItem thrown = player.CurrentThrownItem;
+    bool hasShurikens = thrown.WeaponItem == WeaponItem.SHURIKEN && thrown.CurrentAmmo > 0;
+    int reserved = beastTitanReservedShurikens.ContainsKey(playerId) ? beastTitanReservedShurikens[playerId] : 0;
+    
+    if (canAfford)
+    {
+        // Restore reserved shurikens if any
+        if (reserved > 0)
+        {
+            beastTitanReservedShurikens[playerId] = 0;
+            AddShurikens(player, reserved);
+        }
+    }
+    else
+    {
+        // Not enough energy: confiscate all shurikens to reserve
+        if (hasShurikens)
+        {
+            int ammo = thrown.CurrentAmmo;
+            beastTitanReservedShurikens[playerId] = reserved + ammo;
+            player.RemoveWeaponItemType(WeaponItemType.Thrown);
+        }
+    }
+}
+
+private void BeastTitanAddShurikenOrReserve(IPlayer player, int playerId, int amount)
+{
+    PlayerModifiers gateMods = player.GetModifiers();
+    float throwCostAbs = gateMods.MaxEnergy * BEAST_THROW_ENERGY_COST;
+    bool canAfford = gateMods.CurrentEnergy >= throwCostAbs;
+    
+    if (canAfford)
+    {
+        AddShurikens(player, amount);
+    }
+    else
+    {
+        int reserved = beastTitanReservedShurikens.ContainsKey(playerId) ? beastTitanReservedShurikens[playerId] : 0;
+        beastTitanReservedShurikens[playerId] = reserved + amount;
+    }
 }
 
 private void ActivateAttackTitanSlowmo(IPlayer player, int playerId)
@@ -3353,6 +3441,7 @@ private void TransformToBeastTitan(IPlayer player, int playerId)
     mods.SprintSpeedModifier       *= (1f + BEAST_TITAN_SPEED_BONUS);
     
     mods.MaxEnergy = (int)(mods.MaxEnergy * (1f + BEAST_TITAN_ENERGY_BONUS));
+    mods.EnergyRechargeModifier = (int)(mods.EnergyRechargeModifier * (1f + BEAST_TITAN_ENERGY_RECHARGE_BONUS));
     mods.CurrentEnergy = mods.MaxEnergy;
     
     mods.SizeModifier = BEAST_TITAN_SIZE;
@@ -3380,6 +3469,7 @@ private void TransformToBeastTitan(IPlayer player, int playerId)
     // Initialize Beast Titan state (Large rock mode by default)
     beastTitanRockMode[playerId] = BeastRockMode.Large;
     beastTitanFireThrows[playerId] = 0;
+    beastTitanReservedShurikens[playerId] = 0;
     
     // Store titan size
     titanSizes[playerId] = BEAST_TITAN_SIZE;
@@ -3516,6 +3606,9 @@ public void OnUpdate(float elapsed)
             {
                 // Beast Titan updates
                 UpdateBeastTitanRocks(elapsed);
+                
+                // Manage shuriken gate: hide/restore shurikens based on energy level
+                BeastTitanManageShurikenGate(player, playerId);
                 
                 // Bot AI: action decision and behavior
                 if (player.IsBot)
@@ -6629,6 +6722,7 @@ private void CleanupCartTitanData(int playerId)
     // Beast Titan state
     beastTitanRockMode.Remove(playerId);
     beastTitanFireThrows.Remove(playerId);
+    beastTitanReservedShurikens.Remove(playerId);
     
     // Beast Titan bot state
     beastTitanBotMode.Remove(playerId);
@@ -6950,10 +7044,31 @@ public void OnBeastWeaponAdded(IPlayer player, PlayerWeaponAddedArg arg)
         // Remove the weapon
         player.RemoveWeaponItemType(arg.WeaponItemType);
         
-        // Give 2 shurikens
-        AddShurikens(player, 2);
+        // Give 2 shurikens (or reserve if below throw-energy gate)
+        BeastTitanAddShurikenOrReserve(player, playerId, 2);
         
         Game.PlaySound("GetAmmoHandgun", player.GetWorldPosition());
+        return;
+    }
+    
+    // Shuriken pickup from ground: also check gate
+    if (arg.WeaponItemType == WeaponItemType.Thrown && arg.WeaponItem == WeaponItem.SHURIKEN)
+    {
+        PlayerModifiers gateMods = player.GetModifiers();
+        float throwCostAbs = gateMods.MaxEnergy * BEAST_THROW_ENERGY_COST;
+        bool canAfford = gateMods.CurrentEnergy >= throwCostAbs;
+        if (!canAfford)
+        {
+            // Strip the just-added shuriken(s) and store in reserve
+            int ammo = player.CurrentThrownItem.CurrentAmmo;
+            if (ammo > 0)
+            {
+                int reserved2 = beastTitanReservedShurikens.ContainsKey(playerId) ? beastTitanReservedShurikens[playerId] : 0;
+                beastTitanReservedShurikens[playerId] = reserved2 + ammo;
+                player.RemoveWeaponItemType(WeaponItemType.Thrown);
+            }
+        }
+        return;
     }
 }
 
@@ -7037,6 +7152,15 @@ private void ConvertShurikenToRock(IObject shuriken, int beastTitanId)
     // Delete shuriken
     shuriken.Remove();
     beastPendingShurikens.Add(shuriken);
+    
+    // Deduct 80% energy cost for the throw
+    PlayerModifiers throwMods = beastTitan.GetModifiers();
+    float throwEnergyCost = throwMods.MaxEnergy * BEAST_THROW_ENERGY_COST;
+    throwMods.CurrentEnergy = Math.Max(0f, throwMods.CurrentEnergy - throwEnergyCost);
+    beastTitan.SetModifiers(throwMods);
+    
+    // Immediately gate remaining shurikens into reserve now that energy is below threshold
+    BeastTitanManageShurikenGate(beastTitan, beastTitanId);
     
     // Check if fire rock
     bool fire = false;
@@ -7408,7 +7532,7 @@ private void BeastBotShurikenRegen(IPlayer bot, int botId, float currentTime)
     // Check if 7 seconds have passed
     if (currentTime - lastGiveTime >= BEAST_BOT_SHURIKEN_REGEN_INTERVAL)
     {
-        AddShurikens(bot, 1);
+        BeastTitanAddShurikenOrReserve(bot, botId, 1);
         if (rnd.Next(100) < 10)
             bot.GiveWeaponItem(WeaponItem.FIREAMMO);
         beastTitanBotLastShurikenGiveTime[botId] = currentTime;
