@@ -154,7 +154,7 @@ private const float CART_RESCUE_ALLY_DMG_REDUCTION = 0.50f; // 50% all damage re
 private const float BEAST_TITAN_HP_BONUS = 0.10f;           // +10% HP
 private const float BEAST_TITAN_MELEE_DAMAGE_BONUS = -0.30f;  // -30% melee damage
 private const float BEAST_TITAN_MELEE_FORCE_BONUS = 0.0f;   // +0% melee force
-private const float BEAST_TITAN_SPEED_BONUS = 0.01f;        // +1% speed
+private const float BEAST_TITAN_SPEED_BONUS = -0.17f;        // -17% speed
 private const float BEAST_TITAN_ENERGY_BONUS = 0.01f;       // +1% energy
 private const float BEAST_TITAN_SIZE = 1.15f;               // Fixed size
 
@@ -204,7 +204,7 @@ private const float BEAST_BOT_THROW_MAX_RANGE = 260f;            // Farthest dis
 private const float BEAST_AIM_WINDUP_SEC = 0.45f;                // Draw + aim + prep time before release (for lead)
 private const float BEAST_AIM_ARC_PER_UNIT = 0.04f;             // Upward arc per unit of distance
 private const float BEAST_THROW_ENERGY_COST = 0.80f;            // 80% of max energy per throw
-private const float BEAST_TITAN_ENERGY_RECHARGE_BONUS = 0.60f;  // +60% energy recharge rate
+private const float BEAST_TITAN_ENERGY_RECHARGE_BONUS = 1.70f;  // +170% energy recharge rate
 
 // Cart Titan uphead gun energy costs
 private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.03f;    // 3% per bullet
