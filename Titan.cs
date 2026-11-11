@@ -2767,11 +2767,11 @@ private void HandleArmoredTitanMelee(IPlayer armoredTitan, int armoredTitanId, P
                 if (throwPower > 0)
                 {
                     // Apply fall command
-                    QuickCommand(victim, new PlayerCommand(PlayerCommandType.Fall));
+                    // QuickCommand(victim, new PlayerCommand(PlayerCommandType.Fall));
                     
                     // Apply throw velocity
-                    float velocity = throwPower * ARMORED_RUSH_THROW_SCALE;
-                    victim.SetLinearVelocity(new Vector2(titanFacing * velocity, velocity * ARMORED_RUSH_THROW_UP_RATIO));
+                    float velocity = throwPower * (ARMORED_RUSH_THROW_SCALE * 0.7f);
+                    victim.SetLinearVelocity(new Vector2(titanFacing * velocity, velocity * (ARMORED_RUSH_THROW_UP_RATIO * 4.1f)));
                     
                     // Visual feedback
                     Game.PlayEffect(EffectName.CameraShaker, victim.GetWorldPosition());
