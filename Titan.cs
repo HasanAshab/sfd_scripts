@@ -370,6 +370,7 @@ private Dictionary<int, bool> beastTitanBotLockedIsLarge = new Dictionary<int, b
 private Dictionary<int, IObjectPathNode> beastTitanBotFleeTarget = new Dictionary<int, IObjectPathNode>(); // Flee destination node
 private Dictionary<int, float> beastTitanBotLastShurikenGiveTime = new Dictionary<int, float>(); // Track last shuriken regeneration time
 private Dictionary<int, int> beastTitanReservedShurikens = new Dictionary<int, int>(); // Shurikens held in reserve while energy < throw cost
+private Dictionary<int, float> beastTitanTransformTime = new Dictionary<int, float>(); // Time when player transformed into Beast Titan
 
 // Beast Titan bot shuriken regeneration
 private const float BEAST_BOT_SHURIKEN_REGEN_INTERVAL = 7000f; // Give 1 shuriken every 7 seconds
@@ -2255,6 +2256,13 @@ private void ToggleBeastTitanRockMode(IPlayer player, int playerId)
 
 private void BeastTitanActivateFireVolley(IPlayer player, int playerId)
 {
+    // Do not activate on the first 1s of transformation (prevents consuming DRAW_SPECIAL from the transform action)
+    float tTime;
+    if (beastTitanTransformTime.TryGetValue(playerId, out tTime) && Game.TotalElapsedRealTime - tTime < 1000f)
+    {
+        return;
+    }
+    
     ThrownWeaponItem thrown = player.CurrentThrownItem;
     int inHand = (thrown.WeaponItem == WeaponItem.SHURIKEN) ? thrown.CurrentAmmo : 0;
     int reserved = beastTitanReservedShurikens.ContainsKey(playerId) ? beastTitanReservedShurikens[playerId] : 0;
@@ -3474,6 +3482,7 @@ private void TransformToBeastTitan(IPlayer player, int playerId)
     beastTitanRockMode[playerId] = BeastRockMode.Large;
     beastTitanFireThrows[playerId] = 0;
     beastTitanReservedShurikens[playerId] = 0;
+    beastTitanTransformTime[playerId] = Game.TotalElapsedRealTime;
     
     // Store titan size
     titanSizes[playerId] = BEAST_TITAN_SIZE;
@@ -6731,6 +6740,7 @@ private void CleanupCartTitanData(int playerId)
     beastTitanRockMode.Remove(playerId);
     beastTitanFireThrows.Remove(playerId);
     beastTitanReservedShurikens.Remove(playerId);
+    beastTitanTransformTime.Remove(playerId);
     
     // Beast Titan bot state
     beastTitanBotMode.Remove(playerId);
