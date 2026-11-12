@@ -350,6 +350,7 @@ private Dictionary<int, float> cartTitanBotLastBehCheck = new Dictionary<int, fl
 private Dictionary<int, bool> cartTitanBotIsAvoiding = new Dictionary<int, bool>(); // Is currently avoiding (vs firing)?
 private Dictionary<int, int> cartTitanBotLockedEnemy = new Dictionary<int, int>(); // Locked target ID for bullet-type decision
 private Dictionary<int, bool> cartTitanBotLockedIsSniper = new Dictionary<int, bool>(); // Locked bullet type for current target
+private Dictionary<int, float> cartTitanBotLastFacingTime = new Dictionary<int, float>(); // Cooldown on bot face direction changes to prevent jitter
 
 // Track Beast Titan specific data
 private enum BeastRockMode { Large, Small }
@@ -6446,20 +6447,8 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
             bS.ChokePointPlayerCountThreshold = 0;
             bot.SetBotBehaviorSet(bS);
             bot.SetGuardTarget(fleeNode);
-        }
-    }
-    else
-    {
-        // Enemy is at a safe distance: move normally to patrol / engage
-        BotBehaviorSet firebS = bot.GetBotBehaviorSet();
-        if (!firebS.EliminateEnemies)
-        {
-            firebS.EliminateEnemies = true;
-            firebS.ChaseRange = 0;
-            firebS.GuardRange = 0;
-            firebS.ChokePointPlayerCountThreshold = 1;
-            bot.SetBotBehaviorSet(firebS);
-            bot.SetGuardTarget(null);
+            // While fleeing, do not fight the flee path by overriding facing towards the enemy
+            return;
         }
     }
     
@@ -6483,6 +6472,21 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
     }
     if (targetEnemy == null)
         targetEnemy = closestEnemy;
+    
+    // In combat stance at safe distance: guard targetEnemy so native AI stably tracks target without wandering/jittering
+    BotBehaviorSet firebS = bot.GetBotBehaviorSet();
+    if (firebS.EliminateEnemies || bot.GetGuardTarget() != targetEnemy)
+    {
+        firebS.EliminateEnemies = false;
+        firebS.RangedWeaponUsage = false;
+        firebS.MeleeWeaponUsage = false;
+        firebS.MeleeUsage = false;
+        firebS.ChaseRange = 0;
+        firebS.GuardRange = 250;
+        firebS.ChokePointPlayerCountThreshold = 1;
+        bot.SetBotBehaviorSet(firebS);
+        bot.SetGuardTarget(targetEnemy);
+    }
     
     // Determine bullet type based on enemy size modifier — locked per target, re-evaluated only on enemy change
     int currentEnemyId = targetEnemy.UniqueID;
@@ -6517,15 +6521,26 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
     
     bool isSniper = cartTitanGunIsSniper.ContainsKey(botId) && cartTitanGunIsSniper[botId];
     
-    // Turn bot to face target so gun can physically aim forward at them
+    // Turn bot to face target with hysteresis (15f deadband) and rate-limit to prevent rapid left/right flipping
     Vector2 enemyPos = targetEnemy.GetWorldPosition() + new Vector2(0f, 10f);
     Vector2 toEnemy = enemyPos - gunPos;
     if (toEnemy == Vector2.Zero) return;
     
-    int targetFacing = (toEnemy.X >= 0) ? 1 : -1;
-    if (bot.FacingDirection != targetFacing)
+    int currentFacing = bot.FacingDirection;
+    int desiredFacing = currentFacing;
+    if (toEnemy.X > 15f)
+        desiredFacing = 1;
+    else if (toEnemy.X < -15f)
+        desiredFacing = -1;
+    
+    float lastFacingChange;
+    if (!cartTitanBotLastFacingTime.TryGetValue(botId, out lastFacingChange))
+        lastFacingChange = 0f;
+    
+    if (desiredFacing != currentFacing && currentTime - lastFacingChange >= 350f)
     {
-        bot.SetFaceDirection(targetFacing);
+        bot.SetFaceDirection(desiredFacing);
+        cartTitanBotLastFacingTime[botId] = currentTime;
     }
     
     // Calculate elevation angle relative to forward facing
@@ -6735,6 +6750,7 @@ private void CleanupCartTitanData(int playerId)
     cartTitanBotIsAvoiding.Remove(playerId);
     cartTitanBotLockedEnemy.Remove(playerId);
     cartTitanBotLockedIsSniper.Remove(playerId);
+    cartTitanBotLastFacingTime.Remove(playerId);
     
     // Beast Titan state
     beastTitanRockMode.Remove(playerId);
