@@ -304,9 +304,17 @@ public class RopeController
 		// Update pipe rotation based on aim (if aiming) or default forward direction
 		if(isAiming)
 		{
-			// aimAngle is in world space, always add the base rotation
-			// But when facing left, we need to flip the offset to the other side
-			float pipeAngle = aimAngle + (facing * HOOK_PIPE_DEFAULT_ROTATION);
+			float pipeAngle;
+			if(facing == 1)
+			{
+				pipeAngle = aimAngle + HOOK_PIPE_DEFAULT_ROTATION;
+			}
+			else
+			{
+				// Mirror for left-facing: reflect aim direction across the vertical axis
+				// (d -> PI - d) and negate the sprite rotation. Simplifies to this.
+				pipeAngle = aimAngle - (float)Math.PI - HOOK_PIPE_DEFAULT_ROTATION;
+			}
 			hookPipe.SetAngle(pipeAngle);
 		}
 		else
