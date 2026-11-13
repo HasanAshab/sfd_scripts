@@ -1155,6 +1155,7 @@ Events.PlayerMeleeActionCallback meleeCallback = null;
 Events.UpdateCallback updateCallback = null;
 Events.ObjectTerminatedCallback objectTerminatedCallback = null;
 Events.PlayerKeyInputCallback keyInputCallback = null; // For detecting crate activation
+Events.PlayerWeaponAddedActionCallback weaponAddedCallback = null; // For detecting speed boost pickup
 
 public void OnStartup()
 {
@@ -1183,6 +1184,9 @@ public void OnStartup()
 	
 	// Track player interactions to detect streetsweeper crate activations
 	keyInputCallback = Events.PlayerKeyInputCallback.Start(OnPlayerKeyInput);
+	
+	// Track weapon pickups to detect speed boost and grant rope controller
+	weaponAddedCallback = Events.PlayerWeaponAddedActionCallback.Start(OnPlayerWeaponAdded);
 }
 
 public void GrapplingHookUpdate(float elapsed)
@@ -1209,6 +1213,25 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
 	}
 }
 
+public void OnPlayerWeaponAdded(IPlayer player, PlayerWeaponAddedArg arg)
+{
+	// Check if player picked up a speed boost powerup
+	if(arg.WeaponItemType == WeaponItemType.SPEEDBOOST)
+	{
+		// Check if player already has a rope controller
+		if(!controllersByPlayerId.ContainsKey(player.UniqueID))
+		{
+			// Create a new rope controller for this player
+			RopeController controller = new RopeController(player);
+			ropeControllers.Add(controller);
+			controllersByPlayerId[player.UniqueID] = controller;
+		}
+		
+		// Remove the speed boost powerup instantly
+		player.RemoveWeaponItemType(WeaponItemType.SPEEDBOOST);
+	}
+}
+
 // The game calls this before a map restart / script deactivation (see
 // GameScriptInterface's documented lifecycle: OnStartup -> AfterStartup ->
 // ... -> OnShutdown). Event subscriptions made via Events.*.Start() are NOT
@@ -1226,6 +1249,7 @@ public void OnShutdown()
 	if(objectTerminatedCallback != null) { objectTerminatedCallback.Stop(); objectTerminatedCallback = null; }
 	if(meleeCallback != null) { meleeCallback.Stop(); meleeCallback = null; }
 	if(keyInputCallback != null) { keyInputCallback.Stop(); keyInputCallback = null; }
+	if(weaponAddedCallback != null) { weaponAddedCallback.Stop(); weaponAddedCallback = null; }
 
 	ropeControllers.Clear();
 	controllersByPlayerId.Clear();
