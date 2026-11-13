@@ -304,11 +304,9 @@ public class RopeController
 		// Update pipe rotation based on aim (if aiming) or default forward direction
 		if(isAiming)
 		{
-			// When facing right: add base rotation
-			// When facing left: subtract base rotation (because aimAngle is already mirrored by Atan2)
-			float pipeAngle = facing == 1 
-				? (aimAngle + HOOK_PIPE_DEFAULT_ROTATION) 
-				: (aimAngle - HOOK_PIPE_DEFAULT_ROTATION);
+			// aimAngle is in world space, always add the base rotation
+			// But when facing left, we need to flip the offset to the other side
+			float pipeAngle = aimAngle + (facing * HOOK_PIPE_DEFAULT_ROTATION);
 			hookPipe.SetAngle(pipeAngle);
 		}
 		else
