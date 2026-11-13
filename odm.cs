@@ -157,7 +157,7 @@ public class RopeController
 	private const float AIM_DISTANCE = 25f;
 	private const float AIM_ROTATE_SPEED = 0.06f;
 	private const float QUICK_TAP_THRESHOLD = 200f;
-	private const float HOOK_PIPE_OFFSET_X = 1.5f; // Horizontal offset from player (at glove position)
+	private const float HOOK_PIPE_OFFSET_X = 1f; // Horizontal offset from player (at glove position)
 	private const float HOOK_PIPE_OFFSET_Y = 4f; // Vertical offset from player (at glove position)
 	private const float HOOK_PIPE_DEFAULT_ROTATION = 7.9f; // Default rotation offset in radians (matching Cart Titan gun pipe)
 	private const float GRAB_DELAY_MS = 100f;
