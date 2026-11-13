@@ -301,20 +301,20 @@ public class RopeController
 		);
 		hookPipe.SetWorldPosition(pipePos);
 		
-		// Calculate base rotation based on facing direction
-		float baseRotation = facing == 1 ? HOOK_PIPE_DEFAULT_ROTATION : -HOOK_PIPE_DEFAULT_ROTATION;
-		
 		// Update pipe rotation based on aim (if aiming) or default forward direction
 		if(isAiming)
 		{
-			// Rotate pipe to match aim direction
-			// aimAngle is already in world space, just add the base rotation offset
-			float pipeAngle = aimAngle + baseRotation;
+			// When facing right: add base rotation
+			// When facing left: subtract base rotation (because aimAngle is already mirrored by Atan2)
+			float pipeAngle = facing == 1 
+				? (aimAngle + HOOK_PIPE_DEFAULT_ROTATION) 
+				: (aimAngle - HOOK_PIPE_DEFAULT_ROTATION);
 			hookPipe.SetAngle(pipeAngle);
 		}
 		else
 		{
 			// Default forward rotation based on facing direction
+			float baseRotation = facing == 1 ? HOOK_PIPE_DEFAULT_ROTATION : -HOOK_PIPE_DEFAULT_ROTATION;
 			hookPipe.SetAngle(baseRotation);
 		}
 	}
