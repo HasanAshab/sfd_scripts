@@ -1,4 +1,4 @@
-﻿// Titan Transformation Script
+// Titan Transformation Script
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
 // Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
 
@@ -5007,6 +5007,12 @@ private void CheckHumanDetach(IPlayer player, int playerId, float currentTime)
 
 private void CheckBotDetach(IPlayer player, int playerId, float currentTime)
 {
+    // Prevent detach if not a titan or if Pure Titan
+    if (!titanPlayers.ContainsKey(playerId) || titanPlayers[playerId] == TitanType.Pure)
+    {
+        return;
+    }
+
     // Periodic check
     if (botLastDetachCheck.ContainsKey(playerId) && currentTime - botLastDetachCheck[playerId] < BOT_DETACH_CHECK_INTERVAL)
     {
@@ -5016,22 +5022,20 @@ private void CheckBotDetach(IPlayer player, int playerId, float currentTime)
     
     PlayerModifiers mods = player.GetModifiers();
     
-    // Check if this is Attack Titan bot in blaze form (max size + strength boost)
-    bool isAttackTitanBlazeForm = false;
-    if (titanPlayers.ContainsKey(playerId) && titanPlayers[playerId] == TitanType.Attack)
-    {
-        // Check if max size (1.600) and strength boost active
-        if (titanSizes.ContainsKey(playerId) && titanSizes[playerId] >= 1.600f && player.IsStrengthBoostActive)
-        {
-            isAttackTitanBlazeForm = true;
-        }
-    }
+    // Check if this titan is strength boosted (any titan type, regardless of size)
+    bool isStrengthBoosted = player.IsStrengthBoostActive || player.GetStrengthBoostTime() > 0;
     
     float hpPercent;
     
-    // Use boost health for Attack Titan blaze form, regular health otherwise
-    if (isAttackTitanBlazeForm && player.IsBoostHealthActive)
+    // When strength boosted, only consider detach when boost health is active; do not detach on first (regular) HP
+    if (isStrengthBoosted)
     {
+        // If boost health has not activated yet, titan is still on first HP bar - do not detach
+        if (!player.IsBoostHealthActive)
+        {
+            return;
+        }
+        
         // Use boost health percentage for detach calculation
         float boostHealth = player.GetBoostHealth();
         float maxBoostHealth = 100f; // Boost health max is 100
