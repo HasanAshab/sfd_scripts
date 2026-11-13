@@ -110,7 +110,7 @@ public class RopeController
 
 	// Object reference
 	private IObjectText aimIndicator;
-	private IObject hookPipe; // BgPipe02B visual hook pipe
+	private IObject hookPipe; // BgRailing02A visual hook pipe
 	
 	// Gas bar visualization using separate text objects for each asterisk
 	private IObjectText[] gasIndicatorSegments = null;
@@ -250,7 +250,7 @@ public class RopeController
 		// Don't hide gas indicator here - let it auto-hide after duration
 	}
 	
-	// Creates the hook pipe visual (BgPipe02B)
+	// Creates the hook pipe visual (BgRailing02A)
 	private void CreateHookPipe()
 	{
 		if(hookPipe != null && !hookPipe.IsRemoved) return;
@@ -264,7 +264,7 @@ public class RopeController
 			playerPos.Y + HOOK_PIPE_OFFSET_Y
 		);
 		
-		hookPipe = Game.CreateObject("BgPipe02B", pipePos);
+		hookPipe = Game.CreateObject("BgRailing02A", pipePos);
 		if(hookPipe != null)
 		{
 			// Set initial rotation to point forward
@@ -301,17 +301,20 @@ public class RopeController
 		);
 		hookPipe.SetWorldPosition(pipePos);
 		
+		// Calculate base rotation based on facing direction
+		float baseRotation = facing == 1 ? HOOK_PIPE_DEFAULT_ROTATION : -HOOK_PIPE_DEFAULT_ROTATION;
+		
 		// Update pipe rotation based on aim (if aiming) or default forward direction
 		if(isAiming)
 		{
 			// Rotate pipe to match aim direction
-			float pipeAngle = aimAngle + HOOK_PIPE_DEFAULT_ROTATION;
+			float pipeAngle = (facing == 1) ? (aimAngle + HOOK_PIPE_DEFAULT_ROTATION) : (-aimAngle - HOOK_PIPE_DEFAULT_ROTATION);
 			hookPipe.SetAngle(pipeAngle);
 		}
 		else
 		{
-			// Default forward rotation
-			hookPipe.SetAngle(HOOK_PIPE_DEFAULT_ROTATION);
+			// Default forward rotation based on facing direction
+			hookPipe.SetAngle(baseRotation);
 		}
 	}
 	
