@@ -110,6 +110,7 @@ public class RopeController
 
 	// Object reference
 	private IObjectText aimIndicator;
+	private IObject hookPipe; // BgPipe02B visual hook pipe
 	
 	// Gas bar visualization using separate text objects for each asterisk
 	private IObjectText[] gasIndicatorSegments = null;
@@ -156,6 +157,9 @@ public class RopeController
 	private const float AIM_DISTANCE = 25f;
 	private const float AIM_ROTATE_SPEED = 0.06f;
 	private const float QUICK_TAP_THRESHOLD = 200f;
+	private const float HOOK_PIPE_OFFSET_X = 4f; // Horizontal offset from player (at glove position)
+	private const float HOOK_PIPE_OFFSET_Y = 8f; // Vertical offset from player (at glove position)
+	private const float HOOK_PIPE_DEFAULT_ROTATION = 7.9f; // Default rotation offset in radians (matching Cart Titan gun pipe)
 	private const float GRAB_DELAY_MS = 100f;
 	private const float PULL_FORCE = 0.7f;
 	private const float MIN_PULL_DIST = 20f;
@@ -210,6 +214,9 @@ public class RopeController
 		// Gas is tracked internally and displayed with emoji indicators
 		currentGas = GAS_MAX_CAPACITY;
 		lastSyncedGas = GAS_MAX_CAPACITY;
+		
+		// Create hook pipe visual
+		CreateHookPipe();
 	}
 
 	public void CancelRope(float now)
@@ -241,6 +248,71 @@ public class RopeController
 		}
 		isAiming = false;
 		// Don't hide gas indicator here - let it auto-hide after duration
+	}
+	
+	// Creates the hook pipe visual (BgPipe02B)
+	private void CreateHookPipe()
+	{
+		if(hookPipe != null && !hookPipe.IsRemoved) return;
+		
+		Vector2 playerPos = ply.GetWorldPosition();
+		int facing = ply.FacingDirection;
+		
+		// Place pipe at glove position (offset from player)
+		Vector2 pipePos = new Vector2(
+			playerPos.X + (facing * HOOK_PIPE_OFFSET_X),
+			playerPos.Y + HOOK_PIPE_OFFSET_Y
+		);
+		
+		hookPipe = Game.CreateObject("BgPipe02B", pipePos);
+		if(hookPipe != null)
+		{
+			// Set initial rotation to point forward
+			hookPipe.SetAngle(HOOK_PIPE_DEFAULT_ROTATION);
+		}
+	}
+	
+	// Destroys the hook pipe visual
+	private void DestroyHookPipe()
+	{
+		if(hookPipe != null && !hookPipe.IsRemoved)
+		{
+			hookPipe.Remove();
+		}
+		hookPipe = null;
+	}
+	
+	// Updates hook pipe position and rotation
+	private void UpdateHookPipe()
+	{
+		if(hookPipe == null || hookPipe.IsRemoved)
+		{
+			CreateHookPipe();
+			return;
+		}
+		
+		Vector2 playerPos = ply.GetWorldPosition();
+		int facing = ply.FacingDirection;
+		
+		// Update pipe position to follow player's glove
+		Vector2 pipePos = new Vector2(
+			playerPos.X + (facing * HOOK_PIPE_OFFSET_X),
+			playerPos.Y + HOOK_PIPE_OFFSET_Y
+		);
+		hookPipe.SetWorldPosition(pipePos);
+		
+		// Update pipe rotation based on aim (if aiming) or default forward direction
+		if(isAiming)
+		{
+			// Rotate pipe to match aim direction
+			float pipeAngle = aimAngle + HOOK_PIPE_DEFAULT_ROTATION;
+			hookPipe.SetAngle(pipeAngle);
+		}
+		else
+		{
+			// Default forward rotation
+			hookPipe.SetAngle(HOOK_PIPE_DEFAULT_ROTATION);
+		}
 	}
 	
 	// Creates/updates the gas indicator with separate colored asterisks
@@ -426,8 +498,16 @@ public class RopeController
 		// Check if this player is a titan - skip rope controller if they are
 		if (IsTitanPlayer(ply))
 		{
+			// Hide hook pipe for titans
+			if(hookPipe != null)
+			{
+				DestroyHookPipe();
+			}
 			return; // Don't execute rope controller for titan players
 		}
+		
+		// Update hook pipe position/rotation every tick
+		UpdateHookPipe();
 		
 		float now = Game.TotalElapsedGameTime; // read once, reused for the whole tick
 		float realNow = Game.TotalElapsedRealTime; // real-time for slowmo tracking
