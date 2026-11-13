@@ -1216,7 +1216,7 @@ public void OnPlayerMeleeAction(IPlayer player, PlayerMeleeHitArg[] args)
 public void OnPlayerWeaponAdded(IPlayer player, PlayerWeaponAddedArg arg)
 {
 	// Check if player picked up a speed boost powerup
-	if(arg.WeaponItemType == WeaponItemType.SPEEDBOOST)
+	if(arg.WeaponItem == WeaponItem.SPEEDBOOST)
 	{
 		// Check if player already has a rope controller
 		if(!controllersByPlayerId.ContainsKey(player.UniqueID))
@@ -1228,7 +1228,7 @@ public void OnPlayerWeaponAdded(IPlayer player, PlayerWeaponAddedArg arg)
 		}
 		
 		// Remove the speed boost powerup instantly
-		player.RemoveWeaponItemType(WeaponItemType.SPEEDBOOST);
+		player.RemoveWeaponItemType(WeaponItemType.Powerup);
 	}
 }
 
