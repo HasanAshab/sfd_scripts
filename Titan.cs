@@ -1,4 +1,4 @@
-// Titan Transformation Script
+﻿// Titan Transformation Script
 // When a player picks up strength boost, they transform into a Titan with enhanced abilities
 // Titan Types: Pure Titan (50% chance) and Attack Titan (50% chance)
 
@@ -523,6 +523,7 @@ public void OnStartup()
     // strength boost
     const float OTHERS_SCALE = 0.7f; // 1.0 = unchanged, 0.2 = others are 5x rarer
     short boost = (short)WeaponItem.STRENGTHBOOST;
+    short speedboost = (short)WeaponItem.SPEEDBOOST;
 
     Dictionary<short, int> current = Game.GetWeaponSpawnChances();
     Dictionary<short, int> chances = new Dictionary<short, int>();
@@ -534,7 +535,8 @@ public void OnStartup()
         chances.Add(kv.Key, Math.Max(1, scaled)); // keep at least 1 so nothing disappears
     }
 
-    chances.Add(boost, 100);
+    chances.Add(boost, 90);
+    chances.Add(speedboost, 81);
     Game.UpdateWeaponSpawnChances(chances);
 }
 
