@@ -308,7 +308,8 @@ public class RopeController
 		if(isAiming)
 		{
 			// Rotate pipe to match aim direction
-			float pipeAngle = (facing == 1) ? (aimAngle + HOOK_PIPE_DEFAULT_ROTATION) : (-aimAngle - HOOK_PIPE_DEFAULT_ROTATION);
+			// aimAngle is already in world space, just add the base rotation offset
+			float pipeAngle = aimAngle + baseRotation;
 			hookPipe.SetAngle(pipeAngle);
 		}
 		else
