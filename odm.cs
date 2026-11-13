@@ -194,21 +194,22 @@ public class RopeController
 		this.ply = ply;
 		Controllers[ply.UniqueID] = this;
 
-		// Apply custom clothing
-		IProfile profile = ply.GetProfile();
-		Gender playerGender = profile.Gender;
+		// TEMP: Disabled for now
+		// // Apply custom clothing
+		// IProfile profile = ply.GetProfile();
+		// Gender playerGender = profile.Gender;
 
-		profile.ChestOver = new IProfileClothingItem(
-			playerGender == Gender.Female ? "Jacket_fem" : "Jacket",
-			"ClothingOrange", "ClothingOrange"
-		);
-		profile.Feet = new IProfileClothingItem("RidingBoots", "ClothingDarkBrown");
-		profile.Accessory = new IProfileClothingItem(
-			playerGender == Gender.Female ? "Armband_fem" : "Armband",
-			"ClothingGray"
-		);
+		// profile.ChestOver = new IProfileClothingItem(
+		// 	playerGender == Gender.Female ? "Jacket_fem" : "Jacket",
+		// 	"ClothingOrange", "ClothingOrange"
+		// );
+		// profile.Feet = new IProfileClothingItem("RidingBoots", "ClothingDarkBrown");
+		// profile.Accessory = new IProfileClothingItem(
+		// 	playerGender == Gender.Female ? "Armband_fem" : "Armband",
+		// 	"ClothingGray"
+		// );
 
-		ply.SetProfile(profile);
+		// ply.SetProfile(profile);
 
 		// Setup gas system - no longer using PlayerModifiers energy bar
 		// Gas is tracked internally and displayed with emoji indicators
@@ -1372,8 +1373,8 @@ private void SpawnStreetsweeperBots(IObjectStreetsweeperCrate crate, IPlayer act
 	}
 	botProfile.Gender = gender;
 	
-	// Spawn 2 bots
-	for(int i = 0; i < 2; i++)
+	// Spawn 1 bot
+	for(int i = 0; i < 1; i++)
 	{
 		IPlayer bot = Game.CreatePlayer(spawnPos);
 		if(bot == null) continue;
