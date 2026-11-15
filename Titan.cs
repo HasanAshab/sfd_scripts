@@ -207,8 +207,8 @@ private const float BEAST_THROW_ENERGY_COST = 0.80f;            // 80% of max en
 private const float BEAST_TITAN_ENERGY_RECHARGE_BONUS = 1.10f;  // +110% energy recharge rate
 
 // Cart Titan uphead gun energy costs
-private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.03f;    // 3% per bullet
-private const float CART_GUN_ENERGY_PER_BULLET_SNIPER = 0.25f;  // 25% per bullet
+private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.08f;    // 8% per bullet
+private const float CART_GUN_ENERGY_PER_BULLET_SNIPER = 0.35f;  //35% per bullet
 
 // Cart Titan uphead gun attach offset (above titan head)
 private const float CART_GUN_OFFSET_Y = 18f;
@@ -227,10 +227,10 @@ private const float CART_GUN_PIPE_DEFAULT_ROTATION = 7.9f;
 private const float CART_AIM_UPDATE_INTERVAL = 50f; // 50ms
 
 // Cart Titan progressive aim speed (starts slow, increases with hold time)
-private const float CART_AIM_SPEED_INITIAL = 0.015f; // Initial aim speed (slower start)
-private const float CART_AIM_SPEED_MAX = 0.12f; // Maximum aim speed after prolonged hold
-private const float CART_AIM_SPEED_SNIPER_INITIAL = 0.008f; // Initial aim speed for sniper
-private const float CART_AIM_SPEED_SNIPER_MAX = 0.07f; // Maximum aim speed for sniper
+private const float CART_AIM_SPEED_INITIAL = 0.008f; // Initial aim speed (slower start)
+private const float CART_AIM_SPEED_MAX = 0.07f; // Maximum aim speed after prolonged hold
+private const float CART_AIM_SPEED_SNIPER_INITIAL = 0.0032f; // Initial aim speed for sniper
+private const float CART_AIM_SPEED_SNIPER_MAX = 0.025f; // Maximum aim speed for sniper
 private const float CART_AIM_ACCEL_TIME = 500f; // Time (ms) to reach max speed
 
 // Cart Titan bot constants
@@ -240,7 +240,7 @@ private const float CRT_BOT_RESCUE_HP_TRIGGER     = 0.30f; // Ally HP% to trigge
 private const float CRT_BOT_RESCUE_HP_RELEASE     = 0.80f; // Ally HP% to leave Rescue mode
 private const float CRT_BOT_AVOID_ENEMY_RANGE     = 80f;   // Enemy detection radius for path-node avoidance
 private const float CRT_BOT_OFFENSIVE_FIRE_CHANCE = 0.70f; // 70% → fire, 30% → avoid
-private const float CRT_BOT_FIRE_ACCURACY         = 0.8f; // 80% accuracy (random aim spread when missing)
+private const float CRT_BOT_FIRE_ACCURACY         = 0.9f; // 90% accuracy (random aim spread when missing)
 private const float CRT_BOT_AIM_SPREAD_MAX        = 0.45f; // Max aim angle error (radians) at 0% accuracy
 
 // Titan size range
@@ -6046,7 +6046,7 @@ private void CartTitanUpdateOffensive(IPlayer player, int playerId, float curren
                 IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, spreadDir);
                 if (proj != null)
                 {
-                    proj.DamageDealtModifier = 0.11f;
+                    proj.DamageDealtModifier = 0.04f;
                 }
             }
             Game.PlaySound("M60", muzzlePos);
@@ -6667,7 +6667,7 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
             IProjectile proj = Game.SpawnProjectile(ProjectileItem.PISTOL, muzzlePos, spreadDir);
             if (proj != null)
             {
-                proj.DamageDealtModifier = 0.11f;
+                proj.DamageDealtModifier = 0.04f;
             }
         }
         Game.PlaySound("M60", muzzlePos);
