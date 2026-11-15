@@ -1949,10 +1949,10 @@ private void TransformToArmoredTitan(IPlayer player, int playerId)
     
     // Configure bot melee actions for Armored Titan
     BotMeleeActions meleeActions = new BotMeleeActions();
-    meleeActions.Attack = 23;
-    meleeActions.AttackCombo = 23;
-    meleeActions.Block = 23;
-    meleeActions.Grab = 23;
+    meleeActions.Attack = 13;
+    meleeActions.AttackCombo = 36;
+    meleeActions.Block = 21;
+    meleeActions.Grab = 22;
     meleeActions.Wait = 8;
     bS.SetMeleeActionsAll(meleeActions);
     
