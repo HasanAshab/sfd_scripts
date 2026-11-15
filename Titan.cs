@@ -535,8 +535,8 @@ public void OnStartup()
         chances.Add(kv.Key, Math.Max(1, scaled)); // keep at least 1 so nothing disappears
     }
 
-    chances.Add(boost, 90);
-    chances.Add(speedboost, 81);
+    chances.Add(boost, 94);
+    chances.Add(speedboost, 80);
     Game.UpdateWeaponSpawnChances(chances);
 }
 
