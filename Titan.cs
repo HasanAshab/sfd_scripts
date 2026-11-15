@@ -530,12 +530,12 @@ public void OnStartup()
 
     foreach (KeyValuePair<short, int> kv in current)
     {
-        if (kv.Key == boost || kv.Value <= 0) continue; // skip boost and disabled items
+        if (kv.Key == boost || kv.Key == speedboost || kv.Value <= 0) continue; // skip boost and disabled items
         int scaled = (int)Math.Round(kv.Value * OTHERS_SCALE);
         chances.Add(kv.Key, Math.Max(1, scaled)); // keep at least 1 so nothing disappears
     }
 
-    chances.Add(boost, 94);
+    chances.Add(boost, 90);
     chances.Add(speedboost, 80);
     Game.UpdateWeaponSpawnChances(chances);
 }
