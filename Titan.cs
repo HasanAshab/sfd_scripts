@@ -6438,6 +6438,7 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
     
     // --- 1. Movement: Run away / kite if any enemy is within avoidance range ---
     bool enemyTooClose = Vector2.Distance(closestEnemy.GetWorldPosition(), botPos) <= CRT_BOT_AVOID_ENEMY_RANGE;
+    bool isFleeing = false;
     if (enemyTooClose)
     {
         IObjectPathNode fleeNode = CrtBotFindFleeNode(bot, closestEnemy.GetWorldPosition());
@@ -6453,8 +6454,8 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
             bS.ChokePointPlayerCountThreshold = 0;
             bot.SetBotBehaviorSet(bS);
             bot.SetGuardTarget(fleeNode);
-            // While fleeing, do not fight the flee path by overriding facing towards the enemy
-            return;
+            isFleeing = true;
+            // Continue to attack while fleeing - don't return here
         }
     }
     
@@ -6480,18 +6481,22 @@ private void CrtBotTickOffensive(IPlayer bot, int botId, float currentTime, Vect
         targetEnemy = closestEnemy;
     
     // In combat stance at safe distance: guard targetEnemy so native AI stably tracks target without wandering/jittering
-    BotBehaviorSet firebS = bot.GetBotBehaviorSet();
-    if (firebS.EliminateEnemies || bot.GetGuardTarget() != targetEnemy)
+    // Skip this if we're actively fleeing to avoid overwriting the flee behavior
+    if (!isFleeing)
     {
-        firebS.EliminateEnemies = false;
-        firebS.RangedWeaponUsage = false;
-        firebS.MeleeWeaponUsage = false;
-        firebS.MeleeUsage = false;
-        firebS.ChaseRange = 0;
-        firebS.GuardRange = 250;
-        firebS.ChokePointPlayerCountThreshold = 1;
-        bot.SetBotBehaviorSet(firebS);
-        bot.SetGuardTarget(targetEnemy);
+        BotBehaviorSet firebS = bot.GetBotBehaviorSet();
+        if (firebS.EliminateEnemies || bot.GetGuardTarget() != targetEnemy)
+        {
+            firebS.EliminateEnemies = false;
+            firebS.RangedWeaponUsage = false;
+            firebS.MeleeWeaponUsage = false;
+            firebS.MeleeUsage = false;
+            firebS.ChaseRange = 0;
+            firebS.GuardRange = 250;
+            firebS.ChokePointPlayerCountThreshold = 1;
+            bot.SetBotBehaviorSet(firebS);
+            bot.SetGuardTarget(targetEnemy);
+        }
     }
     
     // Determine bullet type based on enemy size modifier — locked per target, re-evaluated only on enemy change
