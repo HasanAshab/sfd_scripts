@@ -107,6 +107,9 @@ public class RopeController
 	private Vector2 aimStartPosition;
 	private Vector2 pendingAnchorPos;
 	private Vector2 hookThrowPos;
+	private Vector2 lastGoodRegulatorPos;
+	private bool hasLastGoodRegulatorPos;
+	private bool debugRegulatorGuard = true; // set to false once it's sorted
 
 	// Object reference
 	private IObjectText aimIndicator;
@@ -169,6 +172,10 @@ public class RopeController
 	private const float GAS_COST_PER_TICK = (GAS_PULL_COST_PER_SECOND / 100f); // Precomputed
 	private const float DOWNWARD_FORCE_REDUCTION = 0.8f;
 	private const float HOOK_PLAYER_PROXIMITY_DIST = 10f;
+	private const float MAX_REGULATOR_ANCHOR_DIST = MAX_HOOK_RANGE * 2f;
+	private const float MAX_REGULATOR_ANCHOR_DIST_SQ = MAX_REGULATOR_ANCHOR_DIST * MAX_REGULATOR_ANCHOR_DIST;
+	private const float MAX_REGULATOR_JUMP = 120f; // max believable movement in one tick
+	private const float MAX_REGULATOR_JUMP_SQ = MAX_REGULATOR_JUMP * MAX_REGULATOR_JUMP;
 
 	// Precomputed squared thresholds - lets range/threshold checks skip Math.Sqrt entirely.
 	private const float MAX_HOOK_RANGE_SQ = MAX_HOOK_RANGE * MAX_HOOK_RANGE;
@@ -233,6 +240,7 @@ public class RopeController
 
 		pendingGrab = false;
 		pulling = false;
+		hasLastGoodRegulatorPos = false;
 
 		if(isOnRope) ropeReleaseTime = now;
 		isOnRope = false;
@@ -698,6 +706,56 @@ public class RopeController
 			isOnRope = true;
 		}
 
+		// Sanity-check the regulator BEFORE anything uses its position (pull physics,
+		// joint rebuild, player sync). If it's gone or unstable, release the rope and
+		// put the player back at the last good position instead of copying garbage.
+		if(playerSwingRegulator != null)
+		{
+			string problem = null;
+			bool regulatorGone = playerSwingRegulator.IsRemoved || playerSwingRegulator.DestructionInitiated;
+
+			if(regulatorGone)
+			{
+				problem = "regulator destroyed";
+			}
+			else
+			{
+				Vector2 rp = playerSwingRegulator.GetWorldPosition();
+
+				// Comparisons with NaN are always false, so NaN/Infinity fail this too.
+				if(!(Math.Abs(rp.X) < 100000f && Math.Abs(rp.Y) < 100000f))
+				{
+					problem = "invalid position";
+				}
+				else if(anchor != null && !anchor.IsRemoved &&
+						Vector2.DistanceSquared(rp, anchor.GetWorldPosition()) > MAX_REGULATOR_ANCHOR_DIST_SQ)
+				{
+					problem = "too far from anchor";
+				}
+				else if(hasLastGoodRegulatorPos &&
+						Vector2.DistanceSquared(rp, lastGoodRegulatorPos) > MAX_REGULATOR_JUMP_SQ)
+				{
+					problem = "position jump";
+				}
+				else
+				{
+					lastGoodRegulatorPos = rp;
+					hasLastGoodRegulatorPos = true;
+				}
+			}
+
+			if(problem != null)
+			{
+				Vector2 safePos = hasLastGoodRegulatorPos ? lastGoodRegulatorPos : ply.GetWorldPosition();
+				if(regulatorGone) playerSwingRegulator = null; // don't touch a dead object
+				CancelAiming();
+				CancelRope(now);
+				ply.SetWorldPosition(safePos);
+				ply.SetLinearVelocity(new Vector2(0f, 0f));
+				if(debugRegulatorGuard) Game.ShowChatMessage("Rope released: " + problem);
+			}
+		}
+
 		// Pulling physics
 		if(pulling && anchor != null && playerSwingRegulator != null)
 		{
@@ -1064,6 +1122,7 @@ public class RopeController
 		diveRollPowerupActive = false;
 		rollPowerUpEndTime = 0f;
 		hasLeftGroundSinceGrab = false;
+		hasLastGoodRegulatorPos = false;
 	}
 
 	private bool IsTitanPlayer(IPlayer player)
