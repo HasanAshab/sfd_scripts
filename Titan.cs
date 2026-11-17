@@ -1728,10 +1728,10 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     BotBehaviorSet bS = player.GetBotBehaviorSet();
     bS.SearchItems = 0;
     
-    // Configure bot melee actions: 20% attack, 60% grab, 20% wait
+    // Configure bot melee actions:
     BotMeleeActions meleeActions = new BotMeleeActions();
-    meleeActions.Attack = 20;
-    meleeActions.Grab = 60;
+    meleeActions.Attack = 0;
+    meleeActions.Grab = 80;
     meleeActions.Wait = 20;
     bS.SetMeleeActionsAll(meleeActions);
     
