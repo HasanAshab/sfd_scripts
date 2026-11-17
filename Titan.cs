@@ -2194,10 +2194,10 @@ public void OnPlayerKeyInput(IPlayer player, VirtualKeyInfo[] keyInfos)
                 ToggleCartTitanForm(player, playerId);
             }
             
-            // DRAW_SPECIAL: Release lifted ally (Rescue form)
+            // DRAW_SPECIAL: Pick up or release ally (Rescue form)
             if (keyInfo.Event == VirtualKeyEvent.Pressed && keyInfo.Key == VirtualKey.DRAW_SPECIAL)
             {
-                CartTitanReleaseAlly(player, playerId);
+                CartTitanPickupOrReleaseAlly(player, playerId);
             }
             
             // DRAW_RIFLE: Switch to sniper (Offensive form)
@@ -5730,6 +5730,49 @@ private void CartTitanReleaseAlly(IPlayer cartTitan, int cartTitanId)
     ally.SetModifiers(allyMods);
     
     Game.ShowChatMessage(ally.Name + " was released from the backpack.", Color.Cyan);
+}
+
+private void CartTitanPickupOrReleaseAlly(IPlayer cartTitan, int cartTitanId)
+{
+    // If already lifting an ally, release them
+    if (cartTitanLiftedAlly.ContainsKey(cartTitanId) && cartTitanLiftedAlly[cartTitanId] != null)
+    {
+        CartTitanReleaseAlly(cartTitan, cartTitanId);
+        return;
+    }
+    
+    // Otherwise, try to pick up closest ally within 7f range
+    Vector2 cartPos = cartTitan.GetWorldPosition();
+    PlayerTeam cartTeam = cartTitan.GetTeam();
+    float pickupRange = 7f;
+    float closestDist = pickupRange;
+    IPlayer closestAlly = null;
+    
+    IPlayer[] players = Game.GetPlayers();
+    foreach (IPlayer p in players)
+    {
+        if (p == null || p.IsDead || p.IsRemoved) continue;
+        if (p.UniqueID == cartTitanId) continue; // Skip self
+        
+        // Check if teammate (or Independent can pick anyone)
+        PlayerTeam pTeam = p.GetTeam();
+        bool isTeammate = (cartTeam == PlayerTeam.Independent) || (pTeam == cartTeam);
+        if (!isTeammate) continue;
+        
+        float dist = Vector2.Distance(cartPos, p.GetWorldPosition());
+        if (dist < closestDist)
+        {
+            closestDist = dist;
+            closestAlly = p;
+        }
+    }
+    
+    // Pick up the closest ally if found
+    if (closestAlly != null)
+    {
+        float currentTime = Game.TotalElapsedRealTime;
+        CartTitanLiftAlly(cartTitan, cartTitanId, closestAlly, currentTime);
+    }
 }
 
 // Create crosshair '+' text at aim position
