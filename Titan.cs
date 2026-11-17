@@ -207,7 +207,7 @@ private const float BEAST_THROW_ENERGY_COST = 0.80f;            // 80% of max en
 private const float BEAST_TITAN_ENERGY_RECHARGE_BONUS = 1.10f;  // +110% energy recharge rate
 
 // Cart Titan uphead gun energy costs
-private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.08f;    // 8% per bullet
+private const float CART_GUN_ENERGY_PER_BULLET_M60 = 0.06f;    // 6% per bullet
 private const float CART_GUN_ENERGY_PER_BULLET_SNIPER = 0.35f;  //35% per bullet
 
 // Cart Titan uphead gun attach offset (above titan head)
