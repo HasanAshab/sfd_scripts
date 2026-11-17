@@ -4713,6 +4713,15 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
             // Deal damage
             grabData.Victim.DealDamage(damagePerInterval);
             
+            // Pure Titan health restoration: heal for half the damage dealt
+            if (titanPlayers.ContainsKey(titanId) && titanPlayers[titanId] == TitanType.Pure)
+            {
+                PlayerModifiers titanMods = titan.GetModifiers();
+                float healAmount = damagePerInterval * 0.5f; // 50% of damage dealt
+                titanMods.CurrentHealth = Math.Min(titanMods.MaxHealth, titanMods.CurrentHealth + (int)healAmount);
+                titan.SetModifiers(titanMods);
+            }
+            
             // Play blood effect on victim (only once per second)
             if (currentTime >= grabData.NextBloodEffectTime)
             {
