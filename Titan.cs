@@ -4717,8 +4717,8 @@ private void CheckTitanGrabDamage(IPlayer titan, int titanId)
             if (titanPlayers.ContainsKey(titanId) && titanPlayers[titanId] == TitanType.Pure)
             {
                 PlayerModifiers titanMods = titan.GetModifiers();
-                float healAmount = damagePerInterval * 0.5f; // 50% of damage dealt
-                titanMods.CurrentHealth = Math.Min(titanMods.MaxHealth, titanMods.CurrentHealth + (int)healAmount);
+                float healAmount = damagePerInterval;
+                titanMods.CurrentHealth = Math.Min(titanMods.MaxHealth, titanMods.CurrentHealth + healAmount);
                 titan.SetModifiers(titanMods);
             }
             
