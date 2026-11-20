@@ -1799,8 +1799,11 @@ private void TransformToAttackTitan(IPlayer player, int playerId)
     // Initialize Attack Titan punch count
     attackTitanPunchCount[playerId] = 0;
     
+    // Calculate team HP differ before applying scaling
+    float differ = CalculateTeamHPDiffer(player, playerId);
+    
     // Apply height-based scaling (different from Pure Titan's random size)
-    ApplyAttackTitanHeightScaling(player, playerId, mods);
+    ApplyAttackTitanHeightScaling(player, playerId, mods, differ);
 }
 
 private void TransformToJawTitan(IPlayer player, int playerId)
@@ -2003,7 +2006,7 @@ private void ApplySizeScaling(IPlayer player, int playerId, PlayerModifiers mods
     titanSizes[playerId] = titanSize;
 }
 
-private void ApplyAttackTitanHeightScaling(IPlayer player, int playerId, PlayerModifiers mods)
+private float CalculateTeamHPDiffer(IPlayer player, int playerId)
 {
     // Calculate team health totals
     PlayerTeam ownTeam = player.GetTeam();
@@ -2051,9 +2054,12 @@ private void ApplyAttackTitanHeightScaling(IPlayer player, int playerId, PlayerM
         }
     }
     
-    // Calculate differ
-    float differ = opponentTeamTotalHP / (ownTeamTotalHP > 0f ? ownTeamTotalHP : 1f);
-    
+    // Calculate and return differ
+    return opponentTeamTotalHP / (ownTeamTotalHP > 0f ? ownTeamTotalHP : 1f);
+}
+
+private void ApplyAttackTitanHeightScaling(IPlayer player, int playerId, PlayerModifiers mods, float differ)
+{
     // Calculate size based on differ: linear interpolation from 1f->3f to 0.860f->1.300f
     float sizeMod;
     bool giveStrengthBoost = false;
