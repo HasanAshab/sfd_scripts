@@ -1743,6 +1743,9 @@ private void TransformToPureTitan(IPlayer player, int playerId)
 
 private void TransformToAttackTitan(IPlayer player, int playerId)
 {
+    // Calculate team HP differ before applying scaling
+    float differ = CalculateTeamHPDiffer(player, playerId);
+    
     // Clear all items FIRST before profile change
     player.RemoveWeaponItemType(WeaponItemType.Rifle);
     player.RemoveWeaponItemType(WeaponItemType.Handgun);
@@ -1798,9 +1801,6 @@ private void TransformToAttackTitan(IPlayer player, int playerId)
     
     // Initialize Attack Titan punch count
     attackTitanPunchCount[playerId] = 0;
-    
-    // Calculate team HP differ before applying scaling
-    float differ = CalculateTeamHPDiffer(player, playerId);
     
     // Apply height-based scaling (different from Pure Titan's random size)
     ApplyAttackTitanHeightScaling(player, playerId, mods, differ);
@@ -2088,7 +2088,7 @@ private void ApplyAttackTitanHeightScaling(IPlayer player, int playerId, PlayerM
     
     // Apply size
     mods.SizeModifier = sizeMod;
-    
+
     // Apply same size-based scaling as Pure Titan
     float sizeSteps = (sizeMod - TITAN_MIN_SIZE) / 0.01f;
     float statMultiplier = 1f + (sizeSteps * SIZE_STAT_BONUS_PER_0_01);
