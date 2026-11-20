@@ -68,7 +68,7 @@ private const float JAW_TITAN_MELEE_DAMAGE_BONUS = 0.25f; // 25% melee damage in
 private const float JAW_TITAN_MELEE_FORCE_BONUS = 0.0f; // 0% melee force increase
 private const float JAW_TITAN_SPEED_PENALTY = -0.07f; // 7% speed increase
 private const float JAW_TITAN_ENERGY_BONUS = 0.10f; // 10% energy increase
-private const float JAW_TITAN_SIZE = 0.880f; // Fixed size
+private const float JAW_TITAN_SIZE = 0.850f; // Fixed size
 
 // Jaw Titan claw ability
 private const float JAW_CLAW_BASE_DAMAGE = 7f;
@@ -94,7 +94,7 @@ private const float ARMORED_TITAN_MELEE_DAMAGE_BONUS = 0.23f; // 23% melee damag
 private const float ARMORED_TITAN_MELEE_FORCE_BONUS = 0.60f; // 60% melee force increase
 private const float ARMORED_TITAN_SPEED_PENALTY = 0.50f; // 50% speed reduction
 private const float ARMORED_TITAN_ENERGY_BONUS = 0f; // 0% energy increase
-private const float ARMORED_TITAN_SIZE = 1.300f; // Fixed size
+private const float ARMORED_TITAN_SIZE = 1.200f; // Fixed size
 
 // Armored Titan armor mode bonuses (when OFF)
 private const float ARMORED_ARMOR_OFF_SPEED_BONUS = 0.30f; // 30% speed increase
@@ -140,7 +140,7 @@ private const float CART_TITAN_MELEE_FORCE_BONUS = 0.0f;    // +0% melee force
 private const float CART_TITAN_SPEED_BONUS = 0.90f;         // +90% speed
 private const float CART_TITAN_ENERGY_BONUS = 3.0f;         // +300% energy
 private const float CART_TITAN_ENERGY_RECHARGE_BONUS = 3.0f; // +300% energy recharge
-private const float CART_TITAN_SIZE = 0.920f;               // Fixed size
+private const float CART_TITAN_SIZE = 0.820f;               // Fixed size
 
 // Cart Titan Offensive form stat modifiers (applied on top of base CRT)
 private const float CART_OFFENSIVE_SPEED_PENALTY = 0.80f;   // -80% speed
@@ -156,7 +156,7 @@ private const float BEAST_TITAN_MELEE_DAMAGE_BONUS = -0.30f;  // -30% melee dama
 private const float BEAST_TITAN_MELEE_FORCE_BONUS = 0.0f;   // +0% melee force
 private const float BEAST_TITAN_SPEED_BONUS = -0.17f;        // -17% speed
 private const float BEAST_TITAN_ENERGY_BONUS = 0.01f;       // +1% energy
-private const float BEAST_TITAN_SIZE = 1.15f;               // Fixed size
+private const float BEAST_TITAN_SIZE = 1.05f;               // Fixed size
 
 // Beast Titan rock throw mechanics
 private const string BEAST_ROCK_TEXT = ".";
@@ -2054,29 +2054,29 @@ private void ApplyAttackTitanHeightScaling(IPlayer player, int playerId, PlayerM
     
     if (differ <= 1f)
     {
-        sizeMod = 0.920f;
+        sizeMod = 0.860f;
     }
     else if (differ < 1.7f)
     {
-        // Interpolate between 0.920 and 1.250
+        // Interpolate between 0.860 and 1.120
         float t = (differ - 1f) / (1.7f - 1f);
-        sizeMod = 0.920f + (1.250f - 0.920f) * t;
+        sizeMod = 0.860f + (1.120f - 0.860f) * t;
     }
     else if (differ < 2.5f)
     {
-        // Interpolate between 1.250 and 1.600
+        // Interpolate between 1.120 and 1.300
         float t = (differ - 1.7f) / (2.5f - 1.7f);
-        sizeMod = 1.250f + (1.600f - 1.250f) * t;
+        sizeMod = 1.120f + (1.300f - 1.120f) * t;
     }
     else if (differ < 3f)
     {
-        // Interpolate between 1.600 and 1.600 (stay at 1.600)
-        sizeMod = 1.600f;
+        // Interpolate between 1.300 and 1.300 (stay at 1.300)
+        sizeMod = 1.300f;
     }
     else
     {
-        // 3 or more: 1.600 + infinite strength boost
-        sizeMod = 1.600f;
+        // 3 or more: 1.300 + infinite strength boost
+        sizeMod = 1.300f;
         giveInfiniteStrength = true;
     }
     
