@@ -1976,13 +1976,11 @@ private void ApplySizeScaling(IPlayer player, int playerId, PlayerModifiers mods
     // Generate random size for Pure Titan
     float titanSize = TITAN_MIN_SIZE + (float)(rnd.NextDouble() * (TITAN_MAX_SIZE - TITAN_MIN_SIZE));
     
-    // Calculate stat multiplier based on size
-    float sizeSteps = (titanSize - TITAN_MIN_SIZE) / 0.01f;
-    float statMultiplier = 1f + (sizeSteps * SIZE_STAT_BONUS_PER_0_01);
+    // Calculate stat multiplier based on size (ratio-based: bigger titans get proportionally more stats)
+    float statMultiplier = titanSize / TITAN_MIN_SIZE;
     
-    // Calculate speed penalty based on size
-    float speedPenalty = sizeSteps * SIZE_SPEED_PENALTY_PER_0_01;
-    float speedMultiplier = 1f - speedPenalty;
+    // Calculate speed penalty based on size (ratio-based)
+    float speedMultiplier = TITAN_MIN_SIZE / titanSize;
     
     // Apply size
     mods.SizeModifier = titanSize;
@@ -2089,11 +2087,9 @@ private void ApplyAttackTitanHeightScaling(IPlayer player, int playerId, PlayerM
     // Apply size
     mods.SizeModifier = sizeMod;
 
-    // Apply same size-based scaling as Pure Titan
-    float sizeSteps = (sizeMod - TITAN_MIN_SIZE) / 0.01f;
-    float statMultiplier = 1f + (sizeSteps * SIZE_STAT_BONUS_PER_0_01);
-    float speedPenalty = sizeSteps * SIZE_SPEED_PENALTY_PER_0_01;
-    float speedMultiplier = 1f - speedPenalty;
+    // Apply ratio-based size scaling (same as Pure Titan)
+    float statMultiplier = sizeMod / TITAN_MIN_SIZE;
+    float speedMultiplier = TITAN_MIN_SIZE / sizeMod;
     
     mods.MaxHealth = (int)(mods.MaxHealth * statMultiplier);
     mods.MeleeDamageDealtModifier *= statMultiplier;
