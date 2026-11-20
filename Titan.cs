@@ -2019,6 +2019,12 @@ private void ApplyAttackTitanHeightScaling(IPlayer player, int playerId, PlayerM
         PlayerModifiers pMods = p.GetModifiers();
         float pHP = pMods.CurrentHealth;
         
+        // Add 100 bonus HP if player has a titan power
+        if (assignedTitanPowers.ContainsKey(p.UniqueID))
+        {
+            pHP += 100f;
+        }
+        
         if (ownTeam == PlayerTeam.Independent)
         {
             // If own team is Independent/None, self is own team, everyone else is opponent
@@ -2048,36 +2054,30 @@ private void ApplyAttackTitanHeightScaling(IPlayer player, int playerId, PlayerM
     // Calculate differ
     float differ = opponentTeamTotalHP / (ownTeamTotalHP > 0f ? ownTeamTotalHP : 1f);
     
-    // Calculate size based on differ using interpolation
+    // Calculate size based on differ: linear interpolation from 1f->3f to 0.860f->1.300f
     float sizeMod;
-    bool giveInfiniteStrength = false;
+    bool giveStrengthBoost = false;
     
     if (differ <= 1f)
     {
         sizeMod = 0.860f;
     }
-    else if (differ < 1.7f)
+    else if (differ <= 3f)
     {
-        // Interpolate between 0.860 and 1.120
-        float t = (differ - 1f) / (1.7f - 1f);
-        sizeMod = 0.860f + (1.120f - 0.860f) * t;
+        // Linear interpolation from differ 1f to 3f -> size 0.860f to 1.300f
+        float t = (differ - 1f) / (3f - 1f);
+        sizeMod = 0.860f + (1.300f - 0.860f) * t;
     }
-    else if (differ < 2.5f)
+    else if (differ < 3.5f)
     {
-        // Interpolate between 1.120 and 1.300
-        float t = (differ - 1.7f) / (2.5f - 1.7f);
-        sizeMod = 1.120f + (1.300f - 1.120f) * t;
-    }
-    else if (differ < 3f)
-    {
-        // Interpolate between 1.300 and 1.300 (stay at 1.300)
+        // Between 3f and 3.5f: stay at 1.300f
         sizeMod = 1.300f;
     }
     else
     {
-        // 3 or more: 1.300 + infinite strength boost
+        // 3.5 or more: 1.300f + strength boost
         sizeMod = 1.300f;
-        giveInfiniteStrength = true;
+        giveStrengthBoost = true;
     }
     
     // Apply size
@@ -2102,8 +2102,8 @@ private void ApplyAttackTitanHeightScaling(IPlayer player, int playerId, PlayerM
     
     player.SetModifiers(mods);
 
-    // Give infinite strength boost if differ >= 3
-    if (giveInfiniteStrength)
+    // Give infinite strength boost if differ >= 3.5
+    if (giveStrengthBoost)
     {
         player.SetStrengthBoostTime(999999f);
     }
