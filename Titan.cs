@@ -1731,8 +1731,8 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     // Configure bot melee actions:
     BotMeleeActions meleeActions = new BotMeleeActions();
     meleeActions.Attack = 0;
-    meleeActions.Grab = 80;
-    meleeActions.Wait = 20;
+    meleeActions.Grab = 100;
+    meleeActions.Wait = 0;
     bS.SetMeleeActionsAll(meleeActions);
     
     player.SetBotBehaviorSet(bS);
