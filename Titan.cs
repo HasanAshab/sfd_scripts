@@ -2332,6 +2332,25 @@ private void BeastTitanManageShurikenGate(IPlayer player, int playerId)
     }
 }
 
+private void BeastTitanUpdateSpeed(IPlayer player, int playerId)
+{
+    // Get total shuriken count (visible + reserved)
+    int visibleShurikens = player.GetCurrentShurikenAmmo();
+    int reservedShurikens = beastTitanReservedShurikens.ContainsKey(playerId) ? beastTitanReservedShurikens[playerId] : 0;
+    int totalShurikens = visibleShurikens + reservedShurikens;
+    
+    // Calculate speed penalty: 20% per shuriken
+    float speedPenalty = totalShurikens * 0.20f; // 20% per shuriken
+    float speedMultiplier = Math.Max(0.1f, 1f - speedPenalty); // Min 10% speed
+    
+    // Apply speed modifier (preserve base Beast Titan speed bonus)
+    PlayerModifiers mods = player.GetModifiers();
+    float baseSpeedModifier = 1f + BEAST_TITAN_SPEED_BONUS;
+    mods.RunSpeedModifier = baseSpeedModifier * speedMultiplier;
+    mods.SprintSpeedModifier = baseSpeedModifier * speedMultiplier;
+    player.SetModifiers(mods);
+}
+
 private void BeastTitanAddShurikenOrReserve(IPlayer player, int playerId, int amount)
 {
     PlayerModifiers gateMods = player.GetModifiers();
@@ -2643,6 +2662,8 @@ private void HandleJawTitanMelee(IPlayer jawTitan, int jawTitanId, PlayerMeleeHi
                 HandleJawTitanClawAttack(jawTitan, jawTitanId, victim);
             }
         }
+        // Sharp Claw 3rd punch object breaking feature disabled
+        /*
         else
         {
             // Handle object hits - Sharp Claw: 3rd punch breaks objects
@@ -2658,6 +2679,7 @@ private void HandleJawTitanMelee(IPlayer jawTitan, int jawTitanId, PlayerMeleeHi
                 Game.PlaySound("DestroyMetal", hitObject.GetWorldPosition());
             }
         }
+        */
     }
     
     // Reset punch count after 3rd punch
@@ -3631,6 +3653,9 @@ public void OnUpdate(float elapsed)
                 
                 // Manage shuriken gate: hide/restore shurikens based on energy level
                 BeastTitanManageShurikenGate(player, playerId);
+                
+                // Update speed based on shuriken count
+                BeastTitanUpdateSpeed(player, playerId);
                 
                 // Bot AI: action decision and behavior
                 if (player.IsBot)
