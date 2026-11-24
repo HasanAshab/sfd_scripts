@@ -154,7 +154,7 @@ private const float CART_RESCUE_ALLY_DMG_REDUCTION = 0.50f; // 50% all damage re
 private const float BEAST_TITAN_HP_BONUS = 0.10f;           // +10% HP
 private const float BEAST_TITAN_MELEE_DAMAGE_BONUS = -0.30f;  // -30% melee damage
 private const float BEAST_TITAN_MELEE_FORCE_BONUS = 0.0f;   // +0% melee force
-private const float BEAST_TITAN_SPEED_BONUS = -0.17f;        // -17% speed
+private const float BEAST_TITAN_SPEED_BONUS = -0.12f;        // -12% speed
 private const float BEAST_TITAN_ENERGY_BONUS = 0.01f;       // +1% energy
 private const float BEAST_TITAN_SIZE = 1.05f;               // Fixed size
 
@@ -2341,7 +2341,7 @@ private void BeastTitanUpdateSpeed(IPlayer player, int playerId)
     int totalShurikens = visibleShurikens + reservedShurikens;
     
     // Calculate speed penalty: 20% per shuriken
-    float speedPenalty = totalShurikens * 0.20f; // 20% per shuriken
+    float speedPenalty = totalShurikens * 0.09f; // 9% per shuriken
     float speedMultiplier = Math.Max(0.1f, 1f - speedPenalty); // Min 10% speed
     
     // Apply speed modifier (preserve base Beast Titan speed bonus)
