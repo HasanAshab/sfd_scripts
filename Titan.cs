@@ -2335,7 +2335,8 @@ private void BeastTitanManageShurikenGate(IPlayer player, int playerId)
 private void BeastTitanUpdateSpeed(IPlayer player, int playerId)
 {
     // Get total shuriken count (visible + reserved)
-    int visibleShurikens = player.GetCurrentShurikenAmmo();
+    ThrownWeaponItem thrown = player.CurrentThrownItem;
+    int visibleShurikens = (thrown.WeaponItem == WeaponItem.SHURIKEN) ? thrown.CurrentAmmo : 0;
     int reservedShurikens = beastTitanReservedShurikens.ContainsKey(playerId) ? beastTitanReservedShurikens[playerId] : 0;
     int totalShurikens = visibleShurikens + reservedShurikens;
     
