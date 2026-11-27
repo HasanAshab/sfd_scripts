@@ -2599,10 +2599,14 @@ private void HandleAttackTitanMelee(IPlayer attackTitan, int attackTitanId, Play
             }
             if (hitPlayer == null || hitPlayer.IsDead) continue;
             
-            // Super Punch: on third punch, victim will always death kneel
+            // Super Punch: on third punch, victim will always death kneel (enemies only)
             if (isSuperPunch)
             {
-                QuickCommand(hitPlayer, new PlayerCommand(PlayerCommandType.DeathKneel));
+                // Only apply to enemies, not teammates
+                if (!IsTeammate(attackTitan, hitPlayer))
+                {
+                    QuickCommand(hitPlayer, new PlayerCommand(PlayerCommandType.DeathKneel));
+                }
             }
         }
     }
@@ -2783,6 +2787,10 @@ private void HandleArmoredTitanMelee(IPlayer armoredTitan, int armoredTitanId, P
             {
                 IPlayer victim = hitArg.HitObject as IPlayer;
                 if (victim == null || victim.IsDead) continue;
+                
+                // Only throw enemies, not teammates
+                if (IsTeammate(armoredTitan, victim))
+                    continue;
                 
                 // Calculate throw power: (Titan Force × Height) - (Target Force × Height)
                 float victimForce = GetPlayerForce(victim);
