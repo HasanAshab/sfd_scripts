@@ -2834,7 +2834,7 @@ private void HandleArmoredTitanMelee(IPlayer armoredTitan, int armoredTitanId, P
                 if (throwPower > 0)
                 {
                     float velocity = throwPower * ARMORED_RUSH_THROW_SCALE;
-                    hitObj.SetLinearVelocity(new Vector2(titanFacing * (velocity * 0.4f), velocity * (ARMORED_RUSH_THROW_UP_RATIO * 4.1f)));
+                    hitObj.SetLinearVelocity(new Vector2(titanFacing * (velocity * 0.4f), velocity * (ARMORED_RUSH_THROW_UP_RATIO * 3.1f)));
                     
                     // Visual feedback
                     Game.PlayEffect(EffectName.CameraShaker, hitObj.GetWorldPosition());
