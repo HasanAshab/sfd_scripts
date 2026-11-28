@@ -1713,19 +1713,34 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     }
     else
     {
-        subtype = PureTitanSubtype.JawLike; // To be implemented
+        subtype = PureTitanSubtype.JawLike;
     }
     
     // Store subtype
     pureTitanSubtypes[playerId] = subtype;
     
+    // Store original bot behavior for Jaw-like (before changing it)
+    BotBehavior originalBehavior = player.GetBotBehavior();
+    
     // Set Pure Titan profile while keeping player trademarks
     IProfile currentProfile = player.GetProfile();
+    
+    // Jaw-like uses Zombie skin, others use normal skin
+    string skinName;
+    if (subtype == PureTitanSubtype.JawLike)
+    {
+        skinName = currentProfile.Gender == Gender.Female ? "Zombie_fem" : "Zombie";
+    }
+    else
+    {
+        skinName = currentProfile.Gender == Gender.Female ? "Normal_fem" : "Normal";
+    }
+    
     IProfile titanProfile = new IProfile()
     {
         Gender = currentProfile.Gender,
         Skin = new IProfileClothingItem(
-            currentProfile.Gender == Gender.Female ? "Normal_fem" : "Normal",
+            skinName,
             currentProfile.Skin.Color1,
             "ClothingLightPink"
         ),
@@ -1765,21 +1780,31 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     
     player.SetModifiers(mods);
     
-    // Set bot behavior to BotD
-    player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
-    
-    // Configure bot behavior
-    BotBehaviorSet bS = player.GetBotBehaviorSet();
-    bS.SearchItems = 0;
-    
-    // Configure bot melee actions:
-    BotMeleeActions meleeActions = new BotMeleeActions();
-    meleeActions.Attack = 0;
-    meleeActions.Grab = 100;
-    meleeActions.Wait = 0;
-    bS.SetMeleeActionsAll(meleeActions);
-    
-    player.SetBotBehaviorSet(bS);
+    // Set bot behavior based on subtype
+    if (subtype == PureTitanSubtype.JawLike)
+    {
+        // Jaw-like: keep original AI (don't change bot behavior)
+        player.SetBotBehavior(originalBehavior);
+        // Don't configure melee actions - keep whatever they had
+    }
+    else
+    {
+        // Normal and Cart-like: use BotD with grab-only behavior
+        player.SetBotBehavior(new BotBehavior(true, PredefinedAIType.BotD));
+        
+        // Configure bot behavior
+        BotBehaviorSet bS = player.GetBotBehaviorSet();
+        bS.SearchItems = 0;
+        
+        // Configure bot melee actions:
+        BotMeleeActions meleeActions = new BotMeleeActions();
+        meleeActions.Attack = 0;
+        meleeActions.Grab = 100;
+        meleeActions.Wait = 0;
+        bS.SetMeleeActionsAll(meleeActions);
+        
+        player.SetBotBehaviorSet(bS);
+    }
     
     // Apply size-based scaling with subtype-specific size
     ApplySizeScaling(player, playerId, mods, subtype);
@@ -3028,6 +3053,40 @@ public void OnProjectileHit(IProjectile projectile, ProjectileHitArgs args)
 
 public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
 {
+    // Jaw-like Pure Titan eating mechanic: heal for damage dealt
+    if (args.AttackerPlayer != null && !args.AttackerPlayer.IsDead)
+    {
+        int attackerId = args.AttackerPlayer.UniqueID;
+        if (titanPlayers.ContainsKey(attackerId) && titanPlayers[attackerId] == TitanType.Pure)
+        {
+            if (pureTitanSubtypes.ContainsKey(attackerId) && pureTitanSubtypes[attackerId] == PureTitanSubtype.JawLike)
+            {
+                // Heal attacker for the damage dealt
+                PlayerModifiers attackerMods = args.AttackerPlayer.GetModifiers();
+                float healAmount = args.Damage;
+                attackerMods.CurrentHealth = Math.Min(attackerMods.MaxHealth, attackerMods.CurrentHealth + (int)healAmount);
+                args.AttackerPlayer.SetModifiers(attackerMods);
+                
+                // Check if victim died from this attack - if so, track for power extraction
+                if (player != null && !player.IsDead)
+                {
+                    PlayerModifiers victimMods = player.GetModifiers();
+                    bool willDie = victimMods.CurrentHealth <= args.Damage;
+                    
+                    if (willDie && assignedTitanPowers.ContainsKey(player.UniqueID))
+                    {
+                        TitanType victimPower = assignedTitanPowers[player.UniqueID];
+                        if (victimPower != TitanType.Pure)
+                        {
+                            // Track this for power extraction (like Pure Titan grab)
+                            gibbedByPureTitan[player.UniqueID] = attackerId;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     // Safety net: refund damage that slipped through armor
     if (player == null) return;
     
