@@ -1874,7 +1874,7 @@ private void TransformToJawTitan(IPlayer player, int playerId)
     bS.SetMeleeActionsAll(meleeActions);
     
     // Set dive and sprint levels for offensive behavior
-    bS.OffensiveDiveLevel = 0.2f; // 20% dive tendency
+    bS.OffensiveDiveLevel = 1f; // 100% dive tendency
     bS.OffensiveSprintLevel = 0.7f; // 70% sprint tendency
     
     player.SetBotBehaviorSet(bS);
