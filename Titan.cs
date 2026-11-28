@@ -3054,32 +3054,36 @@ public void OnProjectileHit(IProjectile projectile, ProjectileHitArgs args)
 public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
 {
     // Jaw-like Pure Titan eating mechanic: heal for damage dealt
-    if (args.AttackerPlayer != null && !args.AttackerPlayer.IsDead)
+    if (args.SourceID != 0)
     {
-        int attackerId = args.AttackerPlayer.UniqueID;
-        if (titanPlayers.ContainsKey(attackerId) && titanPlayers[attackerId] == TitanType.Pure)
+        IPlayer attacker = Game.GetPlayer(args.SourceID);
+        if (attacker != null && !attacker.IsDead)
         {
-            if (pureTitanSubtypes.ContainsKey(attackerId) && pureTitanSubtypes[attackerId] == PureTitanSubtype.JawLike)
+            int attackerId = attacker.UniqueID;
+            if (titanPlayers.ContainsKey(attackerId) && titanPlayers[attackerId] == TitanType.Pure)
             {
-                // Heal attacker for the damage dealt
-                PlayerModifiers attackerMods = args.AttackerPlayer.GetModifiers();
-                float healAmount = args.Damage;
-                attackerMods.CurrentHealth = Math.Min(attackerMods.MaxHealth, attackerMods.CurrentHealth + (int)healAmount);
-                args.AttackerPlayer.SetModifiers(attackerMods);
-                
-                // Check if victim died from this attack - if so, track for power extraction
-                if (player != null && !player.IsDead)
+                if (pureTitanSubtypes.ContainsKey(attackerId) && pureTitanSubtypes[attackerId] == PureTitanSubtype.JawLike)
                 {
-                    PlayerModifiers victimMods = player.GetModifiers();
-                    bool willDie = victimMods.CurrentHealth <= args.Damage;
+                    // Heal attacker for the damage dealt
+                    PlayerModifiers attackerMods = attacker.GetModifiers();
+                    float healAmount = args.Damage;
+                    attackerMods.CurrentHealth = Math.Min(attackerMods.MaxHealth, attackerMods.CurrentHealth + (int)healAmount);
+                    attacker.SetModifiers(attackerMods);
                     
-                    if (willDie && assignedTitanPowers.ContainsKey(player.UniqueID))
+                    // Check if victim died from this attack - if so, track for power extraction
+                    if (player != null && !player.IsDead)
                     {
-                        TitanType victimPower = assignedTitanPowers[player.UniqueID];
-                        if (victimPower != TitanType.Pure)
+                        PlayerModifiers victimMods = player.GetModifiers();
+                        bool willDie = victimMods.CurrentHealth <= args.Damage;
+                        
+                        if (willDie && assignedTitanPowers.ContainsKey(player.UniqueID))
                         {
-                            // Track this for power extraction (like Pure Titan grab)
-                            gibbedByPureTitan[player.UniqueID] = attackerId;
+                            TitanType victimPower = assignedTitanPowers[player.UniqueID];
+                            if (victimPower != TitanType.Pure)
+                            {
+                                // Track this for power extraction (like Pure Titan grab)
+                                gibbedByPureTitan[player.UniqueID] = attackerId;
+                            }
                         }
                     }
                 }
