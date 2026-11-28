@@ -16,6 +16,14 @@ private enum TitanType
     Beast
 }
 
+// Pure Titan subtype enum
+private enum PureTitanSubtype
+{
+    Normal,      // 50% chance - standard Pure Titan
+    CartLike,    // 25% chance - Cart-like abnormal (backpack, speed, energy)
+    JawLike      // 25% chance - Jaw-like abnormal (to be implemented)
+}
+
 // Attack Titan hardening mode enum
 private enum HardeningMode
 {
@@ -292,6 +300,12 @@ private const float TITAN_EXHAUSTION_DURATION = 3000f; // 3 seconds in milliseco
 
 // Track titan sizes for stat calculations
 private Dictionary<int, float> titanSizes = new Dictionary<int, float>();
+
+// Track Pure Titan subtypes
+private Dictionary<int, PureTitanSubtype> pureTitanSubtypes = new Dictionary<int, PureTitanSubtype>();
+
+// Track Pure Cart-like backpack objects
+private Dictionary<int, IObject> pureCartLikeBackpacks = new Dictionary<int, IObject>();
 
 // Track grab damage for titans
 private Dictionary<int, GrabDamageData> titanGrabDamage = new Dictionary<int, GrabDamageData>();
@@ -1686,6 +1700,25 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     player.RemoveWeaponItemType(WeaponItemType.Thrown);
     player.RemoveWeaponItemType(WeaponItemType.Powerup);
     
+    // Randomly select Pure Titan subtype: 50% Normal, 25% Cart-like, 25% Jaw-like
+    PureTitanSubtype subtype;
+    int roll = rnd.Next(100);
+    if (roll < 50)
+    {
+        subtype = PureTitanSubtype.Normal;
+    }
+    else if (roll < 75)
+    {
+        subtype = PureTitanSubtype.CartLike;
+    }
+    else
+    {
+        subtype = PureTitanSubtype.JawLike; // To be implemented
+    }
+    
+    // Store subtype
+    pureTitanSubtypes[playerId] = subtype;
+    
     // Set Pure Titan profile while keeping player trademarks
     IProfile currentProfile = player.GetProfile();
     IProfile titanProfile = new IProfile()
@@ -1719,6 +1752,17 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     mods.SprintSpeedModifier *= (1f - PURE_TITAN_SPEED_PENALTY);
     mods.ItemDropMode = 1;
     
+    // Apply subtype-specific modifications
+    if (subtype == PureTitanSubtype.CartLike)
+    {
+        // Cart-like abnormal: use Cart Titan's speed, energy, and size
+        mods.RunSpeedModifier = 1f * (1f + CART_TITAN_SPEED_BONUS);
+        mods.SprintSpeedModifier = 1f * (1f + CART_TITAN_SPEED_BONUS);
+        mods.MaxEnergy = (int)(mods.MaxEnergy * (1f + CART_TITAN_ENERGY_BONUS));
+        mods.EnergyRechargeModifier *= (1f + CART_TITAN_ENERGY_RECHARGE_BONUS);
+        mods.CurrentEnergy = mods.MaxEnergy;
+    }
+    
     player.SetModifiers(mods);
     
     // Set bot behavior to BotD
@@ -1737,8 +1781,8 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     
     player.SetBotBehaviorSet(bS);
     
-    // Apply size-based scaling
-    ApplySizeScaling(player, playerId, mods);
+    // Apply size-based scaling with subtype-specific size
+    ApplySizeScaling(player, playerId, mods, subtype);
 }
 
 private void TransformToAttackTitan(IPlayer player, int playerId)
@@ -1971,10 +2015,25 @@ private void TransformToArmoredTitan(IPlayer player, int playerId)
     titanSizes[playerId] = ARMORED_TITAN_SIZE;
 }
 
-private void ApplySizeScaling(IPlayer player, int playerId, PlayerModifiers mods)
+private void ApplySizeScaling(IPlayer player, int playerId, PlayerModifiers mods, PureTitanSubtype subtype)
 {
-    // Generate random size for Pure Titan
-    float titanSize = TITAN_MIN_SIZE + (float)(rnd.NextDouble() * (TITAN_MAX_SIZE - TITAN_MIN_SIZE));
+    // Determine size based on subtype
+    float titanSize;
+    if (subtype == PureTitanSubtype.CartLike)
+    {
+        // Cart-like abnormal: use Cart Titan's fixed size
+        titanSize = CART_TITAN_SIZE;
+    }
+    else if (subtype == PureTitanSubtype.JawLike)
+    {
+        // Jaw-like abnormal: use Jaw Titan's fixed size (to be implemented)
+        titanSize = JAW_TITAN_SIZE;
+    }
+    else
+    {
+        // Normal Pure Titan: random size
+        titanSize = TITAN_MIN_SIZE + (float)(rnd.NextDouble() * (TITAN_MAX_SIZE - TITAN_MIN_SIZE));
+    }
     
     // Calculate stat multiplier based on size (ratio-based: bigger titans get proportionally more stats)
     float statMultiplier = titanSize / TITAN_MIN_SIZE;
@@ -1991,9 +2050,12 @@ private void ApplySizeScaling(IPlayer player, int playerId, PlayerModifiers mods
     mods.MeleeForceModifier *= statMultiplier;
     mods.MeleeStunImmunity = 1;
     
-    // Apply size-based speed penalty
-    mods.RunSpeedModifier *= speedMultiplier;
-    mods.SprintSpeedModifier *= speedMultiplier;
+    // Apply size-based speed penalty (but skip for Cart-like, as it uses Cart speed)
+    if (subtype != PureTitanSubtype.CartLike)
+    {
+        mods.RunSpeedModifier *= speedMultiplier;
+        mods.SprintSpeedModifier *= speedMultiplier;
+    }
     
     // Set health to full
     mods.CurrentHealth = mods.MaxHealth;
@@ -2002,6 +2064,12 @@ private void ApplySizeScaling(IPlayer player, int playerId, PlayerModifiers mods
     
     // Store titan size
     titanSizes[playerId] = titanSize;
+    
+    // Add Cart-like backpack visual
+    if (subtype == PureTitanSubtype.CartLike)
+    {
+        CreatePureCartLikeBackpack(player, playerId);
+    }
 }
 
 private float CalculateTeamHPDiffer(IPlayer player, int playerId)
@@ -3607,6 +3675,7 @@ public void OnUpdate(float elapsed)
             if (titanType == TitanType.Pure)
             {
                 // Pure Titan updates
+                UpdatePureCartLikeBackpack(player, playerId);
                 CheckTitanExhaustion(player, playerId);
                 CheckTitanGrabDamage(player, playerId);
             }
@@ -5368,6 +5437,15 @@ private void CleanupTitanData(int titanPlayerId)
     playerWasOnGround.Remove(titanPlayerId);
     playerHadStrengthBoost.Remove(titanPlayerId);
     
+    // Clean up Pure Titan subtype and backpack
+    pureTitanSubtypes.Remove(titanPlayerId);
+    if (pureCartLikeBackpacks.ContainsKey(titanPlayerId))
+    {
+        IObject backpack = pureCartLikeBackpacks[titanPlayerId];
+        if (backpack != null && !backpack.IsRemoved) backpack.Remove();
+        pureCartLikeBackpacks.Remove(titanPlayerId);
+    }
+    
     // Clean up Attack Titan data
     attackTitanHardeningMode.Remove(titanPlayerId);
     attackTitanHardeningEnergyCost.Remove(titanPlayerId);
@@ -5511,6 +5589,45 @@ private void CartTitanAttachBackObject(IPlayer player, int playerId, CartTitanFo
     if (backObj != null)
     {
         cartTitanBackObject[playerId] = backObj;
+    }
+}
+
+// Create backpack visual for Pure Cart-like abnormal
+private void CreatePureCartLikeBackpack(IPlayer player, int playerId)
+{
+    // Remove old backpack if it exists
+    if (pureCartLikeBackpacks.ContainsKey(playerId))
+    {
+        IObject old = pureCartLikeBackpacks[playerId];
+        if (old != null && !old.IsRemoved) old.Remove();
+        pureCartLikeBackpacks.Remove(playerId);
+    }
+    
+    // Create backpack (same as Cart Titan Rescue form)
+    IObject backpack = Game.CreateObject("BgWallPanel01A", player.GetWorldPosition());
+    if (backpack != null)
+    {
+        pureCartLikeBackpacks[playerId] = backpack;
+    }
+}
+
+// Update Pure Cart-like backpack position
+private void UpdatePureCartLikeBackpack(IPlayer player, int playerId)
+{
+    if (!pureCartLikeBackpacks.ContainsKey(playerId)) return;
+    
+    IObject backpack = pureCartLikeBackpacks[playerId];
+    if (backpack != null && !backpack.IsRemoved)
+    {
+        // Position behind the titan (same as Cart Titan)
+        Vector2 playerPos = player.GetWorldPosition();
+        int facing = player.FacingDirection;
+        Vector2 backPos = playerPos + new Vector2(-facing * 8f, 4f);
+        backpack.SetWorldPosition(backPos);
+    }
+    else
+    {
+        pureCartLikeBackpacks.Remove(playerId);
     }
 }
 
