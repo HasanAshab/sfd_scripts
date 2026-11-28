@@ -1892,6 +1892,8 @@ private void TransformToJawTitan(IPlayer player, int playerId)
         Gender = Gender.Female,
         Skin = new IProfileClothingItem("Zombie_fem", ""),
         Head = new IProfileClothingItem("Hood", "ClothingDarkGray"),
+        Hands = new IProfileClothingItem("FingerlessGloves", "ClothingLightGray"),
+        Feet = new IProfileClothingItem("Shoes", "ClothingLightGray"),
         Accesory = new IProfileClothingItem("GoalieMask", ""),
     };
     player.SetProfile(titanProfile);
