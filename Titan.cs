@@ -1783,9 +1783,11 @@ private void TransformToPureTitan(IPlayer player, int playerId)
     // Set bot behavior based on subtype
     if (subtype == PureTitanSubtype.JawLike)
     {
-        // Jaw-like: keep original AI (don't change bot behavior)
+        // Jaw-like: keep original AI but disable item search
         player.SetBotBehavior(originalBehavior);
-        // Don't configure melee actions - keep whatever they had
+        BotBehaviorSet bS = player.GetBotBehaviorSet();
+        bS.SearchItems = 0;
+        player.SetBotBehaviorSet(bS);
     }
     else
     {
@@ -3070,19 +3072,32 @@ public void OnPlayerDamage(IPlayer player, PlayerDamageArgs args)
                     attackerMods.CurrentHealth = Math.Min(attackerMods.MaxHealth, attackerMods.CurrentHealth + (int)healAmount);
                     attacker.SetModifiers(attackerMods);
                     
-                    // Check if victim died from this attack - if so, track for power extraction
+                    // Play blood effect on victim
+                    if (player != null)
+                    {
+                        Vector2 victimPos = player.GetWorldPosition();
+                        Game.PlayEffect(EffectName.Blood, victimPos);
+                    }
+                    
+                    // Check if victim died from this attack - if so, gib and track for power extraction
                     if (player != null && !player.IsDead)
                     {
                         PlayerModifiers victimMods = player.GetModifiers();
                         bool willDie = victimMods.CurrentHealth <= args.Damage;
                         
-                        if (willDie && assignedTitanPowers.ContainsKey(player.UniqueID))
+                        if (willDie)
                         {
-                            TitanType victimPower = assignedTitanPowers[player.UniqueID];
-                            if (victimPower != TitanType.Pure)
+                            // Gib the victim
+                            player.Gib();
+                            
+                            // Track for power extraction if victim has humanoid titan power
+                            if (assignedTitanPowers.ContainsKey(player.UniqueID))
                             {
-                                // Track this for power extraction (like Pure Titan grab)
-                                gibbedByPureTitan[player.UniqueID] = attackerId;
+                                TitanType victimPower = assignedTitanPowers[player.UniqueID];
+                                if (victimPower != TitanType.Pure)
+                                {
+                                    gibbedByPureTitan[player.UniqueID] = attackerId;
+                                }
                             }
                         }
                     }
